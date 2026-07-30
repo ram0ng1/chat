@@ -217,6 +217,7 @@ export default class ChatDrawer extends Component<ComponentAttrs> {
     chatState.setDrawerCollapsed(false);
 
     if (!chatState.channelsLoaded) {
+      // loadDrafts() is a no-op for a guest; see ChatState.
       await Promise.all([chatState.loadChannels(), chatState.loadDrafts()]);
     }
 

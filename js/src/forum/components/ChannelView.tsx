@@ -18,6 +18,7 @@ import ChannelInfoModal from './ChannelInfoModal';
 import ChatSelectionBar from './ChatSelectionBar';
 import { MessageStreamSkeleton } from './Skeletons';
 import { channelIcon } from '../utils/channelIcon';
+import { messagePreview } from '../utils/preview';
 
 export interface ChannelViewAttrs extends ComponentAttrs {
   channel: Channel;
@@ -158,7 +159,7 @@ export default class ChannelView extends Component<ChannelViewAttrs> {
 
     if (!pinned) return null;
 
-    const text = pinned.content() ?? '';
+    const text = messagePreview(pinned);
     const reachable = state
       .stream(Number(channel.id()))
       .messages.some((message) => message.id() === pinned.id());

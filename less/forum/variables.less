@@ -26,6 +26,30 @@
 @chat-message-gap:          2px;   // between grouped messages from one author
 @chat-message-group-gap:    12px;  // between authors
 
+// ── Spacing ──────────────────────────────────────────────────────────────────
+// A scale, rather than a number chosen per rule. Everything that spaces one thing
+// from another picks from this, so a form field and a section heading elsewhere
+// are separated by the same amount and the whole surface reads as one design.
+//
+// The steps are deliberately few. Given a free choice, each rule ended up with its
+// own value — 6px here, 7px there — and the result was elements that looked stuck
+// together in some places and adrift in others.
+@chat-space-xs:             4px;   // inside a control: icon to its label
+@chat-space-sm:             8px;   // between siblings that belong together
+@chat-space-md:             14px;  // between a label and its field
+@chat-space-lg:             20px;  // between fields in a form
+@chat-space-xl:             28px;  // between sections
+
+// Not spacing: the rendered width of a checkbox. Named so the indent that lines
+// help text up with a checkbox's label reads as "past the box" rather than as an
+// arbitrary number sitting among the spacing steps.
+@chat-checkbox-size:        16px;
+
+// The composer's round controls. One value, because attach and send sit side by
+// side on the same line: two different sizes put their centres at different
+// heights no matter how the row is aligned.
+@chat-composer-button:      32px;
+
 // ── Radii ────────────────────────────────────────────────────────────────────
 // Deliberately tighter than Avocado's 14px card radius: chat rows are dense and
 // a large radius reads as noise at this size.

@@ -43,6 +43,14 @@ class ChannelPolicy extends AbstractPolicy
      */
     public function postMessage(User $actor, Channel $channel): ?bool
     {
+        // The chat needs an account. Guests do not reach this in practice — the
+        // `/chat/*` routes 404 for them and the read endpoints are authenticated —
+        // but a policy that answers correctly on its own is worth more than one
+        // that relies on every caller having checked first.
+        if (! $actor->exists) {
+            return false;
+        }
+
         // Structural: nobody posts into a frozen channel, admins included. An
         // admin who wants to post reopens the channel first.
         if (! $channel->acceptsMessages()) {
@@ -79,6 +87,14 @@ class ChannelPolicy extends AbstractPolicy
 
     public function join(User $actor, Channel $channel): ?bool
     {
+        // A guest reading a public channel has nothing to join: membership is a row
+        // keyed to a user id. The endpoint is authenticated so nothing could come of
+        // it either way, but the policy is also what the client draws from, and
+        // answering `true` here put a Join button in front of someone who cannot.
+        if (! $actor->exists) {
+            return false;
+        }
+
         // Structural: direct channels are joined by invitation, never self-served.
         if ($channel->isDirect() || ! $channel->isOpen()) {
             return false;

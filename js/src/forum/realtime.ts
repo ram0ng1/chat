@@ -37,6 +37,8 @@ interface MessagePayload {
   systemKey: string | null;
   /** Placeholders the system string interpolates. See BroadcastListener. */
   systemData?: Record<string, unknown> | null;
+  /** The author, inlined so a recipient who has never seen them can still draw the row. */
+  user?: { id: number; username: string; displayName: string; avatarUrl: string | null; slug: string } | null;
   contentHtml: string | null;
   createdAt: string | null;
   editedAt: string | null;
@@ -367,9 +369,30 @@ function onTyping(data: { channelId: number; userId: number; username: string; t
 function pushMessage(data: MessagePayload): Message | null {
   const uploads = Array.isArray(data.uploads) ? data.uploads : [];
 
+  // The author goes in `included` beside the uploads, so the `user` relationship
+  // below resolves to a record instead of a dangling reference. Without it, a
+  // recipient who has never seen this person renders the row as "[deleted]" —
+  // which is what happens on a fresh page for every author but yourself.
+  const author = data.user
+    ? [
+        {
+          type: 'users',
+          id: String(data.user.id),
+          attributes: {
+            username: data.user.username,
+            displayName: data.user.displayName,
+            avatarUrl: data.user.avatarUrl,
+            slug: data.user.slug,
+          },
+        },
+      ]
+    : [];
+
   try {
     return app.store.pushPayload<Message>({
-      included: uploads.map((upload) => ({
+      included: [
+        ...author,
+        ...uploads.map((upload) => ({
         type: 'chat-uploads',
         id: String(upload.id),
         attributes: {
@@ -387,7 +410,8 @@ function pushMessage(data: MessagePayload): Message | null {
           messageId: data.id,
         },
         relationships: data.userId ? { user: { data: { type: 'users', id: String(data.userId) } } } : {},
-      })),
+        })),
+      ],
       data: {
         type: 'chat-messages',
         id: String(data.id),

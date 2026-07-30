@@ -159,6 +159,13 @@ ramon-chat:
       remove: Remover dos salvos
       remove_failed: Não foi possível remover dos salvos.
 
+    # Visualizador de imagem em tela cheia, aberto ao clicar numa imagem.
+    lightbox:
+      close: Fechar
+      previous: Imagem anterior
+      next: Próxima imagem
+      open_original: Abrir o original
+
     thread:
       title: Tópico
       untitled: Tópico sem título
@@ -178,6 +185,9 @@ ramon-chat:
       placeholder_closed: Este canal está fechado
       send: Enviar
       attach: Anexar um arquivo
+      sticker: Inserir um sticker
+      sticker_search: Buscar stickers
+      sticker_none: Nenhum sticker encontrado.
       emoji: Emoji
       insert_date: Inserir data
       cancel_edit: Cancelar

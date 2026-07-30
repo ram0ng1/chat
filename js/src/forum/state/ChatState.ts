@@ -848,6 +848,12 @@ export default class ChatState {
   }
 
   async loadDrafts(): Promise<void> {
+    // Drafts belong to an account, and the endpoint is authenticated. Guarded here
+    // rather than at each of the three call sites: a guest asking for them gets a
+    // 401 whose rejection surfaces as an error alert over a chat that is otherwise
+    // working, and a fourth call site would reintroduce it.
+    if (!app.session.user) return;
+
     try {
       const payload = await app.request<{ data: any[] }>({
         method: 'GET',

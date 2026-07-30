@@ -32,19 +32,19 @@ return [
         ->css(__DIR__.'/less/forum.less')
         // Full-screen mode. The drawer is rendered over whatever page is open,
         // so it needs no route of its own.
-        ->route('/chat', 'chat.index')
-        ->route('/chat/c/{id}', 'chat.channel')
-        ->route('/chat/c/{id}/t/{threadId:\d+}', 'chat.thread')
-        ->route('/chat/browse', 'chat.browse')
-        ->route('/chat/browse/{filter}', 'chat.browse.filter')
-        ->route('/chat/threads', 'chat.threads')
-        ->route('/chat/search', 'chat.search')
+        ->route('/chat', 'chat.index', Frontend\RequireChatAccess::class)
+        ->route('/chat/c/{id}', 'chat.channel', Frontend\RequireChatAccess::class)
+        ->route('/chat/c/{id}/t/{threadId:\d+}', 'chat.thread', Frontend\RequireChatAccess::class)
+        ->route('/chat/browse', 'chat.browse', Frontend\RequireChatAccess::class)
+        ->route('/chat/browse/{filter}', 'chat.browse.filter', Frontend\RequireChatAccess::class)
+        ->route('/chat/threads', 'chat.threads', Frontend\RequireChatAccess::class)
+        ->route('/chat/search', 'chat.search', Frontend\RequireChatAccess::class)
         // Both halves are needed for every chat route: this one so a direct load or
         // a refresh of the URL is served the forum page at all, and the matching
         // `app.routes[...]` in js/src/forum/index.tsx so the client knows what to
         // mount once it boots. Registering only the client side leaves a route that
         // works while navigating and 404s on reload.
-        ->route('/chat/bookmarks', 'chat.bookmarks'),
+        ->route('/chat/bookmarks', 'chat.bookmarks', Frontend\RequireChatAccess::class),
 
     (new Extend\Frontend('admin'))
         ->js(__DIR__.'/js/dist/admin.js')
