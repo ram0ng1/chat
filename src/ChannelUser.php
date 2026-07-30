@@ -53,6 +53,7 @@ class ChannelUser extends AbstractModel
         'channel_id'            => 'integer',
         'user_id'               => 'integer',
         'following'             => 'boolean',
+        'hidden'                => 'boolean',
         'notification_level'    => 'integer',
         'muted'                 => 'boolean',
         'last_read_message_id'  => 'integer',

@@ -139,6 +139,9 @@ return [
         // should open with the same emoji in the leading slot.
         ->default('ramon-chat.default_reactions', '+1,heart,tada,eyes,laughing')
         ->default('ramon-chat.threading_default', false)
+        // Notification sound. 'none' disables it; the others name a file under
+        // assets/sounds, published to public/assets/extensions/ramon-chat.
+        ->default('ramon-chat.notification_sound', 'chime')
         // Branding: the label and icon used by the header button and the drawer
         // header. Empty title falls back to the translated "Chat".
         ->default('ramon-chat.title', '')
@@ -150,6 +153,7 @@ return [
         ->serializeToForum('ramon-chat.allowUploads', 'ramon-chat.allow_uploads', 'boolval')
         ->serializeToForum('ramon-chat.defaultReactions', 'ramon-chat.default_reactions')
         ->serializeToForum('ramon-chat.threadingDefault', 'ramon-chat.threading_default', 'boolval')
+        ->serializeToForum('ramon-chat.notificationSound', 'ramon-chat.notification_sound')
         ->serializeToForum('ramon-chat.title', 'ramon-chat.title')
         ->serializeToForum('ramon-chat.icon', 'ramon-chat.icon')
         ->serializeToForum('ramon-chat.showIcon', 'ramon-chat.show_icon', 'boolval')

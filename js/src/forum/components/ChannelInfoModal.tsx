@@ -15,6 +15,7 @@ import { NotificationLevel } from '../../common/models/Channel';
 import chatState from '../state/chat';
 import { displayEmoji } from '../utils/emoji';
 import { isOnline } from '../utils/presence';
+import { MembersSkeleton } from './Skeletons';
 
 export interface ChannelInfoModalAttrs extends IInternalModalAttrs {
   channel: Channel;
@@ -195,7 +196,7 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
     if (this.loadingMembers) {
       return (
         <div className="ChatChannelInfo-section">
-          <LoadingIndicator />
+          {MembersSkeleton()}
         </div>
       );
     }

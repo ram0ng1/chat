@@ -11,6 +11,7 @@ import { displayEmoji } from '../utils/emoji';
 
 import type Channel from '../../common/models/Channel';
 import type ChatState from '../state/ChatState';
+import { SidebarSkeleton } from './Skeletons';
 import ChannelFormModal from './ChannelFormModal';
 
 export interface ChatSidebarAttrs extends ComponentAttrs {
@@ -50,14 +51,16 @@ export default class ChatSidebar extends Component<ChatSidebarAttrs> {
 
         <div className="ChatSidebar-scroll">
           {state.channelsLoading && !state.channelsLoaded ? (
-            <LoadingIndicator />
+            SidebarSkeleton()
           ) : (
             <>
               {this.section(
                 'ramon-chat.forum.sidebar.channels',
                 state.categoryChannels(),
                 {
-                  icon: 'fas fa-pencil',
+                  // A magnifying glass, not a pencil: the action is "browse
+                  // channels", and a pencil promises editing.
+                  icon: 'fas fa-magnifying-glass',
                   title: app.translator.trans('ramon-chat.forum.sidebar.browse_channels', {}, true),
                   action: () => m.route.set(app.route('chat.browse')),
                 }
@@ -153,6 +156,17 @@ export default class ChatSidebar extends Component<ChatSidebarAttrs> {
         )}
 
         <span className="ChatChannelRow-name">{channel.displayName()}</span>
+
+        {/* Private channels are marked where they are used, not only in their
+            settings — otherwise a member has no way to tell that what they say
+            here is not visible to the rest of the forum. */}
+        {channel.isPrivate() ? (
+          <i
+            className="ChatChannelRow-lock fas fa-lock"
+            title={app.translator.trans('ramon-chat.forum.new_channel.private', {}, true)}
+            aria-hidden="true"
+          />
+        ) : null}
 
         {/* A count only for mentions; ambient unreads get a plain dot-less badge. */}
         {mentions > 0 ? (

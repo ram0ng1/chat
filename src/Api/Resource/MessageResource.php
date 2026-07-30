@@ -72,7 +72,7 @@ class MessageResource extends AbstractDatabaseResource
         return [
             Endpoint\Show::make()
                 ->authenticated()
-                ->defaultInclude(['user', 'replyTo', 'replyTo.user', 'uploads', 'thread', 'thread.lastMessage'])
+                ->defaultInclude(['user', 'replyTo', 'replyTo.user', 'uploads', 'thread', 'thread.lastMessage', 'deletedBy'])
                 ->eagerLoad(['reactions', 'uploads', 'mentions']),
 
             Endpoint\Index::make()
@@ -89,7 +89,7 @@ class MessageResource extends AbstractDatabaseResource
                 // for them too on the next reload.
                 //
                 // `thread.lastMessage` comes along for the indicator's preview text.
-                ->defaultInclude(['user', 'replyTo', 'replyTo.user', 'uploads', 'thread', 'thread.lastMessage'])
+                ->defaultInclude(['user', 'replyTo', 'replyTo.user', 'uploads', 'thread', 'thread.lastMessage', 'deletedBy'])
                 ->eagerLoad(['reactions', 'uploads', 'mentions', 'thread'])
                 ->paginate(50),
 

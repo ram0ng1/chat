@@ -83,6 +83,7 @@ class ChannelResource extends AbstractDatabaseResource
             // as null and the client reads a tri-state where it expects a boolean.
             $channel->threading_enabled = (bool) resolve(\Flarum\Settings\SettingsRepositoryInterface::class)
                 ->get('ramon-chat.threading_default', false);
+            $channel->is_private = false;
             $channel->auto_join = false;
             $channel->auto_join_on_reply = false;
             $channel->allow_channel_wide_mentions = true;
@@ -210,13 +211,18 @@ class ChannelResource extends AbstractDatabaseResource
                     $channel = $context->model;
                     $actor = $context->getActor();
 
-                    if (! $actor->can('join', $channel)) {
+                    $hidden = (bool) Arr::get($context->body(), 'data.attributes.hidden', false);
+
+                    // Two different rights: joining, and joining unseen. Checked
+                    // separately so a member who forges `hidden: true` gets a 403
+                    // rather than an invisible membership.
+                    if (! $actor->can($hidden ? 'joinHidden' : 'join', $channel)) {
                         throw new ForbiddenException();
                     }
 
-                    $this->memberships->join($channel, $actor);
+                    $this->memberships->join($channel, $actor, hidden: $hidden);
 
-                    $this->events->dispatch(new UserJoinedChannel($channel, $actor, $actor));
+                    $this->events->dispatch(new UserJoinedChannel($channel, $actor, $actor, $hidden));
                 })
                 ->response(fn () => new EmptyResponse(204)),
 
@@ -355,6 +361,13 @@ class ChannelResource extends AbstractDatabaseResource
 
             Schema\Str::make('status'),
 
+            // Public or invitation-only. Guarded by mayWriteCategoryField for the
+            // same reason tagId is: both decide who can see the channel, and neither
+            // is something a direct channel's creator may set.
+            Schema\Boolean::make('isPrivate')
+                ->get(fn (Channel $c) => $c->isPrivate())
+                ->writable(fn (Channel $c, Context $context) => $this->mayWriteCategoryField($c, $context)),
+
             Schema\Boolean::make('threadingEnabled')
                 ->writable(fn (Channel $c, Context $context) => $this->mayWriteCategoryField($c, $context)),
 
@@ -412,6 +425,15 @@ class ChannelResource extends AbstractDatabaseResource
 
             Schema\Boolean::make('canEdit')
                 ->get(fn (Channel $c, Context $context) => $context->getActor()->can('edit', $c)),
+
+            // Two distinct affordances: rejoin, and rejoin unseen.
+            Schema\Boolean::make('canJoinHidden')
+                ->get(fn (Channel $c, Context $context) => $context->getActor()->can('joinHidden', $c)),
+
+            // So a lurking moderator can tell they are lurking; without it the UI
+            // looks identical to an ordinary membership and the distinction is lost.
+            Schema\Boolean::make('isHiddenMember')
+                ->get(fn (Channel $c, Context $context) => (bool) ($this->membership($c, $context->getActor())?->hidden ?? false)),
 
             Schema\Boolean::make('canJoin')
                 ->get(fn (Channel $c, Context $context) => $context->getActor()->can('join', $c)),
@@ -496,10 +518,17 @@ class ChannelResource extends AbstractDatabaseResource
     }
 
     /**
-     * Memoised per request: the channel list serialises several membership-backed
-     * fields per row, and each would otherwise be its own query.
+     * Memoises the actor's membership: the channel list serialises several
+     * membership-backed fields per row, and each would otherwise be its own query.
      *
-     * @var array<int, ChannelUser|null|false>
+     * Keyed by channel *and* actor. It was keyed by channel alone, on the
+     * assumption that a resource instance never outlives one request and therefore
+     * only ever sees one actor. That assumption does not hold — the container hands
+     * back the same instance for as long as it lives — and when it broke, one
+     * user's membership was served in another user's response: `isFollowing` and
+     * `isHiddenMember` both came back describing whoever was serialised first.
+     *
+     * @var array<string, ChannelUser|null|false>
      */
     protected array $membershipCache = [];
 
@@ -509,7 +538,7 @@ class ChannelResource extends AbstractDatabaseResource
             return null;
         }
 
-        $key = $channel->id;
+        $key = $channel->id.':'.$actor->id;
 
         if (! array_key_exists($key, $this->membershipCache)) {
             $this->membershipCache[$key] = $channel->membershipFor($actor);

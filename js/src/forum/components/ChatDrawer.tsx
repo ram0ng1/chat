@@ -9,6 +9,7 @@ import type Channel from '../../common/models/Channel';
 import chatState from '../state/chat';
 import ChatSidebar from './ChatSidebar';
 import ChannelView from './ChannelView';
+import PinnedPanel from './PinnedPanel';
 import { chatTitle, chatIcon } from '../utils/branding';
 
 /**
@@ -101,6 +102,23 @@ export default class ChatDrawer extends Component<ComponentAttrs> {
             ) : (
               <ChatSidebar state={chatState} onSelect={(c: Channel) => this.select(c)} />
             )}
+
+            {/* The drawer has no room for a side panel, so the pinned list covers
+                the conversation instead — the same arrangement the thread panel
+                uses below the mobile breakpoint. Without this the header's pin
+                button toggled a state nothing rendered, and clicking it did
+                nothing at all. */}
+            {channel && chatState.showPinned ? (
+              <PinnedPanel
+                key={`pinned-${channel.id()}`}
+                channel={channel}
+                state={chatState}
+                onClose={() => {
+                  chatState.showPinned = false;
+                  m.redraw();
+                }}
+              />
+            ) : null}
           </div>
         )}
       </div>

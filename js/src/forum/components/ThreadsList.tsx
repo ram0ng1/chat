@@ -8,6 +8,7 @@ import type Mithril from 'mithril';
 
 import type Thread from '../../common/models/Thread';
 import type ChatState from '../state/ChatState';
+import { ThreadsSkeleton } from './Skeletons';
 
 export interface ThreadsListAttrs extends ComponentAttrs {
   state: ChatState;
@@ -34,7 +35,7 @@ export default class ThreadsList extends Component<ThreadsListAttrs> {
     if (this.loading) {
       return (
         <div className="ChatThreadsList">
-          <LoadingIndicator />
+          {ThreadsSkeleton()}
         </div>
       );
     }

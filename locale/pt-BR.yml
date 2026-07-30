@@ -95,11 +95,15 @@ ramon-chat:
       leave: Sair do canal
       leave_confirm: Sair deste canal? Você pode voltar depois e seu histórico é mantido.
       leave_failed: Não foi possível sair do canal.
+      join_hidden: Entrar sem ser percebido
+      joined_hidden: Você entrou sem aparecer na lista de membros.
+      join_failed: Não foi possível entrar no canal.
 
     message:
       edited: editada
       deleted: Esta mensagem foi excluída.
       deleted_by_moderator: Esta mensagem foi removida por um moderador.
+      deleted_by_named: "Esta mensagem foi removida por {username}."
       reply: Responder
       reply_in_thread: Responder no tópico
       react: Reagir
@@ -177,6 +181,11 @@ ramon-chat:
       emoji: Emoji
       category: Categoria
       no_category: Sem categoria (todo o fórum)
+      visibility: Quem pode ver este canal
+      public: Público
+      public_help: Quem a categoria permite encontra o canal em Navegar e entra por conta própria.
+      private: Privado
+      private_help: Somente por convite. Não aparece em Navegar e só os membros o enxergam.
       category_help: O canal herda as permissões desta categoria. Deixe vazio para valer em todo o fórum.
       submit: Criar canal
       failed: Não foi possível criar o canal.
@@ -186,6 +195,9 @@ ramon-chat:
       submit: Salvar alterações
       failed: Não foi possível salvar as alterações.
       saved: Canal atualizado.
+      lifecycle: Estado do canal
+      lifecycle_help: Fechar impede novas mensagens mas mantém o canal legível. Arquivar copia o histórico para uma discussão e congela o canal em definitivo.
+      archive_confirm: Arquivar este canal? O histórico é copiado para uma discussão e o canal é congelado permanentemente.
 
     emoji_picker:
       placeholder: Buscar emoji
@@ -300,6 +312,11 @@ ramon-chat:
 
       threading_default: Habilitar tópicos por padrão em novos canais
       allow_archiving_channels: Permitir arquivar canais
+      sound: Som de notificação
+      sound_help: Tocado quando chega mensagem em um canal que você não está olhando.
+      sound_none: Desligado
+      sound_chime: Sino
+      sound_alert: Alerta
 
       webhooks_title: Webhooks de entrada
       webhooks_help: Endpoints compatíveis com Slack que publicam em um canal.

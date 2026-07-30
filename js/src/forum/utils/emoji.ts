@@ -57,9 +57,12 @@ export function loadEmojiMap(): void {
 
   loading = true;
 
-  import('simple-emoji-map')
+  // `./emojiMap`, not the package by name: the chunk registration keys off a path
+  // resolved relative to this file, so a bare package name yields an unregistered
+  // chunk whose URL 404s. See the comment in emojiMap.ts.
+  import('./emojiMap')
     .then((module) => {
-      const source = ((module as any).default ?? module) as Record<string, string[]>;
+      const source = (module.default ?? module) as Record<string, string[]>;
       const inverted: Record<string, string> = {};
 
       for (const [unicode, names] of Object.entries(source)) {

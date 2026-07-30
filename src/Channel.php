@@ -30,6 +30,7 @@ use Illuminate\Support\Str;
  * @property string|null $emoji
  * @property int|null $tag_id
  * @property string $status
+ * @property bool $is_private
  * @property bool $threading_enabled
  * @property bool $auto_join
  * @property bool $auto_join_on_reply
@@ -88,6 +89,7 @@ class Channel extends AbstractModel
         'archived_discussion_id'      => 'integer',
         'archived_by_id'              => 'integer',
         'deleted_by_id'               => 'integer',
+        'is_private'                  => 'boolean',
         'threading_enabled'           => 'boolean',
         'auto_join'                   => 'boolean',
         'auto_join_on_reply'          => 'boolean',
@@ -145,6 +147,18 @@ class Channel extends AbstractModel
     public function isDirect(): bool
     {
         return $this->type === self::TYPE_DIRECT;
+    }
+
+    /**
+     * Invitation-only: visible to members alone, so it is absent from Browse and
+     * cannot be joined by someone who was not added.
+     *
+     * A direct channel is never marked private — it is private by construction, and
+     * treating it as both would make the flag mean two different things.
+     */
+    public function isPrivate(): bool
+    {
+        return $this->isCategory() && (bool) $this->is_private;
     }
 
     public function isCategory(): bool
@@ -210,10 +224,19 @@ class Channel extends AbstractModel
      * Every user with a membership row, including those who have muted the
      * channel. Excludes users who left a direct channel.
      */
+    /**
+     * The people in the channel, as everyone else sees them.
+     *
+     * Hidden memberships are excluded: a moderator who joined to observe should not
+     * appear in the member list, which is the whole point of joining that way. They
+     * still have a membership row — see `memberships()`, which does not filter — so
+     * their unread state and sidebar entry work normally.
+     */
     public function participants(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'chat_channel_user', 'channel_id', 'user_id')
-            ->whereNull('chat_channel_user.left_at');
+            ->whereNull('chat_channel_user.left_at')
+            ->where('chat_channel_user.hidden', false);
     }
 
     public function memberships(): HasMany

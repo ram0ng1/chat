@@ -109,6 +109,22 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
    * reflow the conversation and make replies to them incoherent.
    */
   protected tombstone(message: Message): Mithril.Children {
+    // `hasOne` yields false when the relationship was not included.
+    const moderator = message.deletedBy() || null;
+
+    // Naming the moderator is the point: "removed by a moderator" leaves the
+    // author with no idea who to ask. Only shown for a moderator removal — a
+    // message you deleted yourself does not need to tell you who deleted it.
+    if (message.isRedacted() && moderator) {
+      return (
+        <div className="ChatMessage-tombstone">
+          {app.translator.trans('ramon-chat.forum.message.deleted_by_named', {
+            username: username(moderator),
+          })}
+        </div>
+      );
+    }
+
     const key = message.isRedacted()
       ? 'ramon-chat.forum.message.deleted_by_moderator'
       : 'ramon-chat.forum.message.deleted';

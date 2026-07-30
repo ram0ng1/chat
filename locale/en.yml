@@ -113,11 +113,15 @@ ramon-chat:
       leave: Leave channel
       leave_confirm: Leave this channel? You can rejoin later and your history is kept.
       leave_failed: Could not leave the channel.
+      join_hidden: Join without being seen
+      joined_hidden: You joined without appearing in the member list.
+      join_failed: Could not join the channel.
 
     message:
       edited: edited
       deleted: This message was deleted.
       deleted_by_moderator: This message was removed by a moderator.
+      deleted_by_named: "This message was removed by {username}."
       reply: Reply
       reply_in_thread: Reply in thread
       react: React
@@ -195,6 +199,11 @@ ramon-chat:
       emoji: Emoji
       category: Category
       no_category: No category (whole forum)
+      visibility: Who can see this channel
+      public: Public
+      public_help: Anyone allowed by the category can find it in Browse and join it themselves.
+      private: Private
+      private_help: Invitation-only. It does not appear in Browse and only members can see it.
       category_help: The channel inherits this category's permissions. Leave blank to make it forum-wide.
       submit: Create channel
       failed: That channel could not be created.
@@ -204,6 +213,9 @@ ramon-chat:
       submit: Save changes
       failed: Those changes could not be saved.
       saved: Channel updated.
+      lifecycle: Channel state
+      lifecycle_help: Closing stops new messages but keeps the channel readable. Archiving copies the history into a discussion and freezes the channel for good.
+      archive_confirm: Archive this channel? Its history is copied into a discussion and the channel is frozen permanently.
 
     emoji_picker:
       placeholder: Search emoji
@@ -321,6 +333,11 @@ ramon-chat:
 
       threading_default: Enable threads on new channels by default
       allow_archiving_channels: Allow archiving channels
+      sound: Notification sound
+      sound_help: Played when a message arrives in a channel you are not looking at.
+      sound_none: "Off"
+      sound_chime: Chime
+      sound_alert: Alert
 
       webhooks_title: Incoming webhooks
       webhooks_help: Slack-compatible endpoints that post into a channel.

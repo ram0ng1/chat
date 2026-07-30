@@ -29,6 +29,9 @@ export default class Channel extends Model {
   displayName = Model.attribute<string>('displayName');
 
   // ── Configuration ──────────────────────────────────────────────────────────
+  /** Invitation-only: absent from Browse, and not joinable by a non-member. */
+  isPrivate = Model.attribute<boolean>('isPrivate');
+
   threadingEnabled = Model.attribute<boolean>('threadingEnabled');
   autoJoin = Model.attribute<boolean>('autoJoin');
 
@@ -59,6 +62,10 @@ export default class Channel extends Model {
   canPostMessage = Model.attribute<boolean>('canPostMessage');
   canEdit = Model.attribute<boolean>('canEdit');
   canJoin = Model.attribute<boolean>('canJoin');
+  /** May join without appearing in the member list — moderators only. */
+  canJoinHidden = Model.attribute<boolean>('canJoinHidden');
+  /** The actor is in this channel, but invisibly. */
+  isHiddenMember = Model.attribute<boolean>('isHiddenMember');
   canClose = Model.attribute<boolean>('canClose');
   canArchive = Model.attribute<boolean>('canArchive');
   canDelete = Model.attribute<boolean>('canDelete');

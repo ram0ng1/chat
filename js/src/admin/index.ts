@@ -122,6 +122,22 @@ app.initializers.add('ramon-chat', () => {
       label: app.translator.trans('ramon-chat.admin.settings.allow_archiving_channels'),
     })
 
+    // A select rather than a boolean plus a file field: the choice is between two
+    // shipped sounds and silence, and 'none' is a value of the same setting rather
+    // than a second switch that could contradict it.
+    .registerSetting({
+      setting: 'ramon-chat.notification_sound',
+      type: 'select',
+      options: {
+        none: app.translator.trans('ramon-chat.admin.settings.sound_none', {}, true),
+        chime: app.translator.trans('ramon-chat.admin.settings.sound_chime', {}, true),
+        alert: app.translator.trans('ramon-chat.admin.settings.sound_alert', {}, true),
+      },
+      default: 'chime',
+      label: app.translator.trans('ramon-chat.admin.settings.sound'),
+      help: app.translator.trans('ramon-chat.admin.settings.sound_help'),
+    })
+
     // ── Permissions ───────────────────────────────────────────────────────────
     // Priorities descend so the group reads in order of how much it grants:
     // using chat, then starting DMs, then creating channels.

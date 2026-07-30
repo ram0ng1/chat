@@ -42,6 +42,7 @@ export default class ChannelView extends Component<ChannelViewAttrs> {
   private heightBeforePrepend: number | null = null;
 
   private lastRenderedCount = 0;
+  private joining = false;
 
   oninit(vnode: Mithril.Vnode<ChannelViewAttrs>): void {
     super.oninit(vnode);
@@ -236,10 +237,90 @@ export default class ChannelView extends Component<ChannelViewAttrs> {
               title={app.translator.trans('ramon-chat.forum.channel.leave')}
               onclick={() => this.leave()}
             />
-          ) : null}
+          ) : (
+            this.joinControls(channel)
+          )}
         </div>
       </div>
     );
+  }
+
+  /**
+   * Getting back into a channel you left.
+   *
+   * Two buttons rather than one, because they are different acts. An ordinary join
+   * puts you in the member list and the count; a hidden one does not, which is what
+   * lets a moderator read a room without their arrival changing how people talk in
+   * it. The hidden option is drawn only when the server says the actor holds it,
+   * and a lurking moderator is told they are lurking — otherwise the state is
+   * indistinguishable from an ordinary membership.
+   */
+  protected joinControls(channel: Channel): Mithril.Children {
+    const items: Mithril.Children[] = [];
+
+    if (channel.canJoin()) {
+      items.push(
+        <Button
+          className="Button Button--icon Button--flat"
+          icon="fas fa-arrow-right-to-bracket"
+          title={app.translator.trans('ramon-chat.forum.channel.join')}
+          loading={this.joining}
+          onclick={() => this.join(false)}
+        />
+      );
+    }
+
+    if (channel.canJoinHidden()) {
+      items.push(
+        <Button
+          className="Button Button--icon Button--flat"
+          icon="fas fa-user-secret"
+          title={app.translator.trans('ramon-chat.forum.channel.join_hidden')}
+          loading={this.joining}
+          onclick={() => this.join(true)}
+        />
+      );
+    }
+
+    return items.length > 0 ? items : null;
+  }
+
+  protected async join(hidden: boolean): Promise<void> {
+    const { channel, state } = this.attrs;
+
+    this.joining = true;
+    m.redraw();
+
+    try {
+      await app.request({
+        method: 'POST',
+        url: `${app.forum.attribute('apiUrl')}/chat-channels/${channel.id()}/join`,
+        body: { data: { attributes: { hidden } } },
+      });
+
+      channel.pushAttributes({
+        isFollowing: true,
+        isHiddenMember: hidden,
+        // A hidden join is absent from the count, so it must not appear to move it.
+        userCount: hidden ? channel.userCount() : (channel.userCount() ?? 0) + 1,
+      });
+
+      if (!state.channels.some((c) => c.id() === channel.id())) {
+        state.channels.unshift(channel);
+      }
+
+      if (hidden) {
+        app.alerts.show({ type: 'success' }, app.translator.trans('ramon-chat.forum.channel.joined_hidden'));
+      }
+    } catch (e: any) {
+      app.alerts.show(
+        { type: 'error' },
+        e?.response?.errors?.[0]?.detail ?? app.translator.trans('ramon-chat.forum.channel.join_failed')
+      );
+    } finally {
+      this.joining = false;
+      m.redraw();
+    }
   }
 
   /**
