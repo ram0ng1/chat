@@ -65,6 +65,18 @@ class Message extends AbstractModel implements Formattable
      */
     public const TYPE_SYSTEM = 'system';
 
+    /**
+     * Posted by the chat's own bot rather than by a person.
+     *
+     * Distinct from TYPE_SYSTEM: a system message is grey narration rendered from a
+     * locale key, while a bot message is an ordinary message that happens to have no
+     * human author — real content, real formatting, real position in the stream. It
+     * carries `user_id = null`, and the client draws the name and avatar from the
+     * admin's settings, so no account has to exist for the bot and none can be
+     * logged into or impersonated.
+     */
+    public const TYPE_BOT = 'bot';
+
     protected $table = 'chat_messages';
 
     public $timestamps = true;
@@ -166,6 +178,44 @@ class Message extends AbstractModel implements Formattable
         $message->created_at = Carbon::now();
 
         return $message;
+    }
+
+    /**
+     * A message the chat itself posts — an ordinary message with no human author.
+     *
+     * Content goes through the same formatter as anyone else's, so links, emphasis
+     * and mentions render identically; the only difference is that the author is
+     * drawn from settings instead of a user record.
+     *
+     * `$actor` is who the formatter parses as. Passing null means the content is
+     * parsed as a guest would write it, which is deliberate: the bot must not
+     * inherit a member's permissions inside the formatter pipeline just because
+     * their action is what triggered the post.
+     *
+     * @param  array<string, mixed>  $data  Structured detail kept alongside the
+     *                                      prose, so the message stays queryable
+     *                                      and a future renderer is not left
+     *                                      parsing its own output back.
+     */
+    public static function buildBot(Channel $channel, string $key, string $content, array $data = []): static
+    {
+        $message = new static();
+
+        $message->channel_id = $channel->id;
+        $message->user_id = null;
+        $message->type = self::TYPE_BOT;
+        $message->system_key = $key;
+        $message->system_data = $data;
+        $message->created_at = Carbon::now();
+
+        $message->setContentAttribute($content, null);
+
+        return $message;
+    }
+
+    public function isBot(): bool
+    {
+        return $this->type === self::TYPE_BOT;
     }
 
     public function isSystem(): bool

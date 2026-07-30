@@ -37,8 +37,12 @@ const MENTION_DEBOUNCE = 180;
 
 export default class ChatComposer extends Component<ChatComposerAttrs> {
   private textarea: HTMLTextAreaElement | null = null;
+  private joining = false;
   private sending = false;
   private uploading = false;
+
+  /** Id of the reply/edit target the cursor was last moved for. */
+  private focusedContext: string | null = null;
 
   // ── Autocomplete ───────────────────────────────────────────────────────────
   private suggestions: Suggestion[] = [];
@@ -58,6 +62,43 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
 
     this.textarea = vnode.dom.querySelector('.ChatComposer-input');
     this.resize();
+  }
+
+  onupdate(vnode: Mithril.VnodeDOM<ChatComposerAttrs>): void {
+    super.onupdate(vnode);
+
+    this.focusOnNewContext();
+  }
+
+  /**
+   * Puts the cursor in the input when a reply or edit is staged.
+   *
+   * Handled here rather than at each call site because a reply can be started from
+   * three places — the channel's message row, the thread panel, and arrow-up — and
+   * only the composer knows where its own textarea is. Clicking Reply and then
+   * having to click the box before typing is a small thing that happens on every
+   * single reply.
+   *
+   * Fires only on a *change* of target: `onupdate` runs on every redraw, including
+   * one per incoming message, and focusing on each of those would seize the cursor
+   * from someone reading, or scroll a phone's keyboard open unprompted.
+   */
+  protected focusOnNewContext(): void {
+    const target = this.editing() ?? this.replyingTo();
+    const id = target ? String(target.id()) : null;
+
+    if (id === this.focusedContext) return;
+
+    this.focusedContext = id;
+
+    if (!id || !this.textarea) return;
+
+    this.textarea.focus();
+
+    // Caret at the end. An edit pre-fills the box with the existing text, and
+    // landing at position zero means typing inserts before it.
+    const end = this.textarea.value.length;
+    this.textarea.setSelectionRange(end, end);
   }
 
   view(): Mithril.Children {
@@ -99,7 +140,10 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
           />
 
           <div className="ChatComposer-tools">
-            {app.forum.attribute('ramon-chat.allowUploads') ? (
+            {/* Both have to hold: the forum-wide setting, and this actor's
+                permission. Checking only the setting drew a paperclip for people
+                the upload endpoint would refuse. */}
+            {app.forum.attribute('ramon-chat.allowUploads') && app.forum.attribute('canUploadChatFiles') ? (
               <>
                 <input
                   type="file"
@@ -140,19 +184,94 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
     );
   }
 
+  /**
+   * Why you cannot type here.
+   *
+   * The reasons are checked most-specific first, because they are not equivalent:
+   * "this channel is closed" told someone in a perfectly open announcement channel
+   * the wrong thing entirely, and left them with no idea that reading was all that
+   * was ever on offer.
+   */
   protected frozen(channel: Channel): Mithril.Children {
+    // Not a member. Checked before the read-only reasons because it is the only one
+    // the reader can do something about, and telling them the channel is closed when
+    // it is merely unjoined would be the same mistake as the announcement case.
+    if (
+      !channel.isArchived() &&
+      !channel.isClosed() &&
+      channel.postPermission() !== 'moderators' &&
+      !channel.isFollowing() &&
+      channel.canJoin()
+    ) {
+      return (
+        <div className="ChatChannel-frozen ChatChannel-frozen--join">
+          <span>{app.translator.trans('ramon-chat.forum.channel.join_to_post')}</span>
+
+          <Button
+            className="Button Button--primary"
+            icon="fas fa-right-to-bracket"
+            loading={this.joining}
+            onclick={() => this.join(channel)}
+          >
+            {app.translator.trans('ramon-chat.forum.channel.join')}
+          </Button>
+        </div>
+      );
+    }
+
     const key = channel.isArchived()
       ? 'ramon-chat.forum.channel.archived'
       : channel.isClosed()
         ? 'ramon-chat.forum.channel.closed'
-        : 'ramon-chat.forum.composer.placeholder_closed';
+        : channel.postPermission() === 'moderators'
+          ? 'ramon-chat.forum.channel.moderators_only'
+          : 'ramon-chat.forum.composer.placeholder_closed';
+
+    // A megaphone, not a padlock: an announcement channel is not locked, it is
+    // read-only by design, and the lock icon reads as something having gone wrong.
+    const icon = key.endsWith('moderators_only') ? 'fas fa-bullhorn' : 'fas fa-lock';
 
     return (
       <div className="ChatChannel-frozen">
-        <i className="fas fa-lock" aria-hidden="true" />
+        <i className={icon} aria-hidden="true" />
         <span>{app.translator.trans(key)}</span>
       </div>
     );
+  }
+
+  /**
+   * Joins the channel so the composer can appear.
+   *
+   * Refetches the channel rather than assuming success: `canPostMessage` is the
+   * server's answer, and a join that succeeded for a channel that has since been
+   * closed should still leave the composer hidden.
+   */
+  protected async join(channel: Channel): Promise<void> {
+    this.joining = true;
+    m.redraw();
+
+    try {
+      await app.request({
+        method: 'POST',
+        url: `${app.forum.attribute('apiUrl')}/chat-channels/${channel.id()}/join`,
+        body: { data: { attributes: {} } },
+      });
+
+      const fresh = await app.store.find('chat-channels', String(channel.id()));
+
+      channel.pushAttributes({
+        isFollowing: true,
+        canPostMessage: (fresh as any)?.canPostMessage?.() ?? true,
+      });
+    } catch (e: any) {
+      app.alerts.show(
+        { type: 'error' },
+        e?.response?.errors?.[0]?.detail ?? app.translator.trans('ramon-chat.forum.channel.join_failed')
+      );
+    } finally {
+      this.joining = false;
+      m.redraw();
+    }
   }
 
   /**
@@ -332,7 +451,13 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
 
     this.mentionTimer = window.setTimeout(() => {
       app.store
-        .find<User[]>('users', { filter: { q: term }, page: { limit: 6 } })
+        .find<User[]>('users', {
+          // Scoped to the channel: mentioning someone who is not in it notifies
+          // them about a conversation they cannot open, and in a private channel
+          // the unscoped list named people who cannot see it exists.
+          filter: { q: term, chatChannel: Number(this.attrs.channel.id()) },
+          page: { limit: 6 },
+        })
         .then((results) => {
           // A stale response must not replace a newer one, and must not reopen a
           // list the user has already dismissed or typed past.

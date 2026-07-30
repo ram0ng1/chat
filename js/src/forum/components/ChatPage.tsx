@@ -11,6 +11,7 @@ import ChannelView from './ChannelView';
 import ThreadPanel from './ThreadPanel';
 import PinnedPanel from './PinnedPanel';
 import ThreadsList from './ThreadsList';
+import BookmarksList from './BookmarksList';
 import ChatSearch from './ChatSearch';
 import { ChannelSkeleton } from './Skeletons';
 
@@ -29,9 +30,32 @@ export default class ChatPage<CustomAttrs extends IPageAttrs = IPageAttrs> exten
     app.setTitle(app.translator.trans('ramon-chat.forum.nav.chat', {}, true));
 
     // The drawer and the page are mutually exclusive views of the same state.
-    chatState.setDrawerOpen(false);
+    //
+    // Deliberately not `setDrawerOpen(false)`: that clears any pending suspension,
+    // which would throw away the very thing that tells us to reopen the drawer on
+    // the way out. Arriving here from the nav button leaves `drawerSuspended` false
+    // anyway, so nothing is restored for a visit that did not come from the drawer.
+    chatState.hideDrawerForPage();
 
     this.boot();
+  }
+
+  /**
+   * Fires when the chat is left for the rest of the forum — not when moving between
+   * chat routes, which share one mounted page (see ChatPageResolver).
+   */
+  onremove(vnode: Mithril.VnodeDOM<CustomAttrs, this>): void {
+    super.onremove(vnode);
+
+    // Puts back a drawer that only stepped aside for this page. A drawer the user
+    // closed with the X is not suspended, so it stays closed.
+    if (chatState.resumeDrawer()) {
+      // The full-screen page owns the thread panel through the URL; the drawer has
+      // no route to read it back from, and reopening into a thread the user cannot
+      // navigate out of would strand them.
+      chatState.activeThreadId = null;
+      chatState.setDrawerCollapsed(false);
+    }
   }
 
   onbeforeupdate(vnode: Mithril.VnodeDOM<CustomAttrs, this>): void {
@@ -116,6 +140,10 @@ export default class ChatPage<CustomAttrs extends IPageAttrs = IPageAttrs> exten
 
     if (routeName === 'chat.threads') {
       return <ThreadsList state={chatState} />;
+    }
+
+    if (routeName === 'chat.bookmarks') {
+      return <BookmarksList state={chatState} />;
     }
 
     // Built as an array rather than a JSX fragment with a conditional slot.

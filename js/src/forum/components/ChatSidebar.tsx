@@ -13,6 +13,7 @@ import type Channel from '../../common/models/Channel';
 import type ChatState from '../state/ChatState';
 import { SidebarSkeleton } from './Skeletons';
 import ChannelFormModal from './ChannelFormModal';
+import { channelIcon } from '../utils/channelIcon';
 
 export interface ChatSidebarAttrs extends ComponentAttrs {
   state: ChatState;
@@ -30,23 +31,9 @@ export default class ChatSidebar extends Component<ChatSidebarAttrs> {
     return (
       <div className="ChatSidebar">
         <div className="ChatSidebar-top">
-          <button
-            type="button"
-            className="ChatSidebar-quickLink"
-            onclick={() => m.route.set(app.route('chat.threads'))}
-          >
-            <i className="ChatSidebar-quickLink-icon fas fa-comments" aria-hidden="true" />
-            <span>{app.translator.trans('ramon-chat.forum.sidebar.my_threads')}</span>
-          </button>
-
-          <button
-            type="button"
-            className="ChatSidebar-quickLink"
-            onclick={() => m.route.set(app.route('chat.search'))}
-          >
-            <i className="ChatSidebar-quickLink-icon fas fa-magnifying-glass" aria-hidden="true" />
-            <span>{app.translator.trans('ramon-chat.forum.sidebar.search')}</span>
-          </button>
+          {this.quickLink('chat.threads', 'fas fa-comments', 'ramon-chat.forum.sidebar.my_threads')}
+          {this.quickLink('chat.bookmarks', 'fas fa-bookmark', 'ramon-chat.forum.sidebar.bookmarks')}
+          {this.quickLink('chat.search', 'fas fa-magnifying-glass', 'ramon-chat.forum.sidebar.search')}
         </div>
 
         <div className="ChatSidebar-scroll">
@@ -102,6 +89,32 @@ export default class ChatSidebar extends Component<ChatSidebarAttrs> {
     );
   }
 
+  /**
+   * One of the views above the channel list.
+   *
+   * Written once rather than three times, which is what makes the active state
+   * affordable: three hand-rolled buttons had no way to say which view was open,
+   * so the sidebar looked identical whether you were reading a channel, your
+   * threads or your bookmarks.
+   */
+  protected quickLink(routeName: string, icon: string, key: string): Mithril.Children {
+    // `m.route.get()` rather than comparing to a stored value: the route can also
+    // change from browser back/forward, which no click handler observes.
+    const active = m.route.get().split('?')[0] === app.route(routeName);
+
+    return (
+      <button
+        type="button"
+        className={classList('ChatSidebar-quickLink', { 'ChatSidebar-quickLink--active': active })}
+        aria-current={active ? 'page' : undefined}
+        onclick={() => m.route.set(app.route(routeName))}
+      >
+        <i className={`ChatSidebar-quickLink-icon ${icon}`} aria-hidden="true" />
+        <span>{app.translator.trans(key)}</span>
+      </button>
+    );
+  }
+
   protected section(
     labelKey: string,
     channels: Channel[],
@@ -151,7 +164,7 @@ export default class ChatSidebar extends Component<ChatSidebarAttrs> {
       >
         {channel.isDirect() ? this.avatars(channel) : (
           <span className="ChatChannelRow-icon">
-            {channel.emoji() ? displayEmoji(channel.emoji()) : <i className="fas fa-hashtag" aria-hidden="true" />}
+            {channelIcon(channel)}
           </span>
         )}
 

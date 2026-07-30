@@ -90,6 +90,17 @@ export default class ChatState {
   drawerOpen = false;
   drawerCollapsed = false;
 
+  /**
+   * The drawer was closed to go full screen, not dismissed.
+   *
+   * Both leave `drawerOpen` false, and the difference matters on the way back: a
+   * drawer the user closed with the X should stay closed, while one that only
+   * stepped aside for the full-screen page should come back when the page is left.
+   * Without this the two were indistinguishable, so returning to the forum always
+   * looked like the chat had been closed.
+   */
+  drawerSuspended = false;
+
   /** Selection mode, for quote/copy/move. */
   selecting = false;
   selected: Set<number> = new Set();
@@ -146,10 +157,18 @@ export default class ChatState {
 
       if (!raw) return false;
 
-      const saved = JSON.parse(raw) as { open?: boolean; collapsed?: boolean; channelId?: number | null };
+      const saved = JSON.parse(raw) as {
+        open?: boolean;
+        collapsed?: boolean;
+        suspended?: boolean;
+        channelId?: number | null;
+      };
 
       this.drawerOpen = Boolean(saved.open);
       this.drawerCollapsed = Boolean(saved.collapsed);
+      // Persisted so a reload while on the full-screen page does not lose the fact
+      // that the drawer is owed a reopening.
+      this.drawerSuspended = Boolean(saved.suspended);
 
       if (saved.channelId) {
         this.activeChannelId = Number(saved.channelId);
@@ -174,6 +193,7 @@ export default class ChatState {
         JSON.stringify({
           open: this.drawerOpen,
           collapsed: this.drawerCollapsed,
+          suspended: this.drawerSuspended,
           channelId: this.activeChannelId,
         })
       );
@@ -184,7 +204,54 @@ export default class ChatState {
 
   setDrawerOpen(open: boolean): void {
     this.drawerOpen = open;
+
+    // Opening or closing the drawer directly settles the question either way, so a
+    // pending suspension is stale from here on. In particular this is what makes
+    // the X final: closing by hand while suspended must not be undone later.
+    this.drawerSuspended = false;
+
     this.persistDrawer();
+  }
+
+  /**
+   * Closes the drawer because the full-screen page is taking over the view.
+   *
+   * Distinct from both `setDrawerOpen(false)`, which would clear a pending
+   * suspension, and `suspendDrawer()`, which would create one: arriving at the page
+   * by any route other than the drawer's own full-screen button must not earn a
+   * reopening on the way out.
+   */
+  hideDrawerForPage(): void {
+    this.drawerOpen = false;
+    this.persistDrawer();
+  }
+
+  /**
+   * Closes the drawer on the understanding that it is owed a reopening.
+   *
+   * Used when handing the conversation over to the full-screen page, which is the
+   * one case where the drawer disappears without the user having dismissed it.
+   */
+  suspendDrawer(): void {
+    this.drawerOpen = false;
+    this.drawerSuspended = true;
+    this.persistDrawer();
+  }
+
+  /**
+   * Reopens a suspended drawer, and reports whether there was one.
+   *
+   * Consuming the flag here rather than at the call site keeps "restored at most
+   * once" a property of the state instead of a rule each caller has to remember.
+   */
+  resumeDrawer(): boolean {
+    if (!this.drawerSuspended) return false;
+
+    this.drawerSuspended = false;
+    this.drawerOpen = true;
+    this.persistDrawer();
+
+    return true;
   }
 
   setDrawerCollapsed(collapsed: boolean): void {
@@ -254,25 +321,61 @@ export default class ChatState {
    * the drawer was opened without ever loading the list — which read as "the dot
    * does not work".
    */
-  unreadSummary(): { channels: number; mentions: number } {
+  unreadSummary(): { channels: number; messages: number; mentions: number } {
     if (this.channelsLoaded && this.channels.length > 0) {
       let channels = 0;
+      let messages = 0;
       let mentions = 0;
 
       for (const channel of this.channels) {
-        if (channel.hasUnread()) channels++;
+        // Muted channels carry no badge, so they must not feed the header count
+        // either — otherwise the number says there is something to read in a
+        // channel the user deliberately silenced.
+        if (channel.isMuted()) continue;
+
+        if (channel.hasUnread()) {
+          channels++;
+          messages += channel.unreadCount() ?? 0;
+        }
+
         if (channel.hasUnreadMentions()) mentions += channel.unreadMentionsCount() ?? 0;
       }
 
-      return { channels, mentions };
+      return { channels, messages, mentions };
     }
 
+    // Before the channel list is loaded — which is the usual state when the chat
+    // has not been opened yet — the serialised counters are all there is. Realtime
+    // keeps them moving; see bumpUnreadCounters().
     const user = app.session.user;
 
     return {
       channels: Number(user?.attribute<number>('chatUnreadChannelsCount') ?? 0),
+      messages: Number(user?.attribute<number>('chatUnreadMessagesCount') ?? 0),
       mentions: Number(user?.attribute<number>('chatUnreadMentionsCount') ?? 0),
     };
+  }
+
+  /**
+   * Moves the actor's own serialised counters.
+   *
+   * They are a snapshot taken when the page was rendered, and the header badge and
+   * the nav dot fall back to them whenever the channel list has not been loaded —
+   * which is exactly the situation the badge exists for. Without this the dot only
+   * ever appeared after a reload.
+   */
+  bumpUnreadCounters(messages: number, mentions: number, newChannel: boolean): void {
+    const user = app.session.user;
+
+    if (!user) return;
+
+    const at = (key: string) => Number(user.attribute<number>(key) ?? 0);
+
+    user.pushAttributes({
+      chatUnreadMessagesCount: Math.max(0, at('chatUnreadMessagesCount') + messages),
+      chatUnreadMentionsCount: Math.max(0, at('chatUnreadMentionsCount') + mentions),
+      chatUnreadChannelsCount: Math.max(0, at('chatUnreadChannelsCount') + (newChannel ? 1 : 0)),
+    });
   }
 
   // ───────────────────────────────────────────────────────────────────────────

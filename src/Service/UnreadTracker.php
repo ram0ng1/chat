@@ -233,6 +233,30 @@ class UnreadTracker
             ->count();
     }
 
+    /**
+     * How many unread *messages* the user has, across every channel.
+     *
+     * Distinct from totalUnreadFor(), which counts how many channels have anything
+     * unread. The header badge wants the message count — "3 channels" reads as a
+     * far smaller number than the 40 messages waiting in them.
+     *
+     * Muted channels are excluded for the same reason they carry no badge: the user
+     * asked not to be counted at.
+     */
+    public function totalUnreadMessagesFor(User $user): int
+    {
+        if (! $user->exists) {
+            return 0;
+        }
+
+        return (int) ChannelUser::query()
+            ->where('user_id', $user->id)
+            ->where('following', true)
+            ->where('muted', false)
+            ->whereNull('left_at')
+            ->sum('unread_count');
+    }
+
     public function totalUnreadMentionsFor(User $user): int
     {
         if (! $user->exists) {

@@ -118,6 +118,7 @@ export default class ThreadPanel extends Component<ThreadPanelAttrs> {
               message={message}
               previous={stream.messages[index - 1] ?? null}
               state={state}
+              hideThreadIndicator
               onReply={(msg: Message) => this.reply(msg)}
               onEdit={(msg: Message) => this.edit(msg)}
             />

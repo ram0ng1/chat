@@ -75,6 +75,17 @@ export default class Message extends Model {
   }
 
   /**
+   * Posted by the chat's bot rather than a person.
+   *
+   * Not a system message: it has real content and renders through the ordinary
+   * message path. Only the author differs — there is no user record, so the name
+   * and avatar come from the admin's settings.
+   */
+  isBot(): boolean {
+    return this.type() === 'bot';
+  }
+
+  /**
    * True when the row exists but its text was withheld — a moderator-removed
    * message shown to someone who may not read it. The stream renders a
    * tombstone so it does not silently reflow.
@@ -106,11 +117,22 @@ export default class Message extends Model {
     if (this.isSystem() || previous.isSystem()) return false;
     if (this.threadId() !== previous.threadId()) return false;
 
-    const a = this.user();
-    const b = previous.user();
+    // Two bot posts in a row have the same author, the same as two from one
+    // person. Without this they compare `user()` — null for both — and fail the
+    // "unknown author" check below, so consecutive announcements each drew their
+    // own avatar and header instead of collapsing into a run. A bot post and a
+    // human one are never the same author, whichever way round they fall.
+    if (this.isBot() || previous.isBot()) {
+      if (!this.isBot() || !previous.isBot()) return false;
+    } else {
+      const a = this.user();
+      const b = previous.user();
 
-    if (!a || !b || a.id() !== b.id()) return false;
+      if (!a || !b || a.id() !== b.id()) return false;
+    }
 
+    // Reached by both branches: same author is necessary but not sufficient, and
+    // the time window applies to the bot exactly as it does to anyone else.
     const t1 = this.createdAt();
     const t2 = previous.createdAt();
 

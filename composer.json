@@ -59,7 +59,9 @@
                 "flarum/tags",
                 "flarum/realtime",
                 "flarum/mentions",
-                "flarum/emoji"
+                "flarum/emoji",
+                "flarum/gdpr",
+                "flarum/audit"
             ],
             "icon": {
                 "image": "icon.svg",

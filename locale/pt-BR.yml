@@ -24,6 +24,10 @@ ramon-chat:
     direct_needs_participant: Escolha ao menos uma pessoa para conversar.
     direct_too_many: "Uma conversa em grupo aceita no máximo {max} participantes."
     direct_unknown_user: Um desses usuários não existe.
+    members_empty: Escolha ao menos uma pessoa para adicionar.
+    members_too_many: "Você pode adicionar no máximo {max} pessoas por vez."
+    cannot_remove_self: Use "Sair do canal" para se remover.
+    not_a_member: Essa pessoa não está neste canal.
 
     transcript_empty: Nenhuma mensagem foi selecionada, ou você não pode lê-las.
     transcript_too_many: "Você pode citar no máximo {max} mensagens por vez."
@@ -55,11 +59,20 @@ ramon-chat:
   notifications:
     chat_mention: "{username} mencionou você em {channel}"
     chat_message: "{username} publicou em {channel}"
+    chat_channel_invite: "{username} adicionou você a {channel}"
+
+  lib:
+    gdpr:
+      export_description: Suas mensagens de chat, os dados dos anexos e os canais dos quais você participou.
+      anonymize_description: Suas mensagens permanecem para que as conversas continuem legíveis, mas deixam de ser atribuídas a você. Anexos, reações, rascunhos e participações em canais são excluídos.
+      delete_description: Suas mensagens e anexos são excluídos, junto com suas reações, rascunhos e participações em canais.
 
   forum:
     nav:
       chat: Chat
       unread_channels: "{count} canais com mensagens não lidas"
+      unread_messages: "{count} mensagens não lidas"
+      unread_mentions: "{count} menções não lidas"
 
     drawer:
       title: Chat
@@ -70,6 +83,7 @@ ramon-chat:
 
     sidebar:
       my_threads: Meus tópicos
+      bookmarks: Salvos
       search: Buscar
       channels: Canais
       direct_messages: Mensagens diretas
@@ -81,6 +95,8 @@ ramon-chat:
     channel:
       threading_enabled: Tópicos habilitados
       closed: Este canal está fechado. Não é possível enviar novas mensagens.
+      join_to_post: Entre neste canal para enviar mensagens.
+      moderators_only: Apenas moderadores podem enviar mensagens neste canal.
       archived: Este canal foi arquivado.
       archived_link: Ver a transcrição arquivada
       no_messages: Nenhuma mensagem ainda. Diga algo.
@@ -133,6 +149,15 @@ ramon-chat:
         channel_closed: O canal foi fechado.
         channel_reopened: O canal foi reaberto.
         channel_archived: O canal foi arquivado.
+        discussion_started: "{username} abriu uma discussão: {title}"
+
+    # Mensagens salvas pelo usuário. O botão sempre existiu; aqui elas são lidas
+    # de volta.
+    bookmarks:
+      empty: Você ainda não salvou nenhuma mensagem.
+      no_text: (somente anexo)
+      remove: Remover dos salvos
+      remove_failed: Não foi possível remover dos salvos.
 
     thread:
       title: Tópico
@@ -179,6 +204,11 @@ ramon-chat:
       name_placeholder: "ex.: geral"
       description: Descrição
       emoji: Emoji
+      image: Imagem
+      image_help: Substitui o emoji enquanto estiver definida. Imagens quadradas funcionam melhor.
+      image_upload: Enviar imagem
+      image_remove: Remover imagem
+      image_failed: Não foi possível enviar essa imagem.
       category: Categoria
       no_category: Sem categoria (todo o fórum)
       visibility: Quem pode ver este canal
@@ -186,6 +216,10 @@ ramon-chat:
       public_help: Quem a categoria permite encontra o canal em Navegar e entra por conta própria.
       private: Privado
       private_help: Somente por convite. Não aparece em Navegar e só os membros o enxergam.
+      post_permission: Quem pode enviar mensagem
+      post_all: Todos no canal
+      post_moderators: Apenas moderadores
+      post_permission_help: Apenas moderadores transforma o canal em um mural de avisos — todos leem, só moderadores escrevem.
       category_help: O canal herda as permissões desta categoria. Deixe vazio para valer em todo o fórum.
       submit: Criar canal
       failed: Não foi possível criar o canal.
@@ -236,6 +270,8 @@ ramon-chat:
       auto_join_help: Todos os usuários atuais e futuros serão adicionados a este canal.
       auto_join_on_reply: Adicionar quem responder nesta categoria
       auto_join_on_reply_help: Requer uma categoria acima. O usuário entra na primeira vez que responde a uma discussão lá, e não é readicionado se sair depois.
+      post_discussions: Anunciar novas discussões desta categoria
+      post_discussions_help: Requer uma categoria acima. Cada nova discussão aberta lá é anunciada no canal.
       threading: Habilitar tópicos
       close_channel: Fechar canal
       reopen_channel: Reabrir canal
@@ -243,6 +279,13 @@ ramon-chat:
       delete_channel: Excluir canal
       delete_confirm: Excluir um canal não pode ser desfeito. Excluir mesmo assim?
       member_search: Filtrar membros
+      add_member: Adicionar alguém pelo nome
+      add_member_hint: Digite ao menos duas letras para encontrar alguém.
+      no_candidates: Ninguém encontrado, ou quem corresponde já está aqui.
+      member_added: "{username} foi adicionado ao canal."
+      member_removed: "{username} foi removido do canal."
+      remove_member: "Remover {username}"
+      remove_member_confirm: "Remover {username} deste canal?"
       no_members: Nenhum membro corresponde.
       save_failed: Não foi possível salvar a alteração.
 
@@ -269,6 +312,15 @@ ramon-chat:
       unknown_editor: Desconhecido
       failed: Não foi possível carregar o histórico.
 
+    notifications:
+      channel_invite: "{username} adicionou você a {channel}"
+      someone: Alguém
+
+    # Rótulo de autoria do próprio chat, nas mensagens que ele publica.
+    bot:
+      default_name: Bot
+      tag: BOT
+
     settings:
       title: Chat
       enabled: Habilitar o chat na minha conta
@@ -277,6 +329,7 @@ ramon-chat:
       open_in_drawer: Abrir o chat em painel flutuante em vez de tela cheia
       sound: Som de notificação
       sound_none: Nenhum
+      notify_channel_invite: Alguém me adiciona a um canal de chat
 
   admin:
     settings:
@@ -308,6 +361,10 @@ ramon-chat:
       icon_label: Ícone do chat
       icon_help: "Uma classe do Font Awesome, ex.: fas fa-comments."
       show_icon_label: Exibir o ícone do chat
+      bot_name_label: Nome do bot
+      bot_name_help: O autor exibido nas mensagens que o próprio chat publica, como os anúncios de novas discussões.
+      bot_avatar_label: Imagem do bot
+      bot_avatar_help: URL da imagem do bot. Em branco, mostra a inicial do nome.
       show_icon_help: Desligue para mostrar apenas o nome.
 
       threading_default: Habilitar tópicos por padrão em novos canais
@@ -343,6 +400,19 @@ ramon-chat:
       create_thread: Criar tópicos a partir de uma resposta
       pin_message: Fixar e desfixar mensagens
       mention_channel_wide: Usar @here e @all
+
+    # Quem o chat usa como autor quando publica algo por conta própria.
+    bot:
+      title: Anunciante
+      intro: Novas discussões em uma categoria vinculada são anunciadas no canal. Escolha quem as publica.
+      upload: Enviar imagem
+      remove_upload: Remover imagem
+      upload_failed: Não foi possível enviar essa imagem.
+      user_label: Publicar como um membro
+      user_help: Escolha uma conta e os anúncios viram mensagens comuns desse membro — sem nome de bot, sem imagem, sem etiqueta BOT.
+      user_search: Buscar membros
+      user_active: Os anúncios são publicados como este membro.
+      use_bot: Usar o bot
 
     webhooks:
       title: Webhooks de entrada

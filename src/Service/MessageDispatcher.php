@@ -120,7 +120,7 @@ class MessageDispatcher
             if ($thread !== null) {
                 $message->setRelation('thread', $thread);
 
-                $thread->refreshMetadata()->save();
+                $thread->noteReply($message)->save();
                 $this->trackThread($thread, $actor);
             }
 
@@ -213,20 +213,21 @@ class MessageDispatcher
             return;
         }
 
-        $existing = ThreadUser::query()
-            ->where('thread_id', $thread->id)
-            ->where('user_id', $user->id)
-            ->first();
+        // One statement rather than a select followed by an insert. The unique
+        // index on (thread_id, user_id) is what enforces "leave an existing
+        // membership alone" — and it enforces it better than the read did, since a
+        // read-then-write races with a second reply from the same user and can
+        // still hit the constraint. Ignoring the duplicate is the intended outcome
+        // either way.
+        $now = Carbon::now();
 
-        if ($existing !== null) {
-            return;
-        }
-
-        $membership = new ThreadUser();
-        $membership->thread_id = $thread->id;
-        $membership->user_id = $user->id;
-        $membership->notification_level = ThreadUser::LEVEL_ALWAYS;
-        $membership->save();
+        ThreadUser::query()->insertOrIgnore([
+            'thread_id'          => $thread->id,
+            'user_id'            => $user->id,
+            'notification_level' => ThreadUser::LEVEL_ALWAYS,
+            'created_at'         => $now,
+            'updated_at'         => $now,
+        ]);
     }
 
     /**
