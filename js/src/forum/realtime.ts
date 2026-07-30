@@ -3,6 +3,7 @@ import app from 'flarum/forum/app';
 import chatState from './state/chat';
 import { playNotificationSound } from './utils/sound';
 import type Message from '../common/models/Message';
+import { NotificationLevel } from '../common/models/Channel';
 
 /**
  * Wire event names. Must match Ramon\Chat\Realtime\BroadcastListener.
@@ -46,6 +47,9 @@ interface MessagePayload {
   isPinned?: boolean;
   pinnedAt?: string | null;
   uploads?: UploadPayload[];
+  /** Who the message is addressed to. Drives the highlight and the sound. */
+  mentionedUsers?: number[];
+  mentionsChannelWide?: boolean;
 }
 
 /**
@@ -180,7 +184,7 @@ function onMessage(data: MessagePayload): void {
   chatState.upsertMessage(message);
   bumpChannel(data);
   bumpThread(data);
-  announce(data);
+  announce(data, message);
 
   m.redraw();
 }
@@ -192,10 +196,18 @@ function onMessage(data: MessagePayload): void {
  * you watched it arrive, so a chime adds nothing. Skipped for a muted channel for
  * the same reason the badge is.
  *
+ * And skipped according to the channel's notification level, which is the fix for
+ * a chat that beeped continuously. Every membership already carries that setting
+ * — Never, Mentions or Always — and it defaults to Mentions, but the sound
+ * consulted only `isMuted()`. So a channel the user had explicitly set to
+ * "mentions only" still chimed on every message that arrived in it, and a member
+ * of a dozen busy channels heard a chime for traffic they had asked not to be
+ * told about. The badge honoured the setting; the sound did not.
+ *
  * Own messages never reach here — ChatBroadcaster excludes the actor from its own
  * broadcast.
  */
-function announce(data: MessagePayload): void {
+function announce(data: MessagePayload, message: Message): void {
   const channel = chatState.channel(data.channelId);
 
   if (channel?.isMuted()) return;
@@ -207,6 +219,20 @@ function announce(data: MessagePayload): void {
     document.hasFocus();
 
   if (watching) return;
+
+  // Absent means the channel is not in the sidebar yet; treat it the way the
+  // default membership does rather than as "tell me everything".
+  const level = channel?.notificationLevel() ?? NotificationLevel.Mentions;
+
+  if (level === NotificationLevel.Never) return;
+
+  if (level === NotificationLevel.Mentions) {
+    // A direct message is addressed to you by construction — there is nobody
+    // else in the room to have meant it for.
+    const direct = channel?.isDirect() ?? false;
+
+    if (!direct && !message.mentionsActor()) return;
+  }
 
   playNotificationSound();
 }
@@ -431,8 +457,12 @@ function pushMessage(data: MessagePayload): Message | null {
           isPinned: Boolean(data.isPinned),
           pinnedAt: data.pinnedAt ?? null,
           reactionSummary: {},
-          mentionedUsers: [],
-          mentionsChannelWide: false,
+          // Read from the payload rather than blanked. Hardcoding these meant a
+          // message arriving live was never recognised as a mention: it drew
+          // without the highlight, and the sound had no way to tell an @you from
+          // ordinary chatter.
+          mentionedUsers: Array.isArray(data.mentionedUsers) ? data.mentionedUsers : [],
+          mentionsChannelWide: Boolean(data.mentionsChannelWide),
           isBookmarked: false,
           // Capability flags default closed: the push payload cannot know them,
           // and offering an action the server would refuse is worse than

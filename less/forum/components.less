@@ -214,6 +214,23 @@
       font-weight: 800;
       color: var(--avocado-muted-label);
     }
+
+    // Open reports. Unlike -count, which is quiet metadata, this is a queue with
+    // work in it: it carries the alert colour so it reads at a glance, and it is
+    // only rendered when the number is non-zero.
+    &-badge {
+      margin-left: auto;
+      flex-shrink: 0;
+      min-width: 20px;
+      padding: 1px @chat-space-xs;
+      border-radius: @chat-radius-pill;
+      background: var(--alert-error-bg, #d83e3e);
+      color: var(--alert-error-color, #fff);
+      font-size: @chat-font-meta;
+      font-weight: 800;
+      line-height: 1.5;
+      text-align: center;
+    }
   }
 
   &-scroll {
@@ -2423,6 +2440,227 @@
   }
 }
 
+// ── The moderation queue ─────────────────────────────────────────────────────
+// Cards rather than the flat rows the bookmark list uses. A bookmark is one line
+// you scan past; a report is three separate things — who filed it, what they
+// said, and the message itself — and a moderator has to read all three before
+// deciding. Boxing each report keeps those three from bleeding into the next.
+.ChatFlags {
+  .chat-scroll-y();
+  flex: 1;
+  min-height: 0;
+  padding: @chat-space-md @chat-space-lg;
+
+  &-header {
+    .chat-flex-row(@chat-space-sm);
+    justify-content: space-between;
+    margin-bottom: @chat-space-md;
+  }
+
+  &-title {
+    margin: 0;
+    font-size: @chat-font-message;
+    font-weight: 800;
+    color: var(--avocado-text-dark);
+  }
+
+  &-toggle--active {
+    color: var(--primary-color);
+  }
+
+  &-row {
+    .chat-surface(@chat-radius-md);
+    padding: @chat-space-md;
+    margin-bottom: @chat-space-md;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+
+    // Handled reports stay legible but stop competing with the open ones for
+    // attention — they are only on screen when explicitly asked for.
+    &--resolved {
+      opacity: 0.6;
+    }
+  }
+
+  &-reporter {
+    .chat-flex-row(@chat-space-sm);
+
+    .Avatar {
+      width: @chat-avatar-size-compact;
+      height: @chat-avatar-size-compact;
+      flex-shrink: 0;
+    }
+
+    &-meta {
+      .chat-flex-row(@chat-space-xs);
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    &-name {
+      font-weight: 800;
+      color: var(--avocado-text-dark);
+    }
+  }
+
+  &-time {
+    font-size: @chat-font-meta;
+    color: var(--avocado-muted-label);
+  }
+
+  // The reason, as a pill. Pushed to the end of the row because it is the thing a
+  // moderator triages on: scanning a column of reasons is how you decide what to
+  // open first.
+  &-reason {
+    margin-left: auto;
+    flex-shrink: 0;
+    padding: 2px @chat-space-sm;
+    border-radius: @chat-radius-pill;
+    background: var(--avocado-surface-1);
+    font-size: @chat-font-meta;
+    font-weight: 700;
+    color: var(--avocado-text-dark);
+  }
+
+  // The two that describe conduct rather than content. Marked so they stand out
+  // of a column of otherwise identical pills.
+  &-reason--harassment,
+  &-reason--inappropriate {
+    background: var(--alert-error-bg, #d83e3e);
+    color: var(--alert-error-color, #fff);
+  }
+
+  &-detail {
+    margin-top: @chat-space-sm;
+    padding-left: @chat-space-md;
+    border-left: 3px solid var(--avocado-border-soft);
+    font-size: @chat-font-label;
+    line-height: 1.5;
+    color: var(--avocado-text-dark);
+    word-break: break-word;
+    // The reporter typed this into a textarea; their line breaks are part of what
+    // they said.
+    white-space: pre-wrap;
+  }
+
+  &-target {
+    margin-top: @chat-space-md;
+    padding: @chat-space-sm @chat-space-md;
+    border-radius: @chat-radius-sm;
+    background: var(--avocado-surface-1);
+
+    &-meta {
+      .chat-flex-row(@chat-space-xs);
+      flex-wrap: wrap;
+      font-size: @chat-font-meta;
+      color: var(--avocado-muted-label);
+
+      .Avatar {
+        width: 18px;
+        height: 18px;
+        flex-shrink: 0;
+      }
+    }
+
+    &-author {
+      font-weight: 800;
+      color: var(--avocado-text-dark);
+    }
+
+    &-channel {
+      padding: 1px 6px;
+      border-radius: @chat-radius-pill;
+      background: var(--avocado-surface-2, var(--avocado-surface-1));
+    }
+
+    &-excerpt {
+      margin-top: @chat-space-xs;
+      font-size: @chat-font-label;
+      line-height: 1.45;
+      color: var(--avocado-text-dark);
+      word-break: break-word;
+    }
+  }
+
+  &-gone {
+    margin-top: @chat-space-md;
+    font-size: @chat-font-label;
+    font-style: italic;
+    color: var(--avocado-muted-label);
+  }
+
+  &-actions {
+    .chat-flex-row(@chat-space-sm);
+    flex-wrap: wrap;
+    margin-top: @chat-space-md;
+  }
+
+  &-delete {
+    color: var(--alert-error-bg, #d83e3e);
+  }
+
+  &-resolvedBy {
+    font-size: @chat-font-meta;
+    color: var(--avocado-muted-label);
+  }
+}
+
+// ── The report dialog ────────────────────────────────────────────────────────
+.ChatFlagModal {
+  &-target {
+    padding: @chat-space-sm @chat-space-md;
+    margin-bottom: @chat-space-lg;
+    border-radius: @chat-radius-sm;
+    background: var(--avocado-surface-1);
+
+    &-author {
+      font-size: @chat-font-meta;
+      font-weight: 800;
+      color: var(--avocado-muted-label);
+    }
+
+    &-excerpt {
+      margin-top: @chat-space-xs;
+      font-size: @chat-font-label;
+      line-height: 1.45;
+      color: var(--avocado-text-dark);
+      word-break: break-word;
+    }
+  }
+
+  // Buttons rather than a select: five options is few enough to show at once, and
+  // seeing the whole list is what stops someone picking "other" by default.
+  &-reasons {
+    .chat-flex-row(@chat-space-sm);
+    flex-wrap: wrap;
+  }
+
+  &-reason {
+    .chat-pill-btn();
+    border: 1px solid var(--avocado-border-soft);
+    background: none;
+    color: var(--avocado-text-dark);
+
+    &:hover:not(:disabled) {
+      background: var(--chat-row-hover-bg);
+    }
+
+    &--active {
+      border-color: var(--primary-color);
+      background: var(--chat-row-selected-bg);
+      color: var(--primary-color);
+      font-weight: 800;
+    }
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+  }
+}
+
 // ── ramon/stickers ───────────────────────────────────────────────────────────
 // Stickers needs nothing from this extension to work: chat content runs through
 // core's shared formatter, which is where stickers registers its replacements,
@@ -2596,6 +2834,18 @@
   align-items: center;
   line-height: 1;
 
+  // The extension gives the badge `margin-left: 5px`, which is right in a post
+  // header — there it follows the name directly, with no gap of its own. This row
+  // is a flex line that already spaces its children by 8px, so that margin only
+  // applied to one side: 13px before the badge, 8px after it.
+  //
+  // Zeroed, then pulled back against the name. A verification mark belongs to the
+  // name the way an accent belongs to a letter — it is not another item in the
+  // row, and at the row's full 8px it floated between the name and the timestamp,
+  // reading as though it stood on its own. The gap *after* it is left alone: that
+  // one separates the identity from the metadata, which is a real boundary.
+  margin: 0 0 0 -@chat-space-xs;
+
   svg,
   img {
     width: 13px;
@@ -2679,6 +2929,10 @@
 
   &-grid {
     .chat-scroll-y();
+    // Vertical only. The mixin leaves the horizontal axis at its default, and a
+    // grid whose columns plus gaps round up past the panel — which `auto-fill`
+    // with a minimum width does — then earns a second scrollbar nobody wants.
+    overflow-x: hidden;
     display: grid;
     // Wide enough for a sticker to be recognisable at a glance — the point of a
     // picker is choosing by sight, not by reading names.
@@ -2692,6 +2946,9 @@
 
   &-item {
     .chat-flex-center();
+    // Grid items default to `min-width: auto`, which refuses to shrink below
+    // their content and is the other half of the overflow.
+    min-width: 0;
     aspect-ratio: 1;
     padding: @chat-space-xs;
     border: 0;

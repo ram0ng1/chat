@@ -12,6 +12,7 @@ import ThreadPanel from './ThreadPanel';
 import PinnedPanel from './PinnedPanel';
 import ThreadsList from './ThreadsList';
 import BookmarksList from './BookmarksList';
+import FlaggedMessagesList from './FlaggedMessagesList';
 import ChatSearch from './ChatSearch';
 import { ChannelSkeleton } from './Skeletons';
 
@@ -144,6 +145,10 @@ export default class ChatPage<CustomAttrs extends IPageAttrs = IPageAttrs> exten
 
     if (routeName === 'chat.bookmarks') {
       return <BookmarksList state={chatState} />;
+    }
+
+    if (routeName === 'chat.flags') {
+      return <FlaggedMessagesList state={chatState} />;
     }
 
     // Built as an array rather than a JSX fragment with a conditional slot.

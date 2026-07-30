@@ -39,6 +39,14 @@ export default class Message extends Model {
   deletedAt = Model.attribute('deletedAt', Model.transformDate);
 
   isDeleted = Model.attribute<boolean>('isDeleted');
+
+  /**
+   * Whether someone other than the author removed it.
+   *
+   * Distinct from `isRedacted()`, which only says the text was withheld from
+   * this reader — true for a self-deleted message too.
+   */
+  isModeratorDeleted = Model.attribute<boolean>('isModeratorDeleted');
   isEdited = Model.attribute<boolean>('isEdited');
 
   isPinned = Model.attribute<boolean>('isPinned');
@@ -50,6 +58,18 @@ export default class Message extends Model {
   mentionsChannelWide = Model.attribute<boolean>('mentionsChannelWide');
   isBookmarked = Model.attribute<boolean>('isBookmarked');
 
+  /** Whether *this* reader has an open report against it. */
+  isFlagged = Model.attribute<boolean>('isFlagged');
+
+  /**
+   * Open reports on this message.
+   *
+   * Withheld from anyone without `ramon-chat.moderate`, so it is undefined rather
+   * than zero for ordinary readers — a visible count would tell everyone which
+   * messages are being reported, and tell an author they had been.
+   */
+  flagsCount = Model.attribute<number | undefined>('flagsCount');
+
   // ── Capability flags ───────────────────────────────────────────────────────
   canEdit = Model.attribute<boolean>('canEdit');
   canDelete = Model.attribute<boolean>('canDelete');
@@ -58,6 +78,7 @@ export default class Message extends Model {
   canCreateThread = Model.attribute<boolean>('canCreateThread');
   canMove = Model.attribute<boolean>('canMove');
   canPin = Model.attribute<boolean>('canPin');
+  canFlag = Model.attribute<boolean>('canFlag');
 
   // ── Relationships ──────────────────────────────────────────────────────────
   user = Model.hasOne<User | null>('user');

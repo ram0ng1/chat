@@ -1,5 +1,10 @@
 import app from 'flarum/forum/app';
+import Avatar from 'flarum/common/components/Avatar';
+import username from 'flarum/common/helpers/username';
 import type Mithril from 'mithril';
+
+import type Message from '../../common/models/Message';
+import userLink from './userLink';
 
 /**
  * The chat bot's identity.
@@ -61,4 +66,29 @@ export function botAvatar(className = 'Avatar'): Mithril.Children {
       {name.charAt(0).toUpperCase()}
     </span>
   );
+}
+
+/**
+ * The avatar for a message, whoever wrote it.
+ *
+ * A bot message has no `user_id` — deliberately, since there is no account behind
+ * it — so anything that renders `message.user()` directly gets a null relation and
+ * draws it as a deleted account. That is what the bookmark list did: every pinned
+ * announcement appeared as `[deleted]` with a blank disc.
+ *
+ * Written once here because four places need the same distinction, and the fourth
+ * one to be written got it wrong.
+ */
+export function authorAvatar(message: Message, className = 'Avatar'): Mithril.Children {
+  return message.isBot() ? botAvatar(className) : <Avatar user={message.user()} className={className} />;
+}
+
+/** The author's name as plain text — for summaries and one-line rows. */
+export function authorName(message: Message): Mithril.Children {
+  return message.isBot() ? botName() : username(message.user());
+}
+
+/** The author's name as a link to their profile. The bot has none to link to. */
+export function authorLink(message: Message): Mithril.Children {
+  return message.isBot() ? botName() : userLink(message.user());
 }

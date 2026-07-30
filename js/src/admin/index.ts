@@ -114,12 +114,6 @@ app.initializers.add('ramon-chat', () => {
 
     // ── Behaviour ─────────────────────────────────────────────────────────────
     .registerSetting({
-      setting: 'ramon-chat.default_reactions',
-      type: 'string',
-      label: app.translator.trans('ramon-chat.admin.settings.default_reactions'),
-      help: app.translator.trans('ramon-chat.admin.settings.default_reactions_help'),
-    })
-    .registerSetting({
       setting: 'ramon-chat.threading_default',
       type: 'boolean',
       label: app.translator.trans('ramon-chat.admin.settings.threading_default'),
@@ -187,6 +181,15 @@ app.initializers.add('ramon-chat', () => {
     )
     .registerPermission(
       {
+        icon: 'fas fa-note-sticky',
+        label: app.translator.trans('ramon-chat.admin.permissions.send_stickers'),
+        permission: 'ramon-chat.sendStickers',
+      },
+      'start',
+      61
+    )
+    .registerPermission(
+      {
         icon: 'fas fa-paperclip',
         label: app.translator.trans('ramon-chat.admin.permissions.upload'),
         permission: 'ramon-chat.upload',
@@ -220,6 +223,17 @@ app.initializers.add('ramon-chat', () => {
       },
       'reply',
       92
+    )
+    // Filing a report, not reading the queue. Under "reply" because it is
+    // something an ordinary member does; reading what they filed is `moderate`.
+    .registerPermission(
+      {
+        icon: 'fas fa-flag',
+        label: app.translator.trans('ramon-chat.admin.permissions.flag_message'),
+        permission: 'ramon-chat.flagMessage',
+      },
+      'reply',
+      91
     )
     .registerPermission(
       {

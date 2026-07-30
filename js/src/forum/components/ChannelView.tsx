@@ -217,7 +217,7 @@ export default class ChannelView extends Component<ChannelViewAttrs> {
             <Button
               className="Button Button--icon Button--flat"
               icon="fas fa-pen-to-square"
-              title={app.translator.trans('ramon-chat.forum.channel.edit')}
+              title={app.translator.trans('ramon-chat.forum.channel.edit', {}, true)}
               onclick={() => this.editChannel()}
             />
           ) : null}
@@ -227,7 +227,7 @@ export default class ChannelView extends Component<ChannelViewAttrs> {
               'ChatChannel-headerAction--active': this.attrs.state.showPinned,
             })}
             icon="fas fa-thumbtack"
-            title={app.translator.trans('ramon-chat.forum.channel.pinned_messages')}
+            title={app.translator.trans('ramon-chat.forum.channel.pinned_messages', {}, true)}
             onclick={() => {
               this.attrs.state.togglePinned();
               m.redraw();
@@ -237,7 +237,7 @@ export default class ChannelView extends Component<ChannelViewAttrs> {
           <Button
             className="Button Button--icon Button--flat"
             icon="fas fa-magnifying-glass"
-            title={app.translator.trans('ramon-chat.forum.channel.search_in_channel')}
+            title={app.translator.trans('ramon-chat.forum.channel.search_in_channel', {}, true)}
             onclick={() => m.route.set(app.route('chat.search', { channel: channel.id() }))}
           />
 
@@ -247,7 +247,7 @@ export default class ChannelView extends Component<ChannelViewAttrs> {
             <Button
               className="Button Button--icon Button--flat"
               icon="fas fa-arrow-right-from-bracket"
-              title={app.translator.trans('ramon-chat.forum.channel.leave')}
+              title={app.translator.trans('ramon-chat.forum.channel.leave', {}, true)}
               onclick={() => this.leave()}
             />
           ) : (
@@ -276,7 +276,7 @@ export default class ChannelView extends Component<ChannelViewAttrs> {
         <Button
           className="Button Button--icon Button--flat"
           icon="fas fa-arrow-right-to-bracket"
-          title={app.translator.trans('ramon-chat.forum.channel.join')}
+          title={app.translator.trans('ramon-chat.forum.channel.join', {}, true)}
           loading={this.joining}
           onclick={() => this.join(false)}
         />
@@ -288,7 +288,7 @@ export default class ChannelView extends Component<ChannelViewAttrs> {
         <Button
           className="Button Button--icon Button--flat"
           icon="fas fa-user-secret"
-          title={app.translator.trans('ramon-chat.forum.channel.join_hidden')}
+          title={app.translator.trans('ramon-chat.forum.channel.join_hidden', {}, true)}
           loading={this.joining}
           onclick={() => this.join(true)}
         />

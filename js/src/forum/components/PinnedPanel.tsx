@@ -67,7 +67,7 @@ export default class PinnedPanel extends Component<PinnedPanelAttrs> {
           <Button
             className="Button Button--icon Button--flat"
             icon="fas fa-xmark"
-            title={app.translator.trans('ramon-chat.forum.channel.close_pinned')}
+            title={app.translator.trans('ramon-chat.forum.channel.close_pinned', {}, true)}
             onclick={onClose}
           />
         </div>

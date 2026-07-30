@@ -276,7 +276,7 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
                   disabled={this.working}
                   title={app.translator.trans('ramon-chat.forum.info.remove_member', {
                     username: username(user),
-                  })}
+                  }, true)}
                   onclick={() => this.remove(user)}
                 />
               ) : null}

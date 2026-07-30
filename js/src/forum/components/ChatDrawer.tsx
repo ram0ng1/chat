@@ -75,7 +75,7 @@ export default class ChatDrawer extends Component<ComponentAttrs> {
             <Button
               className="Button Button--icon Button--flat"
               icon="fas fa-up-right-and-down-left-from-center"
-              title={app.translator.trans('ramon-chat.forum.drawer.full_screen')}
+              title={app.translator.trans('ramon-chat.forum.drawer.full_screen', {}, true)}
               onclick={(e: Event) => {
                 e.stopPropagation();
                 this.goFullScreen();
@@ -87,8 +87,7 @@ export default class ChatDrawer extends Component<ComponentAttrs> {
               title={app.translator.trans(
                 chatState.drawerCollapsed
                   ? 'ramon-chat.forum.drawer.expand'
-                  : 'ramon-chat.forum.drawer.collapse'
-              )}
+                  : 'ramon-chat.forum.drawer.collapse', {}, true)}
               onclick={(e: Event) => {
                 e.stopPropagation();
                 this.toggleCollapsed();
@@ -97,7 +96,7 @@ export default class ChatDrawer extends Component<ComponentAttrs> {
             <Button
               className="Button Button--icon Button--flat"
               icon="fas fa-times"
-              title={app.translator.trans('ramon-chat.forum.drawer.close')}
+              title={app.translator.trans('ramon-chat.forum.drawer.close', {}, true)}
               onclick={(e: Event) => {
                 e.stopPropagation();
                 this.close();

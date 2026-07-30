@@ -151,7 +151,7 @@ export default class BrowseChannelsPage<CustomAttrs extends IPageAttrs = IPageAt
             <Button
               className="Button Button--icon Button--flat"
               icon="fas fa-pen-to-square"
-              title={app.translator.trans('ramon-chat.forum.channel.edit')}
+              title={app.translator.trans('ramon-chat.forum.channel.edit', {}, true)}
               onclick={() => this.edit(channel)}
             />
           ) : null}
