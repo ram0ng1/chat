@@ -10,6 +10,9 @@ composer.lock
 # Test and analysis caches
 .phpunit.cache
 .phpunit.result.cache
+# Psalm's cache, and the SARIF report the CI job writes into the working tree.
+/.psalm-cache
+psalm-taint.sarif
 /tests/integration/tmp
 
 # Editors and OS

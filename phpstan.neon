@@ -1,0 +1,30 @@
+includes:
+    # Pre-existing findings — Eloquent's magic properties, Flarum's dynamically
+    # registered relations, `new static()` in model factories — frozen here so CI
+    # is green and NEW code is still held to level 6. Tighten it over time; the
+    # same arrangement the other ramon/* extensions use.
+    - phpstan-baseline.neon
+
+parameters:
+    level: 6
+    paths:
+        - src
+        - extend.php
+
+    # CI resolves flarum/core through `composer update`, so a finding that only
+    # appears because core is missing locally would be noise rather than signal.
+    bootstrapFiles:
+        - vendor/autoload.php
+
+    # Eloquent's magic properties and Flarum's dynamically registered relations are
+    # not visible to static analysis, and neither is fixable from here.
+    ignoreErrors:
+        - identifier: property.notFound
+          path: src/*
+        - identifier: missingType.iterableValue
+        - identifier: missingType.generics
+
+    excludePaths:
+        analyse:
+            - src/Gdpr/*
+            - src/Audit/*
