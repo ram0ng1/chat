@@ -45,12 +45,20 @@ export default class BrowseChannelsPage<CustomAttrs extends IPageAttrs = IPageAt
   view(): Mithril.Children {
     return (
       <div className="ChatBrowse">
+        {/* The back link sits above the title rather than beside it: it is
+            navigation, not a peer of the page's primary action, and putting the
+            three on one row made the title collide with the buttons as soon as the
+            viewport narrowed. */}
+        <Button
+          className="Button Button--link ChatBrowse-back"
+          icon="fas fa-arrow-left"
+          onclick={() => m.route.set(app.route('chat.index'))}
+        >
+          {app.translator.trans('ramon-chat.forum.nav.chat')}
+        </Button>
+
         <div className="ChatBrowse-header">
           <h1 className="ChatBrowse-title">{app.translator.trans('ramon-chat.forum.browse.title')}</h1>
-
-          <Button className="Button Button--link" icon="fas fa-arrow-left" onclick={() => m.route.set(app.route('chat.index'))}>
-            {app.translator.trans('ramon-chat.forum.nav.chat')}
-          </Button>
 
           {app.forum.attribute<boolean>('canCreateChatChannel') ? (
             <Button className="Button Button--primary" icon="fas fa-plus" onclick={() => this.create()}>
@@ -59,27 +67,30 @@ export default class BrowseChannelsPage<CustomAttrs extends IPageAttrs = IPageAt
           ) : null}
         </div>
 
-        <div className="ChatBrowse-filters">
-          {(['all', 'open', 'closed', 'archived', 'mine'] as BrowseFilter[]).map((f) => (
-            <button
-              key={f}
-              type="button"
-              className={classList('ChatBrowse-filter', { 'ChatBrowse-filter--active': this.filter === f })}
-              onclick={() => this.setFilter(f)}
-            >
-              {app.translator.trans(`ramon-chat.forum.browse.filter_${f}`)}
-            </button>
-          ))}
-        </div>
+        <div className="ChatBrowse-toolbar">
+          <div className="ChatBrowse-filters">
+            {(['all', 'open', 'closed', 'archived', 'mine'] as BrowseFilter[]).map((f) => (
+              <button
+                key={f}
+                type="button"
+                className={classList('ChatBrowse-filter', { 'ChatBrowse-filter--active': this.filter === f })}
+                onclick={() => this.setFilter(f)}
+              >
+                {app.translator.trans(`ramon-chat.forum.browse.filter_${f}`)}
+              </button>
+            ))}
+          </div>
 
-        <div className="Form-group">
-          <input
-            className="FormControl"
-            type="search"
-            placeholder={app.translator.trans('ramon-chat.forum.browse.search_placeholder', {}, true)}
-            value={this.query}
-            oninput={(e: Event) => this.onSearch((e.target as HTMLInputElement).value)}
-          />
+          <div className="ChatBrowse-search">
+            <i className="ChatBrowse-search-icon fas fa-magnifying-glass" aria-hidden="true" />
+            <input
+              className="ChatBrowse-search-input"
+              type="search"
+              placeholder={app.translator.trans('ramon-chat.forum.browse.search_placeholder', {}, true)}
+              value={this.query}
+              oninput={(e: Event) => this.onSearch((e.target as HTMLInputElement).value)}
+            />
+          </div>
         </div>
 
         {this.loading ? (
@@ -116,7 +127,10 @@ export default class BrowseChannelsPage<CustomAttrs extends IPageAttrs = IPageAt
 
           <div className="ChatBrowseCard-meta">
             <span>{app.translator.trans('ramon-chat.forum.channel.members', { count: channel.userCount() ?? 0 })}</span>
-            <span>{channel.messagesCount() ?? 0} msg</span>
+            {/* Was a hardcoded "msg" — the one untranslated string on the page. */}
+            <span>
+              {app.translator.trans('ramon-chat.forum.browse.messages', { count: channel.messagesCount() ?? 0 })}
+            </span>
             {channel.threadingEnabled() ? (
               <span>{app.translator.trans('ramon-chat.forum.channel.threading_enabled')}</span>
             ) : null}

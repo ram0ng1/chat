@@ -60,7 +60,7 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
   }
 
   className(): string {
-    return 'ChannelFormModal Modal--small';
+    return 'ChatModal ChannelFormModal Modal--small';
   }
 
   title(): Mithril.Children {

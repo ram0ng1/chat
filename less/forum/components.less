@@ -884,6 +884,13 @@
     color: var(--button-primary-color, #fff);
     cursor: pointer;
 
+    // The paper plane's ink sits toward its lower-left — the glyph's box is
+    // centred but the shape reads as offset. A sub-pixel nudge puts the *shape*
+    // in the middle, which is what the eye measures.
+    .fas {
+      transform: translate(1px, -1px);
+    }
+
     &:disabled {
       opacity: 0.35;
       cursor: not-allowed;
@@ -1281,23 +1288,78 @@
   margin: 0 auto;
   padding: 20px 12px 48px;
 
+  &-back {
+    margin-bottom: 6px;
+    padding-left: 0;
+  }
+
   &-header {
     .chat-flex-row(12px);
-    margin-bottom: 16px;
+    // Wraps rather than crushing the title against the create button on a narrow
+    // viewport; `baseline` keeps the button's label on the title's baseline
+    // instead of floating in the middle of a 26px heading.
+    flex-wrap: wrap;
+    align-items: baseline;
+    margin-bottom: 18px;
   }
 
   &-title {
     flex: 1;
+    min-width: 0;
+    margin: 0;
     font-size: 26px;
     font-weight: 900;
     letter-spacing: -0.3px;
     color: var(--avocado-text-dark);
   }
 
+  // Filters and search share one row on desktop and stack on mobile, so the two
+  // controls that narrow the same list stay visually together.
+  &-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+
   &-filters {
     .chat-flex-row(6px);
     flex-wrap: wrap;
-    margin-bottom: 16px;
+    flex: 1 1 auto;
+  }
+
+  &-search {
+    .chat-flex-row(8px);
+    flex: 0 1 260px;
+    min-width: 180px;
+    padding: 0 12px;
+    border-radius: @chat-radius-pill;
+    background: var(--avocado-surface-1);
+
+    &-icon {
+      flex-shrink: 0;
+      font-size: 12px;
+      color: var(--avocado-muted-icon);
+    }
+
+    &-input {
+      flex: 1;
+      min-width: 0;
+      height: 34px;
+      border: 0;
+      background: none;
+      font-size: @chat-font-label;
+      color: var(--avocado-text-dark);
+
+      &:focus {
+        outline: none;
+      }
+
+      &::-webkit-search-cancel-button {
+        display: none;
+      }
+    }
   }
 
   &-filter {
@@ -1376,9 +1438,23 @@
     letter-spacing: 0.5px;
   }
 
+  // Was a bare block, so the edit icon and the join button sat side by side with
+  // nothing but collapsed whitespace between them.
   &-action {
+    .chat-flex-row(6px);
     align-self: center;
     flex-shrink: 0;
+  }
+
+  @media (max-width: @chat-mobile-breakpoint) {
+    // The action drops below the text instead of squeezing it to a couple of
+    // words; the icon stays on its own line with the body.
+    flex-wrap: wrap;
+
+    &-action {
+      width: 100%;
+      justify-content: flex-end;
+    }
   }
 }
 
@@ -1534,17 +1610,83 @@
   }
 }
 
-.NewChannelModal {
-  .Form-group .helpText {
-    margin-top: 4px;
+// ── Modals ───────────────────────────────────────────────────────────────────
+// One class shared by every chat modal, so they agree on spacing, labels and help
+// text instead of each drifting into its own arrangement.
+//
+// This replaces a `.NewChannelModal` block that never applied to anything: the
+// component's className() returns `ChannelFormModal`, so the selector matched no
+// element and the form's help text and checkbox rules were dead the whole time.
+.ChatModal {
+  .Modal-body {
+    padding: 18px 20px 20px;
+  }
+
+  .Form-group {
+    margin-bottom: 16px;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+
+    > label {
+      display: block;
+      margin-bottom: 5px;
+      font-size: @chat-font-label;
+      font-weight: 700;
+      color: var(--avocado-text-dark);
+    }
+  }
+
+  .helpText {
+    margin-top: 5px;
     font-size: @chat-font-meta;
+    line-height: 1.4;
     color: var(--avocado-muted-label);
   }
 
+  // A checkbox row is label-first and inline, so the box lines up with its text
+  // rather than sitting on its own line above it.
   label.checkbox {
-    display: block;
-    margin-bottom: 6px;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: @chat-font-label;
     font-weight: 600;
+    color: var(--avocado-text-dark);
+
+    &:last-of-type {
+      margin-bottom: 0;
+    }
+
+    input[type='checkbox'] {
+      // 2px down: a checkbox aligned to the top of a 1.4-line-height label reads
+      // as floating above it.
+      margin: 2px 0 0;
+      flex-shrink: 0;
+    }
+  }
+
+  // The help text under a checkbox belongs to it, so it is indented to the label's
+  // text rather than to the box.
+  label.checkbox + .helpText {
+    margin: -4px 0 10px 24px;
+  }
+
+  .FormControl {
+    width: 100%;
+  }
+
+  select.FormControl {
+    // Flarum leaves a select at its intrinsic width, which makes a short option
+    // list a fraction of the width of the text input above it.
+    width: 100%;
+  }
+
+  // The submit row: full-width primary action, separated from the fields.
+  .Button--block {
+    margin-top: 4px;
   }
 }
 

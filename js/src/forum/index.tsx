@@ -33,6 +33,7 @@ import ChatAutocomplete from './components/ChatAutocomplete';
 import RevisionsModal from './components/RevisionsModal';
 import { bindRealtime, setPollingFallback, realtimeBound } from './realtime';
 import { bindShortcuts } from './utils/shortcuts';
+import ChatPageResolver from './resolvers/ChatPageResolver';
 
 export {
   Channel,
@@ -88,13 +89,22 @@ app.initializers.add('ramon-chat', () => {
   // ── Routes ────────────────────────────────────────────────────────────────
   // Names match the server-side declarations in extend.php. Without these the
   // URLs would serve the SPA and then render "not found".
-  app.routes['chat.index'] = { path: '/chat', component: ChatPage };
-  app.routes['chat.channel'] = { path: '/chat/c/:id', component: ChatPage };
-  app.routes['chat.thread'] = { path: '/chat/c/:id/t/:threadId', component: ChatPage };
+  //
+  // The ChatPage routes share one resolver whose key is constant, so moving
+  // between them redraws instead of remounting — see ChatPageResolver. Without it
+  // opening a thread or switching channel tore the page down and rebuilt it, which
+  // reads as a full reload.
+  const chatPage = { component: ChatPage, resolverClass: ChatPageResolver };
+
+  app.routes['chat.index'] = { path: '/chat', ...chatPage };
+  app.routes['chat.channel'] = { path: '/chat/c/:id', ...chatPage };
+  app.routes['chat.thread'] = { path: '/chat/c/:id/t/:threadId', ...chatPage };
+  app.routes['chat.threads'] = { path: '/chat/threads', ...chatPage };
+  app.routes['chat.search'] = { path: '/chat/search', ...chatPage };
+
+  // A genuinely separate page, so it keeps the default resolver.
   app.routes['chat.browse'] = { path: '/chat/browse', component: BrowseChannelsPage };
   app.routes['chat.browse.filter'] = { path: '/chat/browse/:filter', component: BrowseChannelsPage };
-  app.routes['chat.threads'] = { path: '/chat/threads', component: ChatPage };
-  app.routes['chat.search'] = { path: '/chat/search', component: ChatPage };
 
   // ── Header trigger ────────────────────────────────────────────────────────
   extend(HeaderSecondary.prototype, 'items', function (items) {

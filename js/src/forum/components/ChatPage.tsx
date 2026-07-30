@@ -33,6 +33,45 @@ export default class ChatPage<CustomAttrs extends IPageAttrs = IPageAttrs> exten
     this.boot();
   }
 
+  onbeforeupdate(vnode: Mithril.VnodeDOM<CustomAttrs, this>): void {
+    super.onbeforeupdate(vnode);
+
+    this.syncFromRoute();
+  }
+
+  /**
+   * Brings the active channel and thread back in line with the URL.
+   *
+   * Every chat route shares one mounted page (see ChatPageResolver), so `oninit`
+   * runs once and cannot be where the route is read. In-app navigation sets the
+   * state before it routes, which makes this a no-op most of the time; it exists
+   * for the paths that do not — browser back and forward, and a link arriving from
+   * outside the page.
+   */
+  protected syncFromRoute(): void {
+    const routeId = m.route.param('id');
+    const channelId = routeId ? Number(routeId) : null;
+
+    // Only when the route actually names one. `/chat/search` and `/chat/threads`
+    // carry no id and must not be read as "no channel selected" — the search pane
+    // keeps its channel context.
+    if (channelId !== null && channelId !== chatState.activeChannelId) {
+      chatState.setActiveChannel(channelId);
+
+      // Deep link to a channel the sidebar has not loaded.
+      if (!chatState.channel(channelId)) {
+        app.store.find('chat-channels', String(channelId)).catch(() => {});
+      }
+    }
+
+    const threadParam = m.route.param('threadId');
+    const threadId = threadParam ? Number(threadParam) : null;
+
+    if (threadId !== chatState.activeThreadId) {
+      chatState.activeThreadId = threadId;
+    }
+  }
+
   view(): Mithril.Children {
     const channel = chatState.channel(chatState.activeChannelId);
     const narrow = window.innerWidth <= 767;

@@ -38,7 +38,7 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
   private working = false;
 
   className(): string {
-    return 'Modal--medium ChatChannelInfoModal';
+    return 'ChatModal ChatChannelInfoModal Modal--medium';
   }
 
   title(): Mithril.Children {
