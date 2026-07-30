@@ -36,6 +36,7 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
   private autoJoin!: Stream<boolean>;
   private allowChannelWide!: Stream<boolean>;
   private autoJoinOnReply!: Stream<boolean>;
+  private isPrivate!: Stream<boolean>;
 
   oninit(vnode: Mithril.Vnode<ChannelFormModalAttrs>): void {
     super.oninit(vnode);
@@ -53,6 +54,10 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
     this.autoJoin = Stream(channel ? Boolean(channel.autoJoin()) : false);
     this.allowChannelWide = Stream(channel ? channel.allowChannelWideMentions() !== false : true);
     this.autoJoinOnReply = Stream(channel ? Boolean(channel.autoJoinOnReply()) : false);
+
+    // Public by default: a channel nobody can find is the surprising outcome, so
+    // it has to be chosen rather than fallen into.
+    this.isPrivate = Stream(channel ? Boolean(channel.isPrivate()) : false);
   }
 
   protected isEditing(): boolean {
@@ -99,6 +104,7 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
             />
           </div>
 
+          {this.visibility()}
           {this.tagOptions()}
 
           <div className="Form-group">
@@ -167,9 +173,137 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
               )}
             </Button>
           </div>
+
+          {this.lifecycle()}
         </div>
       </div>
     );
+  }
+
+  /**
+   * Public or invitation-only.
+   *
+   * Radios rather than a checkbox: the two options are named, and "private" is a
+   * decision about who can find the channel at all — not a toggle whose unchecked
+   * state should be inferred from its label.
+   */
+  protected visibility(): Mithril.Children {
+    return (
+      <div className="Form-group">
+        <label>{app.translator.trans('ramon-chat.forum.new_channel.visibility')}</label>
+
+        <label className="checkbox">
+          <input
+            type="radio"
+            name="ramon-chat-visibility"
+            checked={!this.isPrivate()}
+            onchange={() => this.isPrivate(false)}
+            disabled={this.loading}
+          />
+          {app.translator.trans('ramon-chat.forum.new_channel.public')}
+        </label>
+        <div className="helpText">{app.translator.trans('ramon-chat.forum.new_channel.public_help')}</div>
+
+        <label className="checkbox">
+          <input
+            type="radio"
+            name="ramon-chat-visibility"
+            checked={this.isPrivate()}
+            onchange={() => this.isPrivate(true)}
+            disabled={this.loading}
+          />
+          {app.translator.trans('ramon-chat.forum.new_channel.private')}
+        </label>
+        <div className="helpText">{app.translator.trans('ramon-chat.forum.new_channel.private_help')}</div>
+      </div>
+    );
+  }
+
+  /**
+   * Close and archive, on an existing channel only.
+   *
+   * Neither means anything for a channel that does not exist yet, and both act
+   * immediately rather than on submit — they are not settings being edited, they
+   * are state changes, and mixing them into the form's save would make an
+   * unsaved-and-abandoned form able to archive something.
+   */
+  protected lifecycle(): Mithril.Children {
+    const channel = this.attrs.channel;
+
+    if (!channel) return null;
+
+    const closed = channel.status() === 'closed';
+    const archived = Boolean(channel.archivedAt());
+    const items: Mithril.Children[] = [];
+
+    if (channel.canClose() && !archived) {
+      items.push(
+        <Button
+          className="Button"
+          icon={closed ? 'fas fa-lock-open' : 'fas fa-lock'}
+          loading={this.loading}
+          onclick={() => this.setStatus(closed ? 'open' : 'closed')}
+        >
+          {app.translator.trans(
+            closed ? 'ramon-chat.forum.info.reopen_channel' : 'ramon-chat.forum.info.close_channel'
+          )}
+        </Button>
+      );
+    }
+
+    if (channel.canArchive() && !archived) {
+      items.push(
+        <Button className="Button" icon="fas fa-box-archive" loading={this.loading} onclick={() => this.archive()}>
+          {app.translator.trans('ramon-chat.forum.info.archive_channel')}
+        </Button>
+      );
+    }
+
+    if (items.length === 0) return null;
+
+    return (
+      <div className="Form-group ChannelFormModal-lifecycle">
+        <label>{app.translator.trans('ramon-chat.forum.edit_channel.lifecycle')}</label>
+        <div className="ChannelFormModal-lifecycleActions">{items}</div>
+        <div className="helpText">{app.translator.trans('ramon-chat.forum.edit_channel.lifecycle_help')}</div>
+      </div>
+    );
+  }
+
+  protected async setStatus(status: 'open' | 'closed'): Promise<void> {
+    await this.act(`/chat-channels/${this.attrs.channel!.id()}/status`, { status });
+  }
+
+  protected async archive(): Promise<void> {
+    if (!confirm(app.translator.trans('ramon-chat.forum.edit_channel.archive_confirm', {}, true))) return;
+
+    await this.act(`/chat-channels/${this.attrs.channel!.id()}/archive`, {});
+  }
+
+  protected async act(path: string, attributes: Record<string, unknown>): Promise<void> {
+    this.loading = true;
+    m.redraw();
+
+    try {
+      const payload = await app.request<any>({
+        method: 'POST',
+        url: `${app.forum.attribute('apiUrl')}${path}`,
+        body: { data: { attributes } },
+      });
+
+      if (payload?.data) app.store.pushPayload(payload);
+
+      this.attrs.onSaved?.(this.attrs.channel!);
+      this.hide();
+    } catch (e: any) {
+      app.alerts.show(
+        { type: 'error' },
+        e?.response?.errors?.[0]?.detail ?? app.translator.trans('ramon-chat.forum.edit_channel.failed')
+      );
+    } finally {
+      this.loading = false;
+      m.redraw();
+    }
   }
 
   /**
@@ -232,6 +366,7 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
       allowChannelWideMentions: this.allowChannelWide(),
       autoJoin: this.autoJoin(),
       autoJoinOnReply: this.autoJoinOnReply(),
+      isPrivate: this.isPrivate(),
       tagId: this.tagId() ? Number(this.tagId()) : null,
     };
 

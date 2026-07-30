@@ -1,6 +1,7 @@
 import app from 'flarum/forum/app';
 
 import chatState from './state/chat';
+import { playNotificationSound } from './utils/sound';
 import type Message from '../common/models/Message';
 
 /**
@@ -175,8 +176,35 @@ function onMessage(data: MessagePayload): void {
   chatState.upsertMessage(message);
   bumpChannel(data);
   bumpThread(data);
+  announce(data);
 
   m.redraw();
+}
+
+/**
+ * Sounds the notification for an incoming message.
+ *
+ * Skipped when the message's channel is the one on screen and the tab has focus:
+ * you watched it arrive, so a chime adds nothing. Skipped for a muted channel for
+ * the same reason the badge is.
+ *
+ * Own messages never reach here — ChatBroadcaster excludes the actor from its own
+ * broadcast.
+ */
+function announce(data: MessagePayload): void {
+  const channel = chatState.channel(data.channelId);
+
+  if (channel?.isMuted()) return;
+
+  const watching =
+    chatState.activeChannelId === data.channelId &&
+    !chatState.drawerCollapsed &&
+    document.visibilityState === 'visible' &&
+    document.hasFocus();
+
+  if (watching) return;
+
+  playNotificationSound();
 }
 
 /**

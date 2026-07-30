@@ -43,6 +43,11 @@ class AnnounceMembershipChanges
 
     public function whenJoined(UserJoinedChannel $event): void
     {
+        // The entire point of a hidden join is that it goes unremarked.
+        if ($event->hidden) {
+            return;
+        }
+
         if (! $event->channel->isDirect()) {
             return;
         }

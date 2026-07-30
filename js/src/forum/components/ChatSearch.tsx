@@ -10,6 +10,7 @@ import type Mithril from 'mithril';
 
 import type Message from '../../common/models/Message';
 import type ChatState from '../state/ChatState';
+import { SearchResultsSkeleton } from './Skeletons';
 
 export interface ChatSearchAttrs extends ComponentAttrs {
   state: ChatState;
@@ -88,7 +89,7 @@ export default class ChatSearch extends Component<ChatSearchAttrs> {
 
   protected body(): Mithril.Children {
     if (this.searching && this.results.length === 0) {
-      return <LoadingIndicator />;
+      return SearchResultsSkeleton();
     }
 
     if (!this.searched) {

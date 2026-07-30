@@ -59,6 +59,14 @@ class ChannelPolicy extends AbstractPolicy
             return $channel->membershipFor($actor) !== null ? true : false;
         }
 
+        // An announcement channel: everyone reads, moderators write. Administrators
+        // pass because `hasPermission` grants them everything, so there is no
+        // separate admin branch to keep in step with this one.
+        if ($channel->restrictsPostingToModerators()
+            && ! $actor->hasPermission('ramon-chat.moderate')) {
+            return false;
+        }
+
         return true;
     }
 
@@ -69,7 +77,37 @@ class ChannelPolicy extends AbstractPolicy
             return false;
         }
 
+        // A private channel is invitation-only for ordinary members: the visibility
+        // scope hides it from non-members, and someone who was never invited has no
+        // business letting themselves in.
+        //
+        // Moderators are the exception, and deliberately so — the request is that a
+        // moderator who left a channel can get back in to moderate it. They can
+        // already read every private channel; being unable to *enter* one only means
+        // moderation has to happen from outside the room.
+        if ($channel->isPrivate()
+            && $channel->membershipFor($actor) === null
+            && ! $actor->hasPermission('ramon-chat.moderate')) {
+            return false;
+        }
+
         return $this->view($actor, $channel);
+    }
+
+    /**
+     * Joining without appearing to anyone else.
+     *
+     * Moderators only. A hidden member is absent from the participant list and the
+     * member count, so this is the ability to be in a room unannounced — which is a
+     * moderation power, not a preference.
+     */
+    public function joinHidden(User $actor, Channel $channel): ?bool
+    {
+        if (! $actor->hasPermission('ramon-chat.moderate')) {
+            return false;
+        }
+
+        return $this->join($actor, $channel);
     }
 
     /**

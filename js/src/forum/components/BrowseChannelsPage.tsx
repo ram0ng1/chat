@@ -11,6 +11,7 @@ import { displayEmoji } from '../utils/emoji';
 import type Channel from '../../common/models/Channel';
 import chatState from '../state/chat';
 import ChannelFormModal from './ChannelFormModal';
+import { BrowseSkeleton } from './Skeletons';
 
 type BrowseFilter = 'all' | 'open' | 'closed' | 'archived' | 'mine';
 
@@ -94,7 +95,7 @@ export default class BrowseChannelsPage<CustomAttrs extends IPageAttrs = IPageAt
         </div>
 
         {this.loading ? (
-          <LoadingIndicator />
+          BrowseSkeleton()
         ) : this.channels.length === 0 ? (
           <div className="ChatBrowse-empty">{app.translator.trans('ramon-chat.forum.browse.empty')}</div>
         ) : (
@@ -114,6 +115,13 @@ export default class BrowseChannelsPage<CustomAttrs extends IPageAttrs = IPageAt
         <div className="ChatBrowseCard-body">
           <div className="ChatBrowseCard-name">
             <span>{channel.displayName()}</span>
+
+            {channel.isPrivate() ? (
+              <span className="ChatBrowseCard-status">
+                <i className="ChatBrowseCard-lock fas fa-lock" aria-hidden="true" />{' '}
+                {app.translator.trans('ramon-chat.forum.new_channel.private')}
+              </span>
+            ) : null}
             {channel.isOpen() ? null : (
               <span className="ChatBrowseCard-status">
                 {app.translator.trans(

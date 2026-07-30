@@ -55,10 +55,12 @@ class ScopeChannelVisibility
             }
 
             // Forum-wide category channels (no bound tag).
-            $query->orWhere(function (Builder $query) {
+            $query->orWhere(function (Builder $query) use ($actor) {
                 $query
                     ->where('chat_channels.type', 'category')
                     ->whereNull('chat_channels.tag_id');
+
+                $this->restrictPrivate($query, $actor);
             });
 
             // Tag-bound category channels. When flarum/tags is unavailable these
@@ -75,8 +77,48 @@ class ScopeChannelVisibility
                                 ->whereHasPermission($actor, 'viewForum')
                                 ->select('tags.id');
                         });
+
+                    // Composes with the tag check rather than replacing it: a
+                    // private channel on a restricted category is restricted twice.
+                    $this->restrictPrivate($query, $actor);
                 });
             }
+        });
+    }
+
+    /**
+     * Narrows a category-channel branch so private channels reach members only.
+     *
+     * A public channel passes straight through. A private one requires a live
+     * membership row, which is what makes it invitation-only: it cannot be found in
+     * Browse, cannot be joined from there, and its name is never shown to anyone who
+     * was not added.
+     *
+     * Moderators are exempt, because a private channel they cannot see is one they
+     * cannot moderate — the same trade Flarum makes for private discussions.
+     */
+    protected function restrictPrivate(Builder $query, User $actor): void
+    {
+        if ($actor->hasPermission('ramon-chat.moderate')) {
+            return;
+        }
+
+        $query->where(function (Builder $query) use ($actor) {
+            $query->where('chat_channels.is_private', false);
+
+            // A guest has no membership to find, so the branch is simply skipped
+            // and every private channel stays hidden from them.
+            if (! $actor->exists) {
+                return;
+            }
+
+            $query->orWhereExists(function ($sub) use ($actor) {
+                $sub->selectRaw(1)
+                    ->from('chat_channel_user')
+                    ->whereColumn('chat_channel_user.channel_id', 'chat_channels.id')
+                    ->where('chat_channel_user.user_id', $actor->id)
+                    ->whereNull('chat_channel_user.left_at');
+            });
         });
     }
 }

@@ -31,9 +31,19 @@ class MembershipManager
      * departure rather than creating a duplicate row, which is what makes
      * "restarting a DM links you back to the earlier messages" work.
      */
-    public function join(Channel $channel, User $user, ?int $notificationLevel = null): ChannelUser
-    {
-        return $this->db->transaction(function () use ($channel, $user, $notificationLevel) {
+    /**
+     * @param  bool  $hidden  Join without appearing to anyone else — no entry in the
+     *                        member list, no change to `user_count`, and no join
+     *                        announcement. For moderators reading a channel without
+     *                        their presence changing how people talk in it.
+     */
+    public function join(
+        Channel $channel,
+        User $user,
+        ?int $notificationLevel = null,
+        bool $hidden = false
+    ): ChannelUser {
+        return $this->db->transaction(function () use ($channel, $user, $notificationLevel, $hidden) {
             /** @var ChannelUser|null $membership */
             $membership = ChannelUser::query()
                 ->where('channel_id', $channel->id)
@@ -42,6 +52,7 @@ class MembershipManager
 
             $isNew = $membership === null;
             $wasGone = $membership !== null && $membership->left_at !== null;
+            $wasHidden = $membership !== null && (bool) $membership->hidden;
 
             if ($isNew) {
                 $membership = new ChannelUser();
@@ -53,6 +64,7 @@ class MembershipManager
 
             $membership->following = true;
             $membership->left_at = null;
+            $membership->hidden = $hidden;
 
             if ($notificationLevel !== null) {
                 $membership->notification_level = $notificationLevel;
@@ -66,8 +78,19 @@ class MembershipManager
 
             $membership->save();
 
-            if ($isNew || $wasGone) {
+            // `user_count` is what everyone else sees, so it tracks visible
+            // membership only. Each branch below is a transition *of visibility*,
+            // not of membership: someone can go from hidden to visible without
+            // having joined or left in the meantime.
+            $wasVisible = ! $isNew && ! $wasGone && ! $wasHidden;
+            $isVisible = ! $hidden;
+
+            if (! $wasVisible && $isVisible) {
                 $channel->increment('user_count');
+            } elseif ($wasVisible && ! $isVisible) {
+                if ($channel->user_count > 0) {
+                    $channel->decrement('user_count');
+                }
             }
 
             return $membership;
@@ -92,13 +115,17 @@ class MembershipManager
                 return null;
             }
 
+            $wasHidden = (bool) $membership->hidden;
+
             $membership->following = false;
             $membership->left_at = Carbon::now();
             $membership->unread_count = 0;
             $membership->unread_mentions_count = 0;
             $membership->save();
 
-            if ($channel->user_count > 0) {
+            // A hidden member was never counted, so leaving must not decrement —
+            // otherwise a lurker's departure silently undercounts the channel.
+            if (! $wasHidden && $channel->user_count > 0) {
                 $channel->decrement('user_count');
             }
 

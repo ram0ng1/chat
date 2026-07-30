@@ -9,6 +9,7 @@ import type Channel from '../../common/models/Channel';
 import type Message from '../../common/models/Message';
 import type ChatState from '../state/ChatState';
 import ChatMessage from './ChatMessage';
+import { MessageStreamSkeleton } from './Skeletons';
 
 export interface PinnedPanelAttrs extends ComponentAttrs {
   channel: Channel;
@@ -65,7 +66,7 @@ export default class PinnedPanel extends Component<PinnedPanelAttrs> {
         </div>
 
         <div className="ChatThreadPanel-stream">
-          {this.loading ? <LoadingIndicator /> : null}
+          {this.loading ? MessageStreamSkeleton(3) : null}
 
           {!this.loading && this.messages.length === 0 ? (
             <div className="ChatBrowse-empty">

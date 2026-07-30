@@ -12,15 +12,33 @@
 .ChatNavButton {
   position: relative;
 
+  // The same treatment core gives a HeaderDropdown toggle — the flag and bell
+  // beside us — so the chat icon matches them in size and spacing instead of
+  // falling back to the generic .Button padding, which is larger.
+  //
+  // Scoped to the same breakpoint core scopes it to: on a phone the header moves
+  // into the drawer and its controls show their labels, so hiding ours there would
+  // leave an unlabelled icon in a list of named rows.
+  @media @tablet-up {
+    .Button--icon();
+  }
+
   &-dot {
     position: absolute;
-    top: 6px;
-    right: 6px;
+    // Sits on the icon's upper-right corner within the 36px button.
+    top: 7px;
+    right: 7px;
     width: 8px;
     height: 8px;
     border-radius: 50%;
     background: var(--primary-color);
     box-shadow: 0 0 0 2px var(--header-bg, var(--body-bg));
+  }
+
+  // .Button--icon hides .Button-label, which is where the Bubble's sibling text
+  // would sit; the badge itself has to stay visible.
+  .Bubble {
+    display: block;
   }
 }
 
@@ -852,7 +870,15 @@
   &-tools {
     .chat-flex-row(2px);
     flex-shrink: 0;
-    padding-bottom: 6px;
+  }
+
+  // The shell is `align-items: flex-end`, so a child with no offset sits flush on
+  // the bottom edge. This lift used to be on the tools alone, which put the attach
+  // button one line higher than the send button; both need it, and they need the
+  // same value, to land on the last line of text together.
+  &-tools,
+  &-send {
+    margin-bottom: 6px;
   }
 
   &-tool {
@@ -1553,21 +1579,39 @@
 
 // ── Skeletons ────────────────────────────────────────────────────────────────
 // Rendered while a channel's first page loads, so the panel does not flash empty.
+// ── Skeletons ────────────────────────────────────────────────────────────────
+// Placeholders shaped like the content they stand in for, so the layout does not
+// jump when the data arrives. See Skeletons.tsx — the shapes there and the rules
+// here have to be changed together.
 .ChatSkeleton {
   padding: 12px 16px;
+
+  // For a skeleton that sits inside a container which already pads.
+  &--flush {
+    padding: 0;
+  }
 
   &-row {
     display: flex;
     gap: 12px;
     margin-bottom: @chat-message-group-gap;
+
+    &--tight {
+      margin-bottom: 14px;
+    }
   }
 
   &-avatar {
     .chat-icon-circle(@chat-avatar-size; var(--avocado-surface-1));
+
+    &--large { width: 38px; height: 38px; }
+    &--small { width: @chat-avatar-size-compact; height: @chat-avatar-size-compact; }
+    &--tiny  { width: 16px; height: 16px; border-radius: 4px; }
   }
 
   &-lines {
     flex: 1;
+    min-width: 0;
   }
 
   &-line {
@@ -1576,16 +1620,100 @@
     border-radius: 4px;
     background: var(--avocado-surface-1);
 
+    &:last-child {
+      margin-bottom: 0;
+    }
+
+    // Matches the weight of the text each one replaces, so the block has the same
+    // visual rhythm as the real card.
+    &--title { height: 13px; }
+    &--meta  { height: 8px; }
+
     &--short { width: 30%; }
     &--long  { width: 75%; }
   }
 
+  // ── Whole channel pane ─────────────────────────────────────────────────────
+  &-channel {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &-channelStream {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  // Stands in for the composer shell, at its real height.
+  &-composer {
+    flex-shrink: 0;
+    height: @chat-composer-min-height;
+    margin: 8px 12px 12px;
+    border-radius: @chat-radius-md;
+    background: var(--avocado-surface-1);
+  }
+
+  // ── Sidebar ────────────────────────────────────────────────────────────────
+  &-sidebar {
+    padding: 12px;
+  }
+
+  &-quickLink,
+  &-channelRow {
+    .chat-flex-row(8px);
+    height: 32px;
+    padding: 0 10px;
+  }
+
+  &-channelRow {
+    height: 36px;
+  }
+
+  // The "CHANNELS" section heading.
+  &-heading {
+    width: 70px;
+    height: 8px;
+    margin: 18px 10px 8px;
+    border-radius: 4px;
+    background: var(--avocado-surface-1);
+  }
+
+  // ── Odds and ends ──────────────────────────────────────────────────────────
+  &-memberRow {
+    .chat-flex-row(8px);
+    padding: 7px 4px;
+  }
+
+  // Stands in for a card's action button.
+  &-button {
+    align-self: center;
+    flex-shrink: 0;
+    width: 76px;
+    height: 30px;
+    border-radius: @chat-radius-pill;
+    background: var(--avocado-surface-1);
+  }
+
   .chat-motion-safe({
     &-avatar,
-    &-line {
+    &-line,
+    &-heading,
+    &-button,
+    &-composer {
       animation: chat-pulse 1.4s ease-in-out infinite;
     }
   });
+}
+
+// A card rendered as its own skeleton keeps the card chrome and animates its
+// contents, so the grid does not reflow when the real cards arrive.
+.ChatBrowseCard.ChatSkeleton {
+  padding: 14px 16px;
+}
+
+.ChatRevisions-entry.ChatSkeleton {
+  padding: 10px 12px;
 }
 
 @keyframes chat-pulse {
@@ -1838,5 +1966,41 @@
 
   &:hover {
     background: none;
+  }
+}
+
+// Close and archive on the channel form: state changes, kept visually apart from
+// the fields above them so they cannot be mistaken for part of the save.
+.ChannelFormModal-lifecycle {
+  padding-top: 14px;
+  border-top: 1px solid var(--avocado-border-soft);
+
+  &Actions {
+    .chat-flex-row(8px);
+    flex-wrap: wrap;
+  }
+}
+
+// A private channel is marked in the sidebar and in Browse, so its restricted
+// nature is visible where the channel is, not only in its settings.
+.ChatChannelRow-lock,
+.ChatBrowseCard-lock {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--avocado-muted-icon);
+}
+
+// Inside the drawer the pinned panel has nowhere to sit beside the conversation,
+// so it covers it — the same treatment the thread panel gets on a phone.
+.ChatDrawer-body {
+  position: relative;
+
+  .ChatPinnedPanel {
+    position: absolute;
+    inset: 0;
+    width: auto;
+    border-left: 0;
+    z-index: var(--avocado-z-sidebar);
+    background: var(--body-bg);
   }
 }

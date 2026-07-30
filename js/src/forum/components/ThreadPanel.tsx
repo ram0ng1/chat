@@ -11,6 +11,7 @@ import type Thread from '../../common/models/Thread';
 import type ChatState from '../state/ChatState';
 import ChatMessage from './ChatMessage';
 import ChatComposer from './ChatComposer';
+import { MessageStreamSkeleton } from './Skeletons';
 
 export interface ThreadPanelAttrs extends ComponentAttrs {
   channel: Channel;
@@ -97,7 +98,7 @@ export default class ThreadPanel extends Component<ThreadPanelAttrs> {
         </div>
 
         <div className="ChatThreadPanel-stream" onscroll={(e: Event) => this.onScroll(e)}>
-          {stream.loading && stream.messages.length === 0 ? <LoadingIndicator /> : null}
+          {stream.loading && stream.messages.length === 0 ? MessageStreamSkeleton(4) : null}
 
           {stream.loadedInitial && stream.messages.length === 0 ? (
             <div className="ChatBrowse-empty">

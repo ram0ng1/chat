@@ -36,6 +36,12 @@ export interface ChatAutocompleteAttrs extends ComponentAttrs {
  */
 export default class ChatAutocomplete extends Component<ChatAutocompleteAttrs> {
   onupdate(vnode: Mithril.VnodeDOM<ChatAutocompleteAttrs>): void {
+    // `view()` returns null whenever there is nothing to suggest — which is most
+    // of the time — and a component that rendered nothing has no `vnode.dom`.
+    // Without this guard every redraw of the composer threw
+    // "Cannot read properties of undefined (reading 'querySelector')".
+    if (!vnode.dom) return;
+
     // Keep the keyboard-selected row in view when arrowing past the fold.
     const active = vnode.dom.querySelector('.ChatAutocomplete-item--active');
 

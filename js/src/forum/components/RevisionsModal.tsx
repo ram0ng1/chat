@@ -6,6 +6,7 @@ import humanTime from 'flarum/common/helpers/humanTime';
 import type Mithril from 'mithril';
 
 import type Message from '../../common/models/Message';
+import { RevisionsSkeleton } from './Skeletons';
 
 interface Revision {
   id: number;
@@ -49,7 +50,7 @@ export default class RevisionsModal extends Modal<RevisionsModalAttrs> {
     if (this.loadingRevisions) {
       return (
         <div className="Modal-body">
-          <LoadingIndicator />
+          {RevisionsSkeleton()}
         </div>
       );
     }

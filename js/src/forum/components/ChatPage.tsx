@@ -12,6 +12,7 @@ import ThreadPanel from './ThreadPanel';
 import PinnedPanel from './PinnedPanel';
 import ThreadsList from './ThreadsList';
 import ChatSearch from './ChatSearch';
+import { ChannelSkeleton } from './Skeletons';
 
 /**
  * Full-screen chat.
@@ -101,7 +102,9 @@ export default class ChatPage<CustomAttrs extends IPageAttrs = IPageAttrs> exten
     narrow: boolean,
     threadId: number | null
   ): Mithril.Children {
-    if (this.loading) return <LoadingIndicator />;
+    // The pane's real shape, not a spinner: this is the entire right-hand side
+    // of the page on first load.
+    if (this.loading) return ChannelSkeleton();
 
     if (routeName === 'chat.search') {
       // The channel button passes `?channel=`; the sidebar link does not, and
