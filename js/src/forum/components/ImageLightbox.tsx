@@ -1,13 +1,14 @@
-import app from 'flarum/forum/app';
-import Component from 'flarum/common/Component';
-import type { ComponentAttrs } from 'flarum/common/Component';
-import Button from 'flarum/common/components/Button';
-import humanTime from 'flarum/common/helpers/humanTime';
-import username from 'flarum/common/helpers/username';
-import type Mithril from 'mithril';
+import app from "flarum/forum/app";
+import Component from "flarum/common/Component";
+import type { ComponentAttrs } from "flarum/common/Component";
+import Button from "flarum/common/components/Button";
+import humanTime from "flarum/common/helpers/humanTime";
+import username from "flarum/common/helpers/username";
+import type Mithril from "mithril";
 
-import type Message from '../../common/models/Message';
-import type Upload from '../../common/models/Upload';
+import type Message from "../../common/models/Message";
+import type Upload from "../../common/models/Upload";
+import { safeFileUrl } from "../utils/url";
 
 export interface ImageLightboxAttrs extends ComponentAttrs {
   /** Every image in the message, so the viewer can move between them. */
@@ -44,19 +45,20 @@ export default class ImageLightbox extends Component<ImageLightboxAttrs> {
     super.oncreate(vnode);
 
     this.keyListener = (e: KeyboardEvent) => this.onKey(e);
-    document.addEventListener('keydown', this.keyListener);
+    document.addEventListener("keydown", this.keyListener);
 
     // The page behind must not scroll while the viewer is open, or a scroll
     // gesture aimed at the image moves the conversation instead.
-    document.body.style.overflow = 'hidden';
+    document.body.style.overflow = "hidden";
 
     (vnode.dom as HTMLElement).focus();
   }
 
   onremove(): void {
-    if (this.keyListener) document.removeEventListener('keydown', this.keyListener);
+    if (this.keyListener)
+      document.removeEventListener("keydown", this.keyListener);
 
-    document.body.style.overflow = '';
+    document.body.style.overflow = "";
   }
 
   view(): Mithril.Children {
@@ -73,7 +75,7 @@ export default class ImageLightbox extends Component<ImageLightboxAttrs> {
         tabindex={-1}
         role="dialog"
         aria-modal="true"
-        aria-label={upload.fileName() ?? ''}
+        aria-label={upload.fileName() ?? ""}
         onclick={(e: Event) => {
           // Only the backdrop closes. Clicking the picture itself is what someone
           // does to look at it more closely, not to dismiss it.
@@ -82,8 +84,12 @@ export default class ImageLightbox extends Component<ImageLightboxAttrs> {
       >
         <div className="ChatLightbox-bar">
           <div className="ChatLightbox-meta">
-            <span className="ChatLightbox-author">{username(message.user())}</span>
-            {at ? <span className="ChatLightbox-time">{humanTime(at)}</span> : null}
+            <span className="ChatLightbox-author">
+              {username(message.user())}
+            </span>
+            {at ? (
+              <span className="ChatLightbox-time">{humanTime(at)}</span>
+            ) : null}
             <span className="ChatLightbox-name">{upload.fileName()}</span>
           </div>
 
@@ -97,14 +103,24 @@ export default class ImageLightbox extends Component<ImageLightboxAttrs> {
             <Button
               className="Button Button--icon Button--flat"
               icon="fas fa-arrow-up-right-from-square"
-              title={app.translator.trans('ramon-chat.forum.lightbox.open_original', {}, true)}
-              onclick={() => window.open(upload.url() ?? '', '_blank', 'noopener,noreferrer')}
+              title={app.translator.trans(
+                "ramon-chat.forum.lightbox.open_original",
+                {},
+                true,
+              )}
+              onclick={() =>
+                window.open(safeFileUrl(upload.url()), "_blank", "noopener,noreferrer")
+              }
             />
 
             <Button
               className="Button Button--icon Button--flat"
               icon="fas fa-xmark"
-              title={app.translator.trans('ramon-chat.forum.lightbox.close', {}, true)}
+              title={app.translator.trans(
+                "ramon-chat.forum.lightbox.close",
+                {},
+                true,
+              )}
               onclick={onClose}
             />
           </div>
@@ -114,7 +130,11 @@ export default class ImageLightbox extends Component<ImageLightboxAttrs> {
           <Button
             className="Button Button--icon Button--flat ChatLightbox-nav ChatLightbox-nav--prev"
             icon="fas fa-chevron-left"
-            title={app.translator.trans('ramon-chat.forum.lightbox.previous', {}, true)}
+            title={app.translator.trans(
+              "ramon-chat.forum.lightbox.previous",
+              {},
+              true,
+            )}
             onclick={(e: Event) => {
               e.stopPropagation();
               this.step(-1);
@@ -124,8 +144,8 @@ export default class ImageLightbox extends Component<ImageLightboxAttrs> {
 
         <img
           className="ChatLightbox-image"
-          src={upload.url() ?? ''}
-          alt={upload.fileName() ?? ''}
+          src={safeFileUrl(upload.url())}
+          alt={upload.fileName() ?? ""}
           onclick={(e: Event) => e.stopPropagation()}
         />
 
@@ -133,7 +153,11 @@ export default class ImageLightbox extends Component<ImageLightboxAttrs> {
           <Button
             className="Button Button--icon Button--flat ChatLightbox-nav ChatLightbox-nav--next"
             icon="fas fa-chevron-right"
-            title={app.translator.trans('ramon-chat.forum.lightbox.next', {}, true)}
+            title={app.translator.trans(
+              "ramon-chat.forum.lightbox.next",
+              {},
+              true,
+            )}
             onclick={(e: Event) => {
               e.stopPropagation();
               this.step(1);
@@ -145,14 +169,14 @@ export default class ImageLightbox extends Component<ImageLightboxAttrs> {
   }
 
   protected onKey(e: KeyboardEvent): void {
-    if (e.key === 'Escape') {
+    if (e.key === "Escape") {
       this.attrs.onClose();
 
       return;
     }
 
-    if (e.key === 'ArrowLeft') this.step(-1);
-    if (e.key === 'ArrowRight') this.step(1);
+    if (e.key === "ArrowLeft") this.step(-1);
+    if (e.key === "ArrowRight") this.step(1);
   }
 
   /** Wraps, so the arrows never dead-end on the first or last image. */

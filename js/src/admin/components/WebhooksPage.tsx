@@ -1,10 +1,10 @@
-import app from 'flarum/admin/app';
-import ExtensionPage from 'flarum/admin/components/ExtensionPage';
-import Button from 'flarum/common/components/Button';
-import LoadingIndicator from 'flarum/common/components/LoadingIndicator';
-import BotSettings from './BotSettings';
-import Switch from 'flarum/common/components/Switch';
-import type Mithril from 'mithril';
+import app from "flarum/admin/app";
+import ExtensionPage from "flarum/admin/components/ExtensionPage";
+import Button from "flarum/common/components/Button";
+import LoadingIndicator from "flarum/common/components/LoadingIndicator";
+import BotSettings from "./BotSettings";
+import Switch from "flarum/common/components/Switch";
+import type Mithril from "mithril";
 
 interface WebhookModel {
   id(): string;
@@ -31,8 +31,8 @@ export default class WebhooksPage extends ExtensionPage {
   /** URLs revealed this session, keyed by webhook id. Never re-fetchable. */
   private revealed: Record<string, string> = {};
 
-  private draftName = '';
-  private draftChannel = '';
+  private draftName = "";
+  private draftChannel = "";
   private working = false;
 
   oninit(vnode: Mithril.Vnode): void {
@@ -70,13 +70,19 @@ export default class WebhooksPage extends ExtensionPage {
                 because the choice is exclusive — an announcing account makes the
                 bot's name and picture moot, so the form has to collapse rather
                 than show controls that do nothing. */}
-            <h3>{app.translator.trans('ramon-chat.admin.bot.title')}</h3>
+            <h3>{app.translator.trans("ramon-chat.admin.bot.title")}</h3>
             <BotSettings />
 
-            <h3>{app.translator.trans('ramon-chat.admin.webhooks.title')}</h3>
-            <p className="helpText">{app.translator.trans('ramon-chat.admin.webhooks.help')}</p>
+            <h3>{app.translator.trans("ramon-chat.admin.webhooks.title")}</h3>
+            <p className="helpText">
+              {app.translator.trans("ramon-chat.admin.webhooks.help")}
+            </p>
 
-            {this.loadingHooks ? <LoadingIndicator /> : [this.createForm(), this.list()]}
+            {this.loadingHooks ? (
+              <LoadingIndicator />
+            ) : (
+              [this.createForm(), this.list()]
+            )}
           </div>
         </div>
       </>
@@ -88,7 +94,11 @@ export default class WebhooksPage extends ExtensionPage {
       <div className="Form-group ChatWebhooks-create">
         <input
           className="FormControl"
-          placeholder={app.translator.trans('ramon-chat.admin.webhooks.name', {}, true)}
+          placeholder={app.translator.trans(
+            "ramon-chat.admin.webhooks.name",
+            {},
+            true,
+          )}
           value={this.draftName}
           oninput={(e: Event) => {
             this.draftName = (e.target as HTMLInputElement).value;
@@ -102,10 +112,16 @@ export default class WebhooksPage extends ExtensionPage {
             this.draftChannel = (e.target as HTMLSelectElement).value;
           }}
         >
-          <option value="">{app.translator.trans('ramon-chat.admin.webhooks.pick_channel', {}, true)}</option>
+          <option value="">
+            {app.translator.trans(
+              "ramon-chat.admin.webhooks.pick_channel",
+              {},
+              true,
+            )}
+          </option>
           {this.channels.map((channel) => (
             <option key={channel.id()} value={String(channel.id())}>
-              {channel.attribute('name') ?? channel.attribute('displayName')}
+              {channel.attribute("name") ?? channel.attribute("displayName")}
             </option>
           ))}
         </select>
@@ -116,7 +132,7 @@ export default class WebhooksPage extends ExtensionPage {
           disabled={!this.draftName.trim() || !this.draftChannel}
           onclick={() => this.create()}
         >
-          {app.translator.trans('ramon-chat.admin.webhooks.create')}
+          {app.translator.trans("ramon-chat.admin.webhooks.create")}
         </Button>
       </div>
     );
@@ -124,7 +140,11 @@ export default class WebhooksPage extends ExtensionPage {
 
   protected list(): Mithril.Children {
     if (this.webhooks.length === 0) {
-      return <p className="helpText">{app.translator.trans('ramon-chat.admin.webhooks.empty')}</p>;
+      return (
+        <p className="helpText">
+          {app.translator.trans("ramon-chat.admin.webhooks.empty")}
+        </p>
+      );
     }
 
     return (
@@ -141,36 +161,51 @@ export default class WebhooksPage extends ExtensionPage {
     return (
       <div className="ChatWebhooks-row" key={id}>
         <div className="ChatWebhooks-row-main">
-          <strong>{webhook.attribute<string>('name')}</strong>
+          <strong>{webhook.attribute<string>("name")}</strong>
 
           <span className="ChatWebhooks-row-meta">
-            {app.translator.trans('ramon-chat.admin.webhooks.deliveries', {
-              count: webhook.attribute<number>('deliveriesCount') ?? 0,
+            {app.translator.trans("ramon-chat.admin.webhooks.deliveries", {
+              count: webhook.attribute<number>("deliveriesCount") ?? 0,
             })}
           </span>
         </div>
 
         {url ? (
           <div className="ChatWebhooks-row-url">
-            <p className="helpText">{app.translator.trans('ramon-chat.admin.webhooks.url_once')}</p>
-            <input className="FormControl" readonly value={url} onclick={(e: Event) => (e.target as HTMLInputElement).select()} />
+            <p className="helpText">
+              {app.translator.trans("ramon-chat.admin.webhooks.url_once")}
+            </p>
+            <input
+              className="FormControl"
+              readonly
+              value={url}
+              onclick={(e: Event) => (e.target as HTMLInputElement).select()}
+            />
           </div>
         ) : null}
 
         <div className="ChatWebhooks-row-actions">
           <Switch
-            state={Boolean(webhook.attribute<boolean>('active'))}
+            state={Boolean(webhook.attribute<boolean>("active"))}
             onchange={(value: boolean) => this.setActive(webhook, value)}
           >
-            {app.translator.trans('ramon-chat.admin.webhooks.active')}
+            {app.translator.trans("ramon-chat.admin.webhooks.active")}
           </Switch>
 
-          <Button className="Button Button--text" icon="fas fa-rotate" onclick={() => this.rotate(webhook)}>
-            {app.translator.trans('ramon-chat.admin.webhooks.rotate')}
+          <Button
+            className="Button Button--text"
+            icon="fas fa-rotate"
+            onclick={() => this.rotate(webhook)}
+          >
+            {app.translator.trans("ramon-chat.admin.webhooks.rotate")}
           </Button>
 
-          <Button className="Button Button--text" icon="fas fa-trash" onclick={() => this.remove(webhook)}>
-            {app.translator.trans('ramon-chat.admin.webhooks.delete')}
+          <Button
+            className="Button Button--text"
+            icon="fas fa-trash"
+            onclick={() => this.remove(webhook)}
+          >
+            {app.translator.trans("ramon-chat.admin.webhooks.delete")}
           </Button>
         </div>
       </div>
@@ -182,11 +217,16 @@ export default class WebhooksPage extends ExtensionPage {
   protected async load(): Promise<void> {
     try {
       const [webhooks, channels] = await Promise.all([
-        app.store.find('chat-webhooks', { include: 'channel' }),
-        app.store.find('chat-channels', { filter: { type: 'category' }, page: { limit: 100 } }),
+        app.store.find("chat-webhooks", { include: "channel" }),
+        app.store.find("chat-channels", {
+          filter: { type: "category" },
+          page: { limit: 100 },
+        }),
       ]);
 
-      this.webhooks = (Array.isArray(webhooks) ? webhooks : []) as unknown as WebhookModel[];
+      this.webhooks = (Array.isArray(webhooks)
+        ? webhooks
+        : []) as unknown as WebhookModel[];
       this.channels = Array.isArray(channels) ? channels : [];
     } catch {
       this.webhooks = [];
@@ -201,7 +241,7 @@ export default class WebhooksPage extends ExtensionPage {
     this.working = true;
 
     try {
-      const webhook = (await app.store.createRecord('chat-webhooks').save({
+      const webhook = (await app.store.createRecord("chat-webhooks").save({
         name: this.draftName.trim(),
         channelId: Number(this.draftChannel),
       })) as unknown as WebhookModel;
@@ -209,12 +249,13 @@ export default class WebhooksPage extends ExtensionPage {
       this.webhooks = [webhook, ...this.webhooks];
       this.remember(webhook);
 
-      this.draftName = '';
-      this.draftChannel = '';
+      this.draftName = "";
+      this.draftChannel = "";
     } catch (e: any) {
       app.alerts.show(
-        { type: 'error' },
-        e?.response?.errors?.[0]?.detail ?? app.translator.trans('ramon-chat.admin.webhooks.failed')
+        { type: "error" },
+        e?.response?.errors?.[0]?.detail ??
+          app.translator.trans("ramon-chat.admin.webhooks.failed"),
       );
     } finally {
       this.working = false;
@@ -222,7 +263,10 @@ export default class WebhooksPage extends ExtensionPage {
     }
   }
 
-  protected async setActive(webhook: WebhookModel, active: boolean): Promise<void> {
+  protected async setActive(
+    webhook: WebhookModel,
+    active: boolean,
+  ): Promise<void> {
     webhook.pushAttributes({ active });
     m.redraw();
 
@@ -230,19 +274,31 @@ export default class WebhooksPage extends ExtensionPage {
       await webhook.save({ active });
     } catch {
       webhook.pushAttributes({ active: !active });
-      app.alerts.show({ type: 'error' }, app.translator.trans('ramon-chat.admin.webhooks.failed'));
+      app.alerts.show(
+        { type: "error" },
+        app.translator.trans("ramon-chat.admin.webhooks.failed"),
+      );
     } finally {
       m.redraw();
     }
   }
 
   protected async rotate(webhook: WebhookModel): Promise<void> {
-    if (!confirm(app.translator.trans('ramon-chat.admin.webhooks.rotate_confirm', {}, true))) return;
+    if (
+      !confirm(
+        app.translator.trans(
+          "ramon-chat.admin.webhooks.rotate_confirm",
+          {},
+          true,
+        ),
+      )
+    )
+      return;
 
     try {
       const payload = await app.request<any>({
-        method: 'POST',
-        url: `${app.forum.attribute('apiUrl')}/chat-webhooks/${webhook.id()}/rotate`,
+        method: "POST",
+        url: `${app.forum.attribute("apiUrl")}/chat-webhooks/${webhook.id()}/rotate`,
         body: { data: { attributes: {} } },
       });
 
@@ -254,28 +310,43 @@ export default class WebhooksPage extends ExtensionPage {
 
       if (url) this.revealed[webhook.id()] = url;
     } catch {
-      app.alerts.show({ type: 'error' }, app.translator.trans('ramon-chat.admin.webhooks.failed'));
+      app.alerts.show(
+        { type: "error" },
+        app.translator.trans("ramon-chat.admin.webhooks.failed"),
+      );
     } finally {
       m.redraw();
     }
   }
 
   protected async remove(webhook: WebhookModel): Promise<void> {
-    if (!confirm(app.translator.trans('ramon-chat.admin.webhooks.delete_confirm', {}, true))) return;
+    if (
+      !confirm(
+        app.translator.trans(
+          "ramon-chat.admin.webhooks.delete_confirm",
+          {},
+          true,
+        ),
+      )
+    )
+      return;
 
     try {
       await webhook.delete();
 
       this.webhooks = this.webhooks.filter((row) => row.id() !== webhook.id());
     } catch {
-      app.alerts.show({ type: 'error' }, app.translator.trans('ramon-chat.admin.webhooks.failed'));
+      app.alerts.show(
+        { type: "error" },
+        app.translator.trans("ramon-chat.admin.webhooks.failed"),
+      );
     } finally {
       m.redraw();
     }
   }
 
   protected remember(webhook: WebhookModel): void {
-    const url = webhook.attribute<string | null>('url');
+    const url = webhook.attribute<string | null>("url");
 
     if (url) this.revealed[webhook.id()] = url;
   }

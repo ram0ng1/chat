@@ -1,12 +1,12 @@
-import app from 'flarum/forum/app';
-import { extend, override } from 'flarum/common/extend';
-import Avatar from 'flarum/common/components/Avatar';
-import HeaderListItem from 'flarum/forum/components/HeaderListItem';
-import type Mithril from 'mithril';
+import app from "flarum/forum/app";
+import { extend, override } from "flarum/common/extend";
+import Avatar from "flarum/common/components/Avatar";
+import HeaderListItem from "flarum/forum/components/HeaderListItem";
+import type Mithril from "mithril";
 
-import type MessageFlag from '../../common/models/MessageFlag';
-import { messagePreview } from './preview';
-import { authorName } from './bot';
+import type MessageFlag from "../../common/models/MessageFlag";
+import { messagePreview } from "./preview";
+import { authorName } from "./bot";
 
 /**
  * Puts chat reports in flarum/flags' own list.
@@ -41,12 +41,12 @@ function moduleOf(path: string): any {
 
   try {
     const found =
-      typeof registry.checkModule === 'function'
-        ? registry.checkModule('flarum-flags', path)
-        : registry.get?.('flarum-flags', path);
+      typeof registry.checkModule === "function"
+        ? registry.checkModule("flarum-flags", path)
+        : registry.get?.("flarum-flags", path);
 
     // The registry hands back the module namespace; the component is its default.
-    return found ? found.default ?? found : null;
+    return found ? (found.default ?? found) : null;
   } catch {
     return null;
   }
@@ -58,13 +58,15 @@ function load(): void {
   loading = true;
 
   app.store
-    .find('chat-message-flags', {
-      filter: { resolved: '0' },
-      sort: '-createdAt',
+    .find("chat-message-flags", {
+      filter: { resolved: "0" },
+      sort: "-createdAt",
       page: { limit: 20 },
     })
     .then((results) => {
-      reports = (Array.isArray(results) ? results : []) as unknown as MessageFlag[];
+      reports = (Array.isArray(results)
+        ? results
+        : []) as unknown as MessageFlag[];
     })
     .catch(() => {
       // A forum without the chat queue, or a moderator who lost the permission
@@ -97,15 +99,19 @@ function row(report: MessageFlag): Mithril.Children {
         className="Flag Flag--chat"
         avatar={<Avatar user={message.user() || null} />}
         icon="fas fa-comment-dots"
-        content={app.translator.trans('ramon-chat.forum.flags.flarum_item', {
+        content={app.translator.trans("ramon-chat.forum.flags.flarum_item", {
           username: authorName(message),
           em: <em />,
-          channel: (message.channel() || null)?.displayName() ?? '',
-          reason: app.translator.trans(`ramon-chat.forum.flag.reasons.${report.reason()}`, {}, true),
+          channel: (message.channel() || null)?.displayName() ?? "",
+          reason: app.translator.trans(
+            `ramon-chat.forum.flag.reasons.${report.reason()}`,
+            {},
+            true,
+          ),
         })}
         excerpt={messagePreview(message, 120)}
         datetime={report.createdAt()}
-        href={app.route('chat.flags')}
+        href={app.route("chat.flags")}
         onclick={(e: MouseEvent) => {
           e.redraw = false;
         }}
@@ -115,44 +121,54 @@ function row(report: MessageFlag): Mithril.Children {
 }
 
 export default function bindFlagsIntegration(): void {
-  const FlagList = moduleOf('forum/components/FlagList');
-  const FlagsDropdown = moduleOf('forum/components/FlagsDropdown');
+  const FlagList = moduleOf("forum/components/FlagList");
+  const FlagsDropdown = moduleOf("forum/components/FlagsDropdown");
 
   if (!FlagList?.prototype) return;
 
   // Fetched when the list mounts rather than at boot: a member who never opens the
   // flags dropdown should not pay for a request they will not read.
-  extend(FlagList.prototype, 'oninit', function () {
-    if (app.forum.attribute<boolean>('canModerateChat')) load();
+  extend(FlagList.prototype, "oninit", function () {
+    if (app.forum.attribute<boolean>("canModerateChat")) load();
   });
 
   // `override`, not `extend`. extend() discards whatever the callback returns —
   // it exists to mutate an object in place — and `content()` returns a fresh
   // array, or null when there is nothing to show. Appending to a null is not a
   // thing, so the method has to be replaced.
-  override(FlagList.prototype, 'content', function (this: any, original: Function, state: any) {
-    const vdom = original(state);
+  override(
+    FlagList.prototype,
+    "content",
+    function (this: any, original: Function, state: any) {
+      const vdom = original(state);
 
-    if (!app.forum.attribute<boolean>('canModerateChat')) return vdom;
+      if (!app.forum.attribute<boolean>("canModerateChat")) return vdom;
 
-    const rows = reports.map(row).filter(Boolean);
+      const rows = reports.map(row).filter(Boolean);
 
-    if (rows.length === 0) return vdom;
+      if (rows.length === 0) return vdom;
 
-    // Appended rather than merged by date: flarum/flags paginates its own list,
-    // and interleaving would put chat reports in a page that then loads more
-    // posts over them.
-    return vdom === null ? rows : [vdom, rows];
-  });
+      // Appended rather than merged by date: flarum/flags paginates its own list,
+      // and interleaving would put chat reports in a page that then loads more
+      // posts over them.
+      return vdom === null ? rows : [vdom, rows];
+    },
+  );
 
   // The header badge counts both, so a moderator with only chat reports waiting
   // still sees the flag icon light up. A number, so `extend` cannot touch it.
   if (FlagsDropdown?.prototype) {
-    override(FlagsDropdown.prototype, 'getUnreadCount', function (this: any, original: Function) {
-      const own = Number(original() ?? 0);
-      const chat = Number(app.forum.attribute<number>('chatOpenFlagsCount') ?? 0);
+    override(
+      FlagsDropdown.prototype,
+      "getUnreadCount",
+      function (this: any, original: Function) {
+        const own = Number(original() ?? 0);
+        const chat = Number(
+          app.forum.attribute<number>("chatOpenFlagsCount") ?? 0,
+        );
 
-      return own + chat;
-    });
+        return own + chat;
+      },
+    );
   }
 }

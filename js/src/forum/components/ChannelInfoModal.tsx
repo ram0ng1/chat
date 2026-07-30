@@ -1,24 +1,24 @@
-import app from 'flarum/forum/app';
-import Modal from 'flarum/common/components/Modal';
-import type { IInternalModalAttrs } from 'flarum/common/components/Modal';
-import Button from 'flarum/common/components/Button';
-import Avatar from 'flarum/common/components/Avatar';
-import LoadingIndicator from 'flarum/common/components/LoadingIndicator';
-import Switch from 'flarum/common/components/Switch';
-import username from 'flarum/common/helpers/username';
-import classList from 'flarum/common/utils/classList';
-import type User from 'flarum/common/models/User';
-import type Mithril from 'mithril';
+import app from "flarum/forum/app";
+import Modal from "flarum/common/components/Modal";
+import type { IInternalModalAttrs } from "flarum/common/components/Modal";
+import Button from "flarum/common/components/Button";
+import Avatar from "flarum/common/components/Avatar";
+import LoadingIndicator from "flarum/common/components/LoadingIndicator";
+import Switch from "flarum/common/components/Switch";
+import username from "flarum/common/helpers/username";
+import classList from "flarum/common/utils/classList";
+import type User from "flarum/common/models/User";
+import type Mithril from "mithril";
 
-import userLink from '../utils/userLink';
+import userLink from "../utils/userLink";
 
-import type Channel from '../../common/models/Channel';
-import { NotificationLevel } from '../../common/models/Channel';
-import chatState from '../state/chat';
-import { displayEmoji } from '../utils/emoji';
-import { isOnline } from '../utils/presence';
-import { MembersSkeleton } from './Skeletons';
-import { channelIcon } from '../utils/channelIcon';
+import type Channel from "../../common/models/Channel";
+import { NotificationLevel } from "../../common/models/Channel";
+import chatState from "../state/chat";
+import { displayEmoji } from "../utils/emoji";
+import { isOnline } from "../utils/presence";
+import { MembersSkeleton } from "./Skeletons";
+import { channelIcon } from "../utils/channelIcon";
 
 export interface ChannelInfoModalAttrs extends IInternalModalAttrs {
   channel: Channel;
@@ -34,15 +34,15 @@ export interface ChannelInfoModalAttrs extends IInternalModalAttrs {
  * flag — so a plain member gets a useful panel rather than a locked one.
  */
 export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
-  private tab: 'settings' | 'members' = 'settings';
+  private tab: "settings" | "members" = "settings";
   private members: User[] = [];
   private loadingMembers = false;
   private loadedMembers = false;
-  private memberFilter = '';
+  private memberFilter = "";
   private working = false;
 
   // Candidate search for the add-member field.
-  private candidateQuery = '';
+  private candidateQuery = "";
   private candidates: User[] = [];
   private candidateTimer: number | null = null;
   private candidateSequence = 0;
@@ -54,7 +54,7 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
   }
 
   className(): string {
-    return 'ChatModal ChatChannelInfoModal Modal--medium';
+    return "ChatModal ChatChannelInfoModal Modal--medium";
   }
 
   title(): Mithril.Children {
@@ -62,7 +62,7 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
 
     return (
       <>
-        <span className="ChatChannelInfo-icon">{channelIcon(channel)}</span> 
+        <span className="ChatChannelInfo-icon">{channelIcon(channel)}</span>
         {channel.displayName()}
       </>
     );
@@ -72,24 +72,29 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
     return (
       <div className="ChatChannelInfo">
         <div className="ChatChannelInfo-tabs">
-          {this.tabButton('settings', 'ramon-chat.forum.info.tab_settings')}
-          {this.tabButton('members', 'ramon-chat.forum.info.tab_members')}
+          {this.tabButton("settings", "ramon-chat.forum.info.tab_settings")}
+          {this.tabButton("members", "ramon-chat.forum.info.tab_members")}
         </div>
 
-        {this.tab === 'settings' ? this.settings() : this.memberTab()}
+        {this.tab === "settings" ? this.settings() : this.memberTab()}
       </div>
     );
   }
 
-  protected tabButton(tab: 'settings' | 'members', key: string): Mithril.Children {
+  protected tabButton(
+    tab: "settings" | "members",
+    key: string,
+  ): Mithril.Children {
     return (
       <button
         type="button"
-        className={classList('ChatChannelInfo-tab', { 'ChatChannelInfo-tab--active': this.tab === tab })}
+        className={classList("ChatChannelInfo-tab", {
+          "ChatChannelInfo-tab--active": this.tab === tab,
+        })}
         onclick={() => {
           this.tab = tab;
 
-          if (tab === 'members') this.loadMembers();
+          if (tab === "members") this.loadMembers();
         }}
       >
         {app.translator.trans(key)}
@@ -107,7 +112,7 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
         {channel.description() ? (
           <div className="ChatChannelInfo-section">
             <div className="ChatChannelInfo-section-label">
-              {app.translator.trans('ramon-chat.forum.info.description')}
+              {app.translator.trans("ramon-chat.forum.info.description")}
             </div>
             <div>{channel.description()}</div>
           </div>
@@ -115,26 +120,43 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
 
         <div className="ChatChannelInfo-section">
           <div className="ChatChannelInfo-section-label">
-            {app.translator.trans('ramon-chat.forum.info.notifications')}
+            {app.translator.trans("ramon-chat.forum.info.notifications")}
           </div>
 
           <label>
-            {app.translator.trans('ramon-chat.forum.info.notification_level')}
+            {app.translator.trans("ramon-chat.forum.info.notification_level")}
             <select
               className="FormControl"
-              value={String(channel.notificationLevel() ?? NotificationLevel.Mentions)}
+              value={String(
+                channel.notificationLevel() ?? NotificationLevel.Mentions,
+              )}
               onchange={(e: Event) =>
-                this.saveNotifications(Number((e.target as HTMLSelectElement).value), null)
+                this.saveNotifications(
+                  Number((e.target as HTMLSelectElement).value),
+                  null,
+                )
               }
             >
               <option value={String(NotificationLevel.Always)}>
-                {app.translator.trans('ramon-chat.forum.info.level_always', {}, true)}
+                {app.translator.trans(
+                  "ramon-chat.forum.info.level_always",
+                  {},
+                  true,
+                )}
               </option>
               <option value={String(NotificationLevel.Mentions)}>
-                {app.translator.trans('ramon-chat.forum.info.level_mentions', {}, true)}
+                {app.translator.trans(
+                  "ramon-chat.forum.info.level_mentions",
+                  {},
+                  true,
+                )}
               </option>
               <option value={String(NotificationLevel.Never)}>
-                {app.translator.trans('ramon-chat.forum.info.level_never', {}, true)}
+                {app.translator.trans(
+                  "ramon-chat.forum.info.level_never",
+                  {},
+                  true,
+                )}
               </option>
             </select>
           </label>
@@ -144,10 +166,12 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
             onchange={(value: boolean) => this.saveNotifications(null, value)}
             disabled={this.working}
           >
-            {app.translator.trans('ramon-chat.forum.info.mute')}
+            {app.translator.trans("ramon-chat.forum.info.mute")}
           </Switch>
 
-          <div className="helpText">{app.translator.trans('ramon-chat.forum.info.mute_help')}</div>
+          <div className="helpText">
+            {app.translator.trans("ramon-chat.forum.info.mute_help")}
+          </div>
         </div>
 
         {this.moderation()}
@@ -164,27 +188,34 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
     const items: Mithril.Children[] = [];
 
     if (channel.canClose()) {
-      const closed = channel.status() === 'closed';
+      const closed = channel.status() === "closed";
 
       items.push(
         <Button
           className="Button"
-          icon={closed ? 'fas fa-lock-open' : 'fas fa-lock'}
+          icon={closed ? "fas fa-lock-open" : "fas fa-lock"}
           loading={this.working}
-          onclick={() => this.setStatus(closed ? 'open' : 'closed')}
+          onclick={() => this.setStatus(closed ? "open" : "closed")}
         >
           {app.translator.trans(
-            closed ? 'ramon-chat.forum.info.reopen_channel' : 'ramon-chat.forum.info.close_channel'
+            closed
+              ? "ramon-chat.forum.info.reopen_channel"
+              : "ramon-chat.forum.info.close_channel",
           )}
-        </Button>
+        </Button>,
       );
     }
 
     if (channel.canArchive() && !channel.archivedAt()) {
       items.push(
-        <Button className="Button" icon="fas fa-box-archive" loading={this.working} onclick={() => this.archive()}>
-          {app.translator.trans('ramon-chat.forum.info.archive_channel')}
-        </Button>
+        <Button
+          className="Button"
+          icon="fas fa-box-archive"
+          loading={this.working}
+          onclick={() => this.archive()}
+        >
+          {app.translator.trans("ramon-chat.forum.info.archive_channel")}
+        </Button>,
       );
     }
 
@@ -192,12 +223,18 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
 
     return (
       <>
-        {items.length > 0 ? <div className="ChatChannelInfo-section">{items}</div> : null}
+        {items.length > 0 ? (
+          <div className="ChatChannelInfo-section">{items}</div>
+        ) : null}
 
         {channel.canDelete() ? (
           <div className="ChatChannelInfo-danger">
-            <Button className="Button Button--text" icon="fas fa-trash" onclick={() => this.destroy()}>
-              {app.translator.trans('ramon-chat.forum.info.delete_channel')}
+            <Button
+              className="Button Button--text"
+              icon="fas fa-trash"
+              onclick={() => this.destroy()}
+            >
+              {app.translator.trans("ramon-chat.forum.info.delete_channel")}
             </Button>
           </div>
         ) : null}
@@ -209,23 +246,25 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
 
   protected memberTab(): Mithril.Children {
     if (this.loadingMembers) {
-      return (
-        <div className="ChatChannelInfo-section">
-          {MembersSkeleton()}
-        </div>
-      );
+      return <div className="ChatChannelInfo-section">{MembersSkeleton()}</div>;
     }
 
     const term = this.memberFilter.trim().toLowerCase();
     const shown = term
-      ? this.members.filter((user) => (user.displayName() + ' ' + user.username()).toLowerCase().includes(term))
+      ? this.members.filter((user) =>
+          (user.displayName() + " " + user.username())
+            .toLowerCase()
+            .includes(term),
+        )
       : this.members;
 
     return (
       <div className="ChatChannelInfo-section">
         <div className="ChatChannelInfo-memberHeader">
           <span className="ChatChannelInfo-memberCount">
-            {app.translator.trans('ramon-chat.forum.channel.members', { count: this.members.length })}
+            {app.translator.trans("ramon-chat.forum.channel.members", {
+              count: this.members.length,
+            })}
           </span>
 
           {/* The add field is behind a `+` rather than always open: the common
@@ -233,11 +272,18 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
               at the top of a list of people invites filtering, not inviting. */}
           {this.attrs.channel.canManageMembers() ? (
             <Button
-              className={classList('Button Button--icon Button--flat ChatChannelInfo-addToggle', {
-                'ChatChannelInfo-addToggle--open': this.adding,
-              })}
-              icon={this.adding ? 'fas fa-xmark' : 'fas fa-plus'}
-              title={app.translator.trans('ramon-chat.forum.info.add_member', {}, true)}
+              className={classList(
+                "Button Button--icon Button--flat ChatChannelInfo-addToggle",
+                {
+                  "ChatChannelInfo-addToggle--open": this.adding,
+                },
+              )}
+              icon={this.adding ? "fas fa-xmark" : "fas fa-plus"}
+              title={app.translator.trans(
+                "ramon-chat.forum.info.add_member",
+                {},
+                true,
+              )}
               onclick={() => this.toggleAdding()}
             />
           ) : null}
@@ -248,7 +294,11 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
         <input
           className="FormControl ChatChannelInfo-filter"
           type="search"
-          placeholder={app.translator.trans('ramon-chat.forum.info.member_search', {}, true)}
+          placeholder={app.translator.trans(
+            "ramon-chat.forum.info.member_search",
+            {},
+            true,
+          )}
           value={this.memberFilter}
           oninput={(e: Event) => {
             this.memberFilter = (e.target as HTMLInputElement).value;
@@ -259,8 +309,8 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
           {shown.map((user) => (
             <div
               key={user.id()}
-              className={classList('ChatChannelInfo-member', {
-                'ChatChannelInfo-member--online': isOnline(user),
+              className={classList("ChatChannelInfo-member", {
+                "ChatChannelInfo-member--online": isOnline(user),
               })}
             >
               <Avatar user={user} className="Avatar" />
@@ -269,14 +319,19 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
               {/* Drawn only for people the actor may actually remove, so the button
                   is never a promise the server refuses to keep. Removing yourself is
                   what "Leave channel" is for, and the endpoint rejects it. */}
-              {this.attrs.channel.canManageMembers() && user.id() !== app.session.user?.id() ? (
+              {this.attrs.channel.canManageMembers() &&
+              user.id() !== app.session.user?.id() ? (
                 <Button
                   className="Button Button--icon Button--flat ChatChannelInfo-member-remove"
                   icon="fas fa-user-minus"
                   disabled={this.working}
-                  title={app.translator.trans('ramon-chat.forum.info.remove_member', {
-                    username: username(user),
-                  }, true)}
+                  title={app.translator.trans(
+                    "ramon-chat.forum.info.remove_member",
+                    {
+                      username: username(user),
+                    },
+                    true,
+                  )}
                   onclick={() => this.remove(user)}
                 />
               ) : null}
@@ -284,7 +339,9 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
           ))}
 
           {shown.length === 0 ? (
-            <div className="ChatBrowse-empty">{app.translator.trans('ramon-chat.forum.info.no_members')}</div>
+            <div className="ChatBrowse-empty">
+              {app.translator.trans("ramon-chat.forum.info.no_members")}
+            </div>
           ) : null}
         </div>
       </div>
@@ -309,10 +366,18 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
         <input
           className="FormControl ChatChannelInfo-add-field"
           type="search"
-          placeholder={app.translator.trans('ramon-chat.forum.info.add_member', {}, true)}
+          placeholder={app.translator.trans(
+            "ramon-chat.forum.info.add_member",
+            {},
+            true,
+          )}
           value={this.candidateQuery}
-          oninput={(e: Event) => this.searchCandidates((e.target as HTMLInputElement).value)}
-          oncreate={(vnode: Mithril.VnodeDOM) => (vnode.dom as HTMLInputElement).focus()}
+          oninput={(e: Event) =>
+            this.searchCandidates((e.target as HTMLInputElement).value)
+          }
+          oncreate={(vnode: Mithril.VnodeDOM) =>
+            (vnode.dom as HTMLInputElement).focus()
+          }
         />
 
         {this.candidates.length > 0 ? (
@@ -326,18 +391,23 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
                 onclick={() => this.add(user)}
               >
                 <Avatar user={user} className="Avatar" />
-                <span className="ChatChannelInfo-candidate-name">{username(user)}</span>
-                <i className="ChatChannelInfo-candidate-add fas fa-plus" aria-hidden="true" />
+                <span className="ChatChannelInfo-candidate-name">
+                  {username(user)}
+                </span>
+                <i
+                  className="ChatChannelInfo-candidate-add fas fa-plus"
+                  aria-hidden="true"
+                />
               </button>
             ))}
           </div>
         ) : searching ? (
           <div className="ChatChannelInfo-add-empty">
-            {app.translator.trans('ramon-chat.forum.info.no_candidates')}
+            {app.translator.trans("ramon-chat.forum.info.no_candidates")}
           </div>
         ) : (
           <div className="ChatChannelInfo-add-hint">
-            {app.translator.trans('ramon-chat.forum.info.add_member_hint')}
+            {app.translator.trans("ramon-chat.forum.info.add_member_hint")}
           </div>
         )}
       </div>
@@ -350,7 +420,7 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
     // Leaving a stale query and its results behind would mean reopening the field
     // shows matches for something typed minutes ago.
     if (!this.adding) {
-      this.candidateQuery = '';
+      this.candidateQuery = "";
       this.candidates = [];
     }
 
@@ -372,7 +442,10 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
 
     this.candidateTimer = window.setTimeout(() => {
       app.store
-        .find<User[]>('users', { filter: { q: value.trim() }, page: { limit: 6 } })
+        .find<User[]>("users", {
+          filter: { q: value.trim() },
+          page: { limit: 6 },
+        })
         .then((results) => {
           // A slower earlier search must not overwrite a later one.
           if (mine !== this.candidateSequence) return;
@@ -381,7 +454,9 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
 
           // Someone already in the channel is not a candidate; offering them and
           // then silently doing nothing is worse than not offering.
-          this.candidates = (Array.isArray(results) ? results : []).filter((user) => !already.has(user.id()));
+          this.candidates = (Array.isArray(results) ? results : []).filter(
+            (user) => !already.has(user.id()),
+          );
 
           m.redraw();
         })
@@ -397,27 +472,34 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
 
     try {
       const payload = await app.request<any>({
-        method: 'POST',
-        url: `${app.forum.attribute('apiUrl')}/chat-channels/${this.attrs.channel.id()}/members`,
+        method: "POST",
+        url: `${app.forum.attribute("apiUrl")}/chat-channels/${this.attrs.channel.id()}/members`,
         body: { data: { attributes: { userIds: [Number(user.id())] } } },
       });
 
       if (payload?.data) app.store.pushPayload(payload);
 
       this.members = [...this.members, user];
-      this.candidates = this.candidates.filter((candidate) => candidate.id() !== user.id());
-      this.candidateQuery = '';
+      this.candidates = this.candidates.filter(
+        (candidate) => candidate.id() !== user.id(),
+      );
+      this.candidateQuery = "";
 
-      this.attrs.channel.pushAttributes({ userCount: (this.attrs.channel.userCount() ?? 0) + 1 });
+      this.attrs.channel.pushAttributes({
+        userCount: (this.attrs.channel.userCount() ?? 0) + 1,
+      });
 
       app.alerts.show(
-        { type: 'success' },
-        app.translator.trans('ramon-chat.forum.info.member_added', { username: username(user) })
+        { type: "success" },
+        app.translator.trans("ramon-chat.forum.info.member_added", {
+          username: username(user),
+        }),
       );
     } catch (e: any) {
       app.alerts.show(
-        { type: 'error' },
-        e?.response?.errors?.[0]?.detail ?? app.translator.trans('ramon-chat.forum.info.save_failed')
+        { type: "error" },
+        e?.response?.errors?.[0]?.detail ??
+          app.translator.trans("ramon-chat.forum.info.save_failed"),
       );
     } finally {
       this.working = false;
@@ -434,7 +516,11 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
    */
   protected async remove(user: User): Promise<void> {
     const confirmed = confirm(
-      app.translator.trans('ramon-chat.forum.info.remove_member_confirm', { username: username(user) }, true)
+      app.translator.trans(
+        "ramon-chat.forum.info.remove_member_confirm",
+        { username: username(user) },
+        true,
+      ),
     );
 
     if (!confirmed) return;
@@ -444,8 +530,8 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
 
     try {
       const payload = await app.request<any>({
-        method: 'POST',
-        url: `${app.forum.attribute('apiUrl')}/chat-channels/${this.attrs.channel.id()}/members/remove`,
+        method: "POST",
+        url: `${app.forum.attribute("apiUrl")}/chat-channels/${this.attrs.channel.id()}/members/remove`,
         body: { data: { attributes: { userId: Number(user.id()) } } },
       });
 
@@ -460,13 +546,16 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
       });
 
       app.alerts.show(
-        { type: 'success' },
-        app.translator.trans('ramon-chat.forum.info.member_removed', { username: username(user) })
+        { type: "success" },
+        app.translator.trans("ramon-chat.forum.info.member_removed", {
+          username: username(user),
+        }),
       );
     } catch (e: any) {
       app.alerts.show(
-        { type: 'error' },
-        e?.response?.errors?.[0]?.detail ?? app.translator.trans('ramon-chat.forum.info.save_failed')
+        { type: "error" },
+        e?.response?.errors?.[0]?.detail ??
+          app.translator.trans("ramon-chat.forum.info.save_failed"),
       );
     } finally {
       this.working = false;
@@ -482,9 +571,13 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
     try {
       // Re-fetched with the relationship included rather than read off the
       // sidebar's copy, which is loaded without participants.
-      const channel = (await app.store.find('chat-channels', String(this.attrs.channel.id()), {
-        include: 'participants',
-      })) as unknown as Channel;
+      const channel = (await app.store.find(
+        "chat-channels",
+        String(this.attrs.channel.id()),
+        {
+          include: "participants",
+        },
+      )) as unknown as Channel;
 
       this.members = (channel.participants() || []).filter(Boolean) as User[];
     } catch {
@@ -498,7 +591,10 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
 
   // ── Actions ────────────────────────────────────────────────────────────────
 
-  protected async saveNotifications(level: number | null, muted: boolean | null): Promise<void> {
+  protected async saveNotifications(
+    level: number | null,
+    muted: boolean | null,
+  ): Promise<void> {
     const channel = this.attrs.channel;
 
     // Optimistic: the endpoint answers 204, so there is nothing to push back and
@@ -513,8 +609,8 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
 
     try {
       await app.request({
-        method: 'POST',
-        url: `${app.forum.attribute('apiUrl')}/chat-channels/${channel.id()}/notifications`,
+        method: "POST",
+        url: `${app.forum.attribute("apiUrl")}/chat-channels/${channel.id()}/notifications`,
         body: {
           data: {
             attributes: {
@@ -525,15 +621,20 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
         },
       });
     } catch {
-      app.alerts.show({ type: 'error' }, app.translator.trans('ramon-chat.forum.info.save_failed'));
+      app.alerts.show(
+        { type: "error" },
+        app.translator.trans("ramon-chat.forum.info.save_failed"),
+      );
     } finally {
       this.working = false;
       m.redraw();
     }
   }
 
-  protected async setStatus(status: 'open' | 'closed'): Promise<void> {
-    await this.act(`/chat-channels/${this.attrs.channel.id()}/status`, { status });
+  protected async setStatus(status: "open" | "closed"): Promise<void> {
+    await this.act(`/chat-channels/${this.attrs.channel.id()}/status`, {
+      status,
+    });
   }
 
   protected async archive(): Promise<void> {
@@ -541,14 +642,21 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
   }
 
   protected async destroy(): Promise<void> {
-    if (!confirm(app.translator.trans('ramon-chat.forum.info.delete_confirm', {}, true))) return;
+    if (
+      !confirm(
+        app.translator.trans("ramon-chat.forum.info.delete_confirm", {}, true),
+      )
+    )
+      return;
 
     this.working = true;
 
     try {
       await this.attrs.channel.delete();
 
-      chatState.channels = chatState.channels.filter((c) => c.id() !== this.attrs.channel.id());
+      chatState.channels = chatState.channels.filter(
+        (c) => c.id() !== this.attrs.channel.id(),
+      );
 
       if (chatState.activeChannelId === Number(this.attrs.channel.id())) {
         chatState.setActiveChannel(null);
@@ -556,21 +664,27 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
 
       this.hide();
     } catch {
-      app.alerts.show({ type: 'error' }, app.translator.trans('ramon-chat.forum.info.save_failed'));
+      app.alerts.show(
+        { type: "error" },
+        app.translator.trans("ramon-chat.forum.info.save_failed"),
+      );
     } finally {
       this.working = false;
       m.redraw();
     }
   }
 
-  protected async act(path: string, attributes: Record<string, unknown>): Promise<void> {
+  protected async act(
+    path: string,
+    attributes: Record<string, unknown>,
+  ): Promise<void> {
     this.working = true;
     m.redraw();
 
     try {
       const payload = await app.request<any>({
-        method: 'POST',
-        url: `${app.forum.attribute('apiUrl')}${path}`,
+        method: "POST",
+        url: `${app.forum.attribute("apiUrl")}${path}`,
         body: { data: { attributes } },
       });
 
@@ -579,8 +693,9 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
       this.hide();
     } catch (e: any) {
       app.alerts.show(
-        { type: 'error' },
-        e?.response?.errors?.[0]?.detail ?? app.translator.trans('ramon-chat.forum.info.save_failed')
+        { type: "error" },
+        e?.response?.errors?.[0]?.detail ??
+          app.translator.trans("ramon-chat.forum.info.save_failed"),
       );
     } finally {
       this.working = false;

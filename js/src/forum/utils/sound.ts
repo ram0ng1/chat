@@ -1,4 +1,4 @@
-import app from 'flarum/forum/app';
+import app from "flarum/forum/app";
 
 /**
  * The notification sound.
@@ -29,11 +29,12 @@ let loadedFor: string | null = null;
 function chosen(): string | null {
   // The user's own switch takes precedence over the forum default. Absent means
   // "follow the forum", so only an explicit `false` silences it.
-  if (app.session.user?.preferences()?.['ramon-chat.sound'] === false) return null;
+  if (app.session.user?.preferences()?.["ramon-chat.sound"] === false)
+    return null;
 
-  const setting = app.forum.attribute<string>('ramon-chat.notificationSound');
+  const setting = app.forum.attribute<string>("ramon-chat.notificationSound");
 
-  if (!setting || setting === 'none') return null;
+  if (!setting || setting === "none") return null;
 
   return setting;
 }
@@ -47,7 +48,7 @@ function chosen(): string | null {
  * subdirectory still finds them.
  */
 function url(name: string): string {
-  const base = app.forum.attribute<string>('assetsBaseUrl') ?? '/assets';
+  const base = app.forum.attribute<string>("assetsBaseUrl") ?? "/assets";
 
   return `${base}/extensions/ramon-chat/sounds/${name}.mp3`;
 }
@@ -68,7 +69,7 @@ export function playNotificationSound(): void {
     // browser will not garbage-collect one that is mid-play.
     if (!element || loadedFor !== name) {
       element = new Audio(url(name));
-      element.preload = 'auto';
+      element.preload = "auto";
       loadedFor = name;
     }
 
@@ -88,7 +89,7 @@ export function playNotificationSound(): void {
  * For the admin preview, where the point *is* to hear it.
  */
 export function previewSound(name: string): void {
-  if (!name || name === 'none') return;
+  if (!name || name === "none") return;
 
   try {
     const audio = new Audio(url(name));

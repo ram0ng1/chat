@@ -1,7 +1,7 @@
-import app from 'flarum/forum/app';
-import type Mithril from 'mithril';
+import app from "flarum/forum/app";
+import type Mithril from "mithril";
 
-import StickerPicker from '../components/StickerPicker';
+import StickerPicker from "../components/StickerPicker";
 
 /**
  * Optional integration with ramon/stickers.
@@ -28,14 +28,14 @@ import StickerPicker from '../components/StickerPicker';
  * The model, by contrast, is registered in their initializer, which runs at boot.
  */
 /** The namespace ramon/stickers registers its modules under. */
-const EXTENSION = 'ramon-stickers';
+const EXTENSION = "ramon-stickers";
 
 export function stickersAvailable(): boolean {
   // Two conditions, and both matter: the extension has to be installed, and this
   // actor has to be allowed to send stickers. Drawing the button for someone the
   // server would refuse is the same mistake the paperclip made before it was
   // gated on `ramon-chat.upload`.
-  if (! app.forum.attribute<boolean>('canSendChatStickers')) return false;
+  if (!app.forum.attribute<boolean>("canSendChatStickers")) return false;
 
   return Boolean((app.store as any)?.models?.stickers);
 }
@@ -49,11 +49,14 @@ export function stickersAvailable(): boolean {
  * @param trigger The button that opened it, used to position the panel.
  * @param onInsert Receives the shortcode, e.g. `:wave:`.
  */
-export function openStickerPicker(trigger: HTMLElement | null, onInsert: (text: string) => void): void {
+export function openStickerPicker(
+  trigger: HTMLElement | null,
+  onInsert: (text: string) => void,
+): void {
   close();
 
-  const mount = document.createElement('div');
-  mount.className = 'ChatStickerPicker-wrapper';
+  const mount = document.createElement("div");
+  mount.className = "ChatStickerPicker-wrapper";
   document.body.appendChild(mount);
 
   openMount = mount;
@@ -63,7 +66,7 @@ export function openStickerPicker(trigger: HTMLElement | null, onInsert: (text: 
 
     // Above the button, right-aligned to it, which is where there is room in a
     // composer pinned to the bottom of the panel.
-    mount.style.position = 'fixed';
+    mount.style.position = "fixed";
     mount.style.bottom = `${window.innerHeight - box.top + 8}px`;
     mount.style.right = `${Math.max(8, window.innerWidth - box.right)}px`;
   }
@@ -113,14 +116,14 @@ export function playOnHover(node: HTMLElement): void {
   if (!registry) return;
 
   const renderers: Array<[string, string]> = [
-    ['common/utils/renderLottie', 'initLottieInRoot'],
-    ['common/utils/renderTgs', 'initTgsInRoot'],
+    ["common/utils/renderLottie", "initLottieInRoot"],
+    ["common/utils/renderTgs", "initTgsInRoot"],
   ];
 
   for (const [path, fn] of renderers) {
     try {
       const module =
-        typeof registry.checkModule === 'function'
+        typeof registry.checkModule === "function"
           ? registry.checkModule(EXTENSION, path)
           : registry.get?.(EXTENSION, path);
 
@@ -148,31 +151,31 @@ export function isStickerPickerOpen(): boolean {
  * build-time dependency, which is the one thing this module exists to avoid.
  */
 const STICKER_ICON_PATH =
-  'M20,11.5 L20,7.5 C20,5.56700338 18.4329966,4 16.5,4 L7.5,4 C5.56700338,4 4,5.56700338 4,7.5 ' +
-  'L4,16.5 C4,18.4329966 5.56700338,20 7.5,20 L12.5,20 C13.3284271,20 14,19.3284271 14,18.5 ' +
-  'L14,16.5 C14,14.5670034 15.5670034,13 17.5,13 L18.5,13 C19.3284271,13 20,12.3284271 20,11.5 Z ' +
-  'M19.9266247,13.5532532 C19.522053,13.8348821 19.0303092,14 18.5,14 L17.5,14 ' +
-  'C16.1192881,14 15,15.1192881 15,16.5 L15,18.5 C15,18.9222858 14.8952995,19.3201175 14.7104416,19.668952 ' +
-  'C17.4490113,18.8255402 19.5186665,16.4560464 19.9266247,13.5532532 Z';
+  "M20,11.5 L20,7.5 C20,5.56700338 18.4329966,4 16.5,4 L7.5,4 C5.56700338,4 4,5.56700338 4,7.5 " +
+  "L4,16.5 C4,18.4329966 5.56700338,20 7.5,20 L12.5,20 C13.3284271,20 14,19.3284271 14,18.5 " +
+  "L14,16.5 C14,14.5670034 15.5670034,13 17.5,13 L18.5,13 C19.3284271,13 20,12.3284271 20,11.5 Z " +
+  "M19.9266247,13.5532532 C19.522053,13.8348821 19.0303092,14 18.5,14 L17.5,14 " +
+  "C16.1192881,14 15,15.1192881 15,16.5 L15,18.5 C15,18.9222858 14.8952995,19.3201175 14.7104416,19.668952 " +
+  "C17.4490113,18.8255402 19.5186665,16.4560464 19.9266247,13.5532532 Z";
 
 export function stickerIcon(): Mithril.Children {
   return m(
-    'svg',
+    "svg",
     {
-      fill: 'currentColor',
-      viewBox: '0 0 24 24',
-      xmlns: 'http://www.w3.org/2000/svg',
+      fill: "currentColor",
+      viewBox: "0 0 24 24",
+      xmlns: "http://www.w3.org/2000/svg",
       // 18px, not 16: this shape is a rounded square with a lot of empty margin
       // inside its 24-unit viewBox, so at the paperclip's size it reads smaller
       // than the paperclip does.
-      style: { display: 'block', width: '18px', height: '18px' },
-      'aria-hidden': 'true',
+      style: { display: "block", width: "18px", height: "18px" },
+      "aria-hidden": "true",
     },
-    m('path', { d: STICKER_ICON_PATH })
+    m("path", { d: STICKER_ICON_PATH }),
   );
 }
 
 /** Only meaningful while the extension is present. */
 export function stickerLabel(): string {
-  return app.translator.trans('ramon-chat.forum.composer.sticker', {}, true);
+  return app.translator.trans("ramon-chat.forum.composer.sticker", {}, true);
 }

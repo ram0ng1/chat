@@ -1,4 +1,4 @@
-import app from 'flarum/forum/app';
+import app from "flarum/forum/app";
 
 /**
  * Runs a callback once no modal is on screen.
@@ -20,7 +20,10 @@ import app from 'flarum/forum/app';
  *                  the callback forever. At ~60fps this is comfortably longer
  *                  than core's 200ms transition.
  */
-export default function afterModalClosed(callback: () => void, maxFrames = 40): void {
+export default function afterModalClosed(
+  callback: () => void,
+  maxFrames = 40,
+): void {
   let frames = 0;
 
   const tick = () => {

@@ -1,17 +1,17 @@
-import app from 'flarum/forum/app';
-import Component from 'flarum/common/Component';
-import type { ComponentAttrs } from 'flarum/common/Component';
-import Button from 'flarum/common/components/Button';
-import classList from 'flarum/common/utils/classList';
-import type Mithril from 'mithril';
+import app from "flarum/forum/app";
+import Component from "flarum/common/Component";
+import type { ComponentAttrs } from "flarum/common/Component";
+import Button from "flarum/common/components/Button";
+import classList from "flarum/common/utils/classList";
+import type Mithril from "mithril";
 
-import type Channel from '../../common/models/Channel';
-import chatState from '../state/chat';
-import ChatSidebar from './ChatSidebar';
-import ChannelView from './ChannelView';
-import PinnedPanel from './PinnedPanel';
-import ThreadPanel from './ThreadPanel';
-import { chatTitle, chatIcon } from '../utils/branding';
+import type Channel from "../../common/models/Channel";
+import chatState from "../state/chat";
+import ChatSidebar from "./ChatSidebar";
+import ChannelView from "./ChannelView";
+import PinnedPanel from "./PinnedPanel";
+import ThreadPanel from "./ThreadPanel";
+import { chatTitle, chatIcon } from "../utils/branding";
 
 /**
  * The floating chat panel, pinned bottom-right over whatever page is open.
@@ -30,11 +30,16 @@ export default class ChatDrawer extends Component<ComponentAttrs> {
 
     return (
       <div
-        className={classList('ChatDrawer', { 'ChatDrawer--collapsed': chatState.drawerCollapsed })}
+        className={classList("ChatDrawer", {
+          "ChatDrawer--collapsed": chatState.drawerCollapsed,
+        })}
         role="complementary"
         aria-label={title}
       >
-        <div className="ChatDrawer-header" onclick={() => this.toggleCollapsed()}>
+        <div
+          className="ChatDrawer-header"
+          onclick={() => this.toggleCollapsed()}
+        >
           {channel ? (
             <Button
               className="Button Button--icon Button--flat"
@@ -48,7 +53,9 @@ export default class ChatDrawer extends Component<ComponentAttrs> {
             <i className={icon} aria-hidden="true" />
           ) : null}
 
-          <span className="ChatDrawer-title">{channel ? channel.displayName() : title}</span>
+          <span className="ChatDrawer-title">
+            {channel ? channel.displayName() : title}
+          </span>
 
           {/* Collapsed, the drawer is a bar with no stream to look at — so unread
               activity has to surface on the header itself or it goes unnoticed.
@@ -58,16 +65,24 @@ export default class ChatDrawer extends Component<ComponentAttrs> {
           {chatState.drawerCollapsed && unread.mentions > 0 ? (
             <span
               className="ChatDrawer-badge ChatDrawer-badge--mention"
-              title={app.translator.trans('ramon-chat.forum.nav.unread_mentions', { count: unread.mentions }, true)}
+              title={app.translator.trans(
+                "ramon-chat.forum.nav.unread_mentions",
+                { count: unread.mentions },
+                true,
+              )}
             >
-              {unread.mentions > 99 ? '99+' : unread.mentions}
+              {unread.mentions > 99 ? "99+" : unread.mentions}
             </span>
           ) : chatState.drawerCollapsed && unread.messages > 0 ? (
             <span
               className="ChatDrawer-badge"
-              title={app.translator.trans('ramon-chat.forum.nav.unread_messages', { count: unread.messages }, true)}
+              title={app.translator.trans(
+                "ramon-chat.forum.nav.unread_messages",
+                { count: unread.messages },
+                true,
+              )}
             >
-              {unread.messages > 99 ? '99+' : unread.messages}
+              {unread.messages > 99 ? "99+" : unread.messages}
             </span>
           ) : null}
 
@@ -75,7 +90,11 @@ export default class ChatDrawer extends Component<ComponentAttrs> {
             <Button
               className="Button Button--icon Button--flat"
               icon="fas fa-up-right-and-down-left-from-center"
-              title={app.translator.trans('ramon-chat.forum.drawer.full_screen', {}, true)}
+              title={app.translator.trans(
+                "ramon-chat.forum.drawer.full_screen",
+                {},
+                true,
+              )}
               onclick={(e: Event) => {
                 e.stopPropagation();
                 this.goFullScreen();
@@ -83,11 +102,18 @@ export default class ChatDrawer extends Component<ComponentAttrs> {
             />
             <Button
               className="Button Button--icon Button--flat"
-              icon={chatState.drawerCollapsed ? 'fas fa-chevron-up' : 'fas fa-chevron-down'}
+              icon={
+                chatState.drawerCollapsed
+                  ? "fas fa-chevron-up"
+                  : "fas fa-chevron-down"
+              }
               title={app.translator.trans(
                 chatState.drawerCollapsed
-                  ? 'ramon-chat.forum.drawer.expand'
-                  : 'ramon-chat.forum.drawer.collapse', {}, true)}
+                  ? "ramon-chat.forum.drawer.expand"
+                  : "ramon-chat.forum.drawer.collapse",
+                {},
+                true,
+              )}
               onclick={(e: Event) => {
                 e.stopPropagation();
                 this.toggleCollapsed();
@@ -96,7 +122,11 @@ export default class ChatDrawer extends Component<ComponentAttrs> {
             <Button
               className="Button Button--icon Button--flat"
               icon="fas fa-times"
-              title={app.translator.trans('ramon-chat.forum.drawer.close', {}, true)}
+              title={app.translator.trans(
+                "ramon-chat.forum.drawer.close",
+                {},
+                true,
+              )}
               onclick={(e: Event) => {
                 e.stopPropagation();
                 this.close();
@@ -127,9 +157,18 @@ export default class ChatDrawer extends Component<ComponentAttrs> {
   protected body(channel: Channel | null): Mithril.Children {
     const panes: Mithril.Children[] = [
       channel ? (
-        <ChannelView key={`channel-${channel.id()}`} channel={channel} state={chatState} embedded />
+        <ChannelView
+          key={`channel-${channel.id()}`}
+          channel={channel}
+          state={chatState}
+          embedded
+        />
       ) : (
-        <ChatSidebar key="sidebar" state={chatState} onSelect={(c: Channel) => this.select(c)} />
+        <ChatSidebar
+          key="sidebar"
+          state={chatState}
+          onSelect={(c: Channel) => this.select(c)}
+        />
       ),
     ];
 
@@ -147,7 +186,7 @@ export default class ChatDrawer extends Component<ComponentAttrs> {
             chatState.closeThread();
             m.redraw();
           }}
-        />
+        />,
       );
 
       return panes;
@@ -166,7 +205,7 @@ export default class ChatDrawer extends Component<ComponentAttrs> {
             chatState.showPinned = false;
             m.redraw();
           }}
-        />
+        />,
       );
     }
 
@@ -205,7 +244,9 @@ export default class ChatDrawer extends Component<ComponentAttrs> {
 
     chatState.suspendDrawer();
 
-    m.route.set(id ? app.route('chat.channel', { id }) : app.route('chat.index'));
+    m.route.set(
+      id ? app.route("chat.channel", { id }) : app.route("chat.index"),
+    );
   }
 
   /**

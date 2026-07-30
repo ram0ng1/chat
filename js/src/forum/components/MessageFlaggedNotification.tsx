@@ -1,6 +1,6 @@
-import app from 'flarum/forum/app';
-import Notification from 'flarum/forum/components/Notification';
-import type Mithril from 'mithril';
+import app from "flarum/forum/app";
+import Notification from "flarum/forum/components/Notification";
+import type Mithril from "mithril";
 
 interface FlaggedData {
   flagId?: number;
@@ -22,22 +22,29 @@ interface FlaggedData {
  */
 export default class MessageFlaggedNotification extends Notification {
   icon(): string {
-    return 'fas fa-flag';
+    return "fas fa-flag";
   }
 
   href(): string {
-    return app.route('chat.flags');
+    return app.route("chat.flags");
   }
 
   content(): Mithril.Children {
     const reporter = this.attrs.notification.fromUser();
 
-    return app.translator.trans('ramon-chat.forum.notifications.message_flagged', {
-      username: reporter
-        ? reporter.displayName()
-        : app.translator.trans('ramon-chat.forum.notifications.someone', {}, true),
-      channel: this.data().channelName ?? '',
-    });
+    return app.translator.trans(
+      "ramon-chat.forum.notifications.message_flagged",
+      {
+        username: reporter
+          ? reporter.displayName()
+          : app.translator.trans(
+              "ramon-chat.forum.notifications.someone",
+              {},
+              true,
+            ),
+        channel: this.data().channelName ?? "",
+      },
+    );
   }
 
   /**

@@ -1,13 +1,13 @@
-import app from 'flarum/forum/app';
-import Component from 'flarum/common/Component';
-import type { ComponentAttrs } from 'flarum/common/Component';
-import Icon from 'flarum/common/components/Icon';
-import classList from 'flarum/common/utils/classList';
-import type Mithril from 'mithril';
+import app from "flarum/forum/app";
+import Component from "flarum/common/Component";
+import type { ComponentAttrs } from "flarum/common/Component";
+import Icon from "flarum/common/components/Icon";
+import classList from "flarum/common/utils/classList";
+import type Mithril from "mithril";
 
-import ChatDrawer from './ChatDrawer';
-import chatState from '../state/chat';
-import { chatTitle, chatIcon } from '../utils/branding';
+import ChatDrawer from "./ChatDrawer";
+import chatState from "../state/chat";
+import { chatTitle, chatIcon } from "../utils/branding";
 
 /**
  * The chat entry point in the header — Discourse's speech bubble next to search.
@@ -22,7 +22,7 @@ import { chatTitle, chatIcon } from '../utils/branding';
  * instead of needing a parallel set of rules to keep in sync.
  */
 export default class ChatNavButton<
-  CustomAttrs extends ComponentAttrs = ComponentAttrs
+  CustomAttrs extends ComponentAttrs = ComponentAttrs,
 > extends Component<CustomAttrs> {
   view(): Mithril.Children {
     const mentions = this.unreadMentions();
@@ -33,7 +33,7 @@ export default class ChatNavButton<
     return (
       <button
         type="button"
-        className={classList('Button Button--flat ChatNavButton', {
+        className={classList("Button Button--flat ChatNavButton", {
           // Core styles `.new` on a header button to signal fresh activity.
           new: mentions > 0,
           hasIcon: icon !== null,
@@ -57,7 +57,7 @@ export default class ChatNavButton<
             data-digits={String(Math.min(mentions, 99)).length}
             aria-hidden="true"
           >
-            {mentions > 99 ? '99+' : mentions}
+            {mentions > 99 ? "99+" : mentions}
           </span>
         ) : unread > 0 ? (
           <span
@@ -65,12 +65,12 @@ export default class ChatNavButton<
             data-digits={String(Math.min(unread, 99)).length}
             aria-hidden="true"
           >
-            {unread > 99 ? '99+' : unread}
+            {unread > 99 ? "99+" : unread}
           </span>
         ) : null}
 
         <span className="Button-label">
-          <span className="Button-labelText">{icon ? '' : label}</span>
+          <span className="Button-labelText">{icon ? "" : label}</span>
         </span>
       </button>
     );
@@ -84,7 +84,8 @@ export default class ChatNavButton<
    * worse than the page it is imitating.
    */
   open(): void {
-    const preferDrawer = app.session.user?.preferences()?.['ramon-chat.openInDrawer'] !== false;
+    const preferDrawer =
+      app.session.user?.preferences()?.["ramon-chat.openInDrawer"] !== false;
 
     if (preferDrawer && window.innerWidth > 767) {
       ChatDrawer.open();
@@ -92,7 +93,7 @@ export default class ChatNavButton<
       return;
     }
 
-    m.route.set(app.route('chat.index'));
+    m.route.set(app.route("chat.index"));
   }
 
   /**
@@ -117,13 +118,25 @@ export default class ChatNavButton<
    * and it has to say which kind of unread it is, because the two carry different
    * urgency and the colour that distinguishes them is not announced.
    */
-  protected ariaLabel(mentions: number, hasUnread: boolean, label: string): string {
+  protected ariaLabel(
+    mentions: number,
+    hasUnread: boolean,
+    label: string,
+  ): string {
     if (mentions > 0) {
-      return app.translator.trans('ramon-chat.forum.nav.unread_mentions', { count: mentions }, true);
+      return app.translator.trans(
+        "ramon-chat.forum.nav.unread_mentions",
+        { count: mentions },
+        true,
+      );
     }
 
     if (hasUnread) {
-      return app.translator.trans('ramon-chat.forum.nav.unread_messages', { count: this.unreadChannels() }, true);
+      return app.translator.trans(
+        "ramon-chat.forum.nav.unread_messages",
+        { count: this.unreadChannels() },
+        true,
+      );
     }
 
     return label;
