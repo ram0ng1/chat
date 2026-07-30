@@ -1,0 +1,109 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Chat mixins
+//
+// Mirrors the naming and intent of Avocado's `mixins/avocado-utils.less` so the
+// two read as one system. Where Avocado already has a mixin (flex-center,
+// truncate, line-clamp, card, online-ring) it is re-declared here rather than
+// imported, because an extension cannot rely on the theme's LESS being on the
+// include path — the definitions are kept byte-compatible on purpose.
+// ─────────────────────────────────────────────────────────────────────────────
+
+.chat-flex-center() {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chat-flex-row(@gap: 0) {
+  display: flex;
+  align-items: center;
+  gap: @gap;
+}
+
+.chat-truncate() {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+// overflow-wrap breaks long unbroken tokens (URLs, hashes) instead of letting
+// them overflow the clamped box.
+.chat-line-clamp(@lines) {
+  display: -webkit-box;
+  -webkit-line-clamp: @lines;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: break-word;
+}
+
+// Green presence ring, matching Avocado's online-avatars treatment.
+.chat-online-ring(@ring: 2px) {
+  box-shadow: 0 0 0 @ring var(--avocado-online);
+}
+
+.chat-icon-circle(@size: 28px; @bg: var(--avocado-surface-1)) {
+  width: @size;
+  height: @size;
+  border-radius: 50%;
+  background: @bg;
+  .chat-flex-center();
+  flex-shrink: 0;
+}
+
+.chat-pill-btn(@height: 30px; @h-padding: 12px; @font-size: @chat-font-label) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: @height;
+  padding: 0 @h-padding;
+  border-radius: @chat-radius-pill;
+  border: none;
+  font-size: @font-size;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background var(--avocado-t-fast),
+    color var(--avocado-t-fast),
+    opacity var(--avocado-t-fast);
+}
+
+.chat-surface(@radius: @chat-radius-md) {
+  border: 1px solid var(--avocado-border-subtle);
+  border-radius: @radius;
+  background: var(--control-bg);
+  transition:
+    box-shadow var(--avocado-t-medium),
+    border-color var(--avocado-t-medium);
+}
+
+// A scroll container that keeps its scrollbar out of the layout on platforms
+// that support it, so message text does not shift when content overflows.
+.chat-scroll-y() {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+}
+
+// Visually hidden but reachable by screen readers and focusable. Used for the
+// live region that announces incoming messages.
+.chat-sr-only() {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+// Respect a user's reduced-motion preference for anything that animates on
+// message arrival — a chat that animates every row is punishing at volume.
+.chat-motion-safe(@rules) {
+  @media (prefers-reduced-motion: no-preference) {
+    @rules();
+  }
+}

@@ -1,0 +1,19 @@
+# Dependencies. `js/dist` is deliberately NOT ignored: Flarum extensions ship their
+# compiled bundles so that `composer require` works without a Node toolchain.
+/vendor
+js/node_modules
+
+# Resolved for the dev environment only. This is a library, so consumers resolve
+# their own versions against the forum they install it into.
+composer.lock
+
+# Test and analysis caches
+.phpunit.cache
+.phpunit.result.cache
+/tests/integration/tmp
+
+# Editors and OS
+.idea
+.vscode
+.DS_Store
+Thumbs.db

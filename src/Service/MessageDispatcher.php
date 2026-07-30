@@ -1,0 +1,264 @@
+<?php
+
+/*
+ * This file is part of ramon/chat.
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
+namespace Ramon\Chat\Service;
+
+use Carbon\Carbon;
+use Flarum\Foundation\ValidationException;
+use Flarum\Locale\Translator;
+use Flarum\Settings\SettingsRepositoryInterface;
+use Flarum\User\User;
+use Illuminate\Contracts\Events\Dispatcher as Events;
+use Illuminate\Database\ConnectionInterface;
+use Ramon\Chat\Channel;
+use Ramon\Chat\Event\MessageWasSent;
+use Ramon\Chat\Event\ThreadWasCreated;
+use Ramon\Chat\Mention\MentionResolver;
+use Ramon\Chat\Message;
+use Ramon\Chat\Thread;
+use Ramon\Chat\ThreadUser;
+use Ramon\Chat\Upload;
+
+/**
+ * The single path through which user-authored messages enter a channel.
+ *
+ * Centralising this keeps the invariants in one place: validation, rate
+ * limiting, mention resolution, thread bookkeeping, attachment binding, counter
+ * maintenance and unread fan-out all have to happen together or not at all.
+ */
+class MessageDispatcher
+{
+    public function __construct(
+        protected ConnectionInterface $db,
+        protected Events $events,
+        protected SettingsRepositoryInterface $settings,
+        protected Translator $translator,
+        protected MentionResolver $mentions,
+        protected RateLimiter $rateLimiter,
+        protected UnreadTracker $unread
+    ) {
+    }
+
+    /**
+     * @param  int[]  $uploadIds  Ids of previously uploaded, not-yet-attached files.
+     *
+     * @throws ValidationException
+     */
+    public function send(
+        Channel $channel,
+        User $actor,
+        string $content,
+        ?Thread $thread = null,
+        ?Message $replyTo = null,
+        array $uploadIds = [],
+        bool $createThread = false
+    ): Message {
+        $content = trim($content);
+
+        $this->assertValidContent($content, $uploadIds);
+        $this->rateLimiter->assertWithinLimit($actor);
+
+        // A reply that starts a thread must anchor to a message in this channel;
+        // otherwise the thread would span channels and break the (channel,
+        // number) ordering contract.
+        if ($replyTo !== null && $replyTo->channel_id !== $channel->id) {
+            throw new ValidationException([
+                'replyTo' => $this->translator->trans('ramon-chat.api.invalid_reply_target'),
+            ]);
+        }
+
+        if ($thread !== null && $thread->channel_id !== $channel->id) {
+            throw new ValidationException([
+                'thread' => $this->translator->trans('ramon-chat.api.invalid_thread_target'),
+            ]);
+        }
+
+        $threadWasCreated = false;
+
+        $message = $this->db->transaction(function () use (
+            $channel, $actor, $content, &$thread, $replyTo, $uploadIds, $createThread, &$threadWasCreated
+        ) {
+            // Starting a thread from a message that has none yet: create the
+            // thread, then back-fill the root message's thread_id so the thread
+            // reads as a single query.
+            if ($createThread && $thread === null && $replyTo !== null) {
+                if ($replyTo->thread_id !== null) {
+                    $thread = $replyTo->thread;
+                } else {
+                    $thread = Thread::build($channel, $replyTo, $actor);
+                    $thread->save();
+
+                    $replyTo->thread_id = $thread->id;
+                    $replyTo->save();
+
+                    $this->trackThread($thread, $replyTo->user_id !== null ? $replyTo->user : $actor);
+
+                    $threadWasCreated = true;
+                }
+            }
+
+            $message = Message::build($channel, $actor, $content, $thread, $replyTo);
+            $message->save();
+
+            $this->attachUploads($message, $actor, $uploadIds);
+
+            $this->mentions->sync(
+                $message,
+                $actor->can('mentionChannelWide', $channel)
+            );
+
+            // Reload relations the downstream listeners and serialisers rely on.
+            $message->setRelation('channel', $channel);
+            $message->setRelation('user', $actor);
+
+            if ($thread !== null) {
+                $message->setRelation('thread', $thread);
+
+                $thread->refreshMetadata()->save();
+                $this->trackThread($thread, $actor);
+            }
+
+            $channel->last_message_id = $message->id;
+            $channel->last_message_at = $message->created_at;
+            $channel->messages_count++;
+            $channel->save();
+
+            // The sender is implicitly caught up; everyone else gains an unread.
+            $this->unread->recordNewMessage($message);
+
+            return $message;
+        });
+
+        // Events fire *after* commit, never inside the transaction.
+        //
+        // Listeners have side effects the database cannot roll back: the realtime
+        // broadcast puts the message on subscribers' websockets, and notifications
+        // may send mail. Dispatching inside the transaction meant a client could
+        // receive the push — and act on it — before the row was committed, and a
+        // late rollback would leave a message that was announced but never existed.
+        if ($threadWasCreated && $thread !== null) {
+            $this->events->dispatch(new ThreadWasCreated($thread, $actor));
+        }
+
+        $this->events->dispatch(new MessageWasSent($message, $actor));
+
+        return $message;
+    }
+
+    /**
+     * Posts a system message (joins, status changes). System messages bypass
+     * rate limiting and mention resolution but still advance channel counters so
+     * they order correctly in the stream.
+     */
+    public function sendSystem(Channel $channel, string $key, array $data = []): Message
+    {
+        $message = $this->db->transaction(function () use ($channel, $key, $data) {
+            $message = Message::buildSystem($channel, $key, $data);
+            $message->save();
+
+            $message->setRelation('channel', $channel);
+
+            $channel->last_message_id = $message->id;
+            $channel->last_message_at = $message->created_at;
+            $channel->messages_count++;
+            $channel->save();
+
+            return $message;
+        });
+
+        // After commit, as above.
+        $this->events->dispatch(new MessageWasSent($message, null));
+
+        return $message;
+    }
+
+    /**
+     * Binds pending uploads to the message. Only the sender's own unattached
+     * uploads are eligible, which prevents claiming someone else's file by id.
+     *
+     * @param  int[]  $uploadIds
+     */
+    protected function attachUploads(Message $message, User $actor, array $uploadIds): void
+    {
+        $uploadIds = array_values(array_filter(array_map('intval', $uploadIds)));
+
+        if ($uploadIds === []) {
+            return;
+        }
+
+        Upload::query()
+            ->whereIn('id', $uploadIds)
+            ->where('user_id', $actor->id)
+            ->whereNull('message_id')
+            ->update([
+                'message_id' => $message->id,
+                'updated_at' => Carbon::now(),
+            ]);
+    }
+
+    /**
+     * Replying to a thread opts you into it at "always", mirroring Discourse's
+     * thread tracking. An existing membership is left untouched so a user who
+     * deliberately lowered their level is not re-escalated by replying.
+     */
+    protected function trackThread(Thread $thread, ?User $user): void
+    {
+        if ($user === null || ! $user->exists) {
+            return;
+        }
+
+        $existing = ThreadUser::query()
+            ->where('thread_id', $thread->id)
+            ->where('user_id', $user->id)
+            ->first();
+
+        if ($existing !== null) {
+            return;
+        }
+
+        $membership = new ThreadUser();
+        $membership->thread_id = $thread->id;
+        $membership->user_id = $user->id;
+        $membership->notification_level = ThreadUser::LEVEL_ALWAYS;
+        $membership->save();
+    }
+
+    /**
+     * @param  int[]  $uploadIds
+     *
+     * @throws ValidationException
+     */
+    protected function assertValidContent(string $content, array $uploadIds): void
+    {
+        $min = (int) $this->settings->get('ramon-chat.min_message_length', 1);
+        $max = (int) $this->settings->get('ramon-chat.max_message_length', 3000);
+
+        // An attachment-only message is legitimate, so the minimum applies to
+        // the text only when there is nothing else being sent.
+        if ($content === '' && $uploadIds === []) {
+            throw new ValidationException([
+                'content' => $this->translator->trans('ramon-chat.api.message_empty'),
+            ]);
+        }
+
+        $length = mb_strlen($content);
+
+        if ($content !== '' && $length < $min) {
+            throw new ValidationException([
+                'content' => $this->translator->trans('ramon-chat.api.message_too_short', ['min' => $min]),
+            ]);
+        }
+
+        if ($length > $max) {
+            throw new ValidationException([
+                'content' => $this->translator->trans('ramon-chat.api.message_too_long', ['max' => $max]),
+            ]);
+        }
+    }
+}

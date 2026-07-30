@@ -1,0 +1,82 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Chat-specific tokens
+//
+// Only values the chat needs that Avocado has no opinion about. Anything Avocado
+// already defines is consumed, not redefined — see fallbacks.less.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Layout ───────────────────────────────────────────────────────────────────
+@chat-sidebar-width:        280px;
+@chat-thread-panel-width:   380px;
+@chat-drawer-width:         420px;
+@chat-drawer-height:        560px;
+@chat-drawer-collapsed:     48px;
+@chat-header-height:        56px;
+@chat-composer-min-height:  44px;
+@chat-composer-max-height:  220px;
+
+// Breakpoint at which the drawer goes full-bleed and the thread panel stacks
+// over the channel instead of beside it.
+@chat-mobile-breakpoint:    767px;
+
+// ── Message rhythm ───────────────────────────────────────────────────────────
+@chat-avatar-size:          32px;
+@chat-avatar-size-compact:  24px;
+@chat-message-gutter:       44px;  // avatar + gap, so grouped messages align
+@chat-message-gap:          2px;   // between grouped messages from one author
+@chat-message-group-gap:    12px;  // between authors
+
+// ── Radii ────────────────────────────────────────────────────────────────────
+// Deliberately tighter than Avocado's 14px card radius: chat rows are dense and
+// a large radius reads as noise at this size.
+@chat-radius-sm:            8px;
+@chat-radius-md:            12px;
+@chat-radius-pill:          999px;
+
+// ── Typography ───────────────────────────────────────────────────────────────
+@chat-font-message:         15px;
+@chat-font-meta:            12px;
+@chat-font-label:           13px;
+
+// ── Chat-only semantic colours ───────────────────────────────────────────────
+:root {
+  // The unread divider — Discourse's red "new messages" rule. Kept independent
+  // of --alert-error-color so a theme restyling alerts does not move it.
+  --chat-unread-line:        #e03e3e;
+
+  // Mention highlight on a message addressed to you.
+  --chat-mention-bg:         rgba(255, 196, 0, 0.14);
+  --chat-mention-border:     rgba(255, 196, 0, 0.55);
+
+  // A pinned message. Deliberately not the mention amber: the two can apply to
+  // the same row, and they mean different things — one is addressed to you, the
+  // other to the whole channel.
+  --chat-pinned-bg:          rgba(99, 102, 241, 0.10);
+  --chat-pinned-border:      rgba(99, 102, 241, 0.75);
+
+  // Row states.
+  --chat-row-hover-bg:       rgba(0, 0, 0, 0.035);
+  --chat-row-selected-bg:    rgba(59, 130, 246, 0.10);
+
+
+  // Reaction chips.
+  --chat-reaction-bg:        var(--avocado-surface-1);
+  --chat-reaction-bg-active: rgba(59, 130, 246, 0.14);
+  --chat-reaction-border:    var(--avocado-border-chip);
+
+  // A deleted message's tombstone.
+  --chat-tombstone-color:    var(--avocado-muted-icon);
+
+  // Thread indicator strip under a threaded message.
+  --chat-thread-strip:       var(--avocado-border-subtle);
+}
+
+[data-theme^="dark"] {
+  --chat-unread-line:        #ff6b6b;
+  --chat-mention-bg:         rgba(255, 196, 0, 0.10);
+  --chat-row-hover-bg:       rgba(255, 255, 255, 0.04);
+  --chat-row-selected-bg:    rgba(96, 165, 250, 0.14);
+  --chat-reaction-bg-active: rgba(96, 165, 250, 0.18);
+  --chat-pinned-bg:          rgba(129, 140, 248, 0.12);
+  --chat-pinned-border:      rgba(129, 140, 248, 0.85);
+}

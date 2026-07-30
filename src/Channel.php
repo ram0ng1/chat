@@ -1,0 +1,268 @@
+<?php
+
+/*
+ * This file is part of ramon/chat.
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
+namespace Ramon\Chat;
+
+use Carbon\Carbon;
+use Flarum\Database\AbstractModel;
+use Flarum\Database\ScopeVisibilityTrait;
+use Flarum\Foundation\EventGeneratorTrait;
+use Flarum\User\User;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Str;
+
+/**
+ * @property int $id
+ * @property string $type
+ * @property string|null $name
+ * @property string|null $slug
+ * @property string|null $description
+ * @property string|null $emoji
+ * @property int|null $tag_id
+ * @property string $status
+ * @property bool $threading_enabled
+ * @property bool $auto_join
+ * @property bool $auto_join_on_reply
+ * @property bool $allow_channel_wide_mentions
+ * @property int|null $creator_id
+ * @property int $messages_count
+ * @property int $user_count
+ * @property int|null $last_message_id
+ * @property Carbon|null $last_message_at
+ * @property int|null $archived_discussion_id
+ * @property Carbon|null $archived_at
+ * @property int|null $archived_by_id
+ * @property Carbon|null $deleted_at
+ * @property int|null $deleted_by_id
+ * @property Carbon $created_at
+ * @property Carbon $updated_at
+ * @property-read User|null $creator
+ * @property-read Collection<int, Message> $messages
+ * @property-read Collection<int, Thread> $threads
+ * @property-read Collection<int, User> $participants
+ * @property-read Message|null $lastMessage
+ */
+class Channel extends AbstractModel
+{
+    use EventGeneratorTrait;
+    use ScopeVisibilityTrait;
+
+    /**
+     * A channel bound to a tag (or to the whole forum when tags is disabled).
+     * Visibility is inherited from the tag, so category permissions govern chat
+     * access without a second permission surface to maintain.
+     */
+    public const TYPE_CATEGORY = 'category';
+
+    /**
+     * A 1:1 or group conversation with an explicit participant list.
+     */
+    public const TYPE_DIRECT = 'direct';
+
+    public const STATUS_OPEN = 'open';
+    public const STATUS_CLOSED = 'closed';
+    public const STATUS_ARCHIVED = 'archived';
+
+    protected $table = 'chat_channels';
+
+    public $timestamps = true;
+
+    protected $guarded = [];
+
+    protected $casts = [
+        'tag_id'                      => 'integer',
+        'creator_id'                  => 'integer',
+        'messages_count'              => 'integer',
+        'user_count'                  => 'integer',
+        'last_message_id'             => 'integer',
+        'archived_discussion_id'      => 'integer',
+        'archived_by_id'              => 'integer',
+        'deleted_by_id'               => 'integer',
+        'threading_enabled'           => 'boolean',
+        'auto_join'                   => 'boolean',
+        'auto_join_on_reply'          => 'boolean',
+        'allow_channel_wide_mentions' => 'boolean',
+        'last_message_at'             => 'datetime',
+        'archived_at'                 => 'datetime',
+        'deleted_at'                  => 'datetime',
+    ];
+
+    public static function build(
+        string $type,
+        ?string $name = null,
+        ?string $description = null,
+        ?int $tagId = null,
+        ?User $creator = null
+    ): static {
+        $channel = new static();
+
+        $channel->type = $type;
+        $channel->name = $name;
+        $channel->description = $description;
+        $channel->tag_id = $tagId;
+        $channel->creator_id = $creator?->id;
+        $channel->status = self::STATUS_OPEN;
+
+        if ($type === self::TYPE_CATEGORY && $name !== null) {
+            $channel->slug = $channel->generateSlug($name);
+        }
+
+        return $channel;
+    }
+
+    /**
+     * Slugs are only meaningful for category channels — direct channels are
+     * addressed by id because their name is derived from the participant list.
+     */
+    public function generateSlug(string $name): string
+    {
+        $base = Str::slug($name) ?: 'channel';
+        $slug = $base;
+        $suffix = 1;
+
+        while (
+            static::query()
+                ->where('slug', $slug)
+                ->when($this->exists, fn (Builder $q) => $q->whereKeyNot($this->id))
+                ->exists()
+        ) {
+            $slug = $base.'-'.(++$suffix);
+        }
+
+        return $slug;
+    }
+
+    public function isDirect(): bool
+    {
+        return $this->type === self::TYPE_DIRECT;
+    }
+
+    public function isCategory(): bool
+    {
+        return $this->type === self::TYPE_CATEGORY;
+    }
+
+    public function isOpen(): bool
+    {
+        return $this->status === self::STATUS_OPEN;
+    }
+
+    public function isClosed(): bool
+    {
+        return $this->status === self::STATUS_CLOSED;
+    }
+
+    public function isArchived(): bool
+    {
+        return $this->status === self::STATUS_ARCHIVED;
+    }
+
+    public function isDeleted(): bool
+    {
+        return $this->deleted_at !== null;
+    }
+
+    /**
+     * Whether new messages may be posted. Closed and archived channels stay
+     * readable but frozen, which is what makes archiving non-destructive.
+     */
+    public function acceptsMessages(): bool
+    {
+        return $this->isOpen() && ! $this->isDeleted();
+    }
+
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'creator_id');
+    }
+
+    public function messages(): HasMany
+    {
+        return $this->hasMany(Message::class, 'channel_id');
+    }
+
+    public function threads(): HasMany
+    {
+        return $this->hasMany(Thread::class, 'channel_id');
+    }
+
+    public function lastMessage(): BelongsTo
+    {
+        return $this->belongsTo(Message::class, 'last_message_id');
+    }
+
+    public function webhooks(): HasMany
+    {
+        return $this->hasMany(Webhook::class, 'channel_id');
+    }
+
+    /**
+     * Every user with a membership row, including those who have muted the
+     * channel. Excludes users who left a direct channel.
+     */
+    public function participants(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'chat_channel_user', 'channel_id', 'user_id')
+            ->whereNull('chat_channel_user.left_at');
+    }
+
+    public function memberships(): HasMany
+    {
+        return $this->hasMany(ChannelUser::class, 'channel_id');
+    }
+
+    /**
+     * The tag this channel inherits permissions from. Resolved dynamically so
+     * the model does not hard-depend on flarum/tags being installed.
+     */
+    public function tag(): ?BelongsTo
+    {
+        if (! class_exists(\Flarum\Tags\Tag::class)) {
+            return null;
+        }
+
+        return $this->belongsTo(\Flarum\Tags\Tag::class, 'tag_id');
+    }
+
+    public function membershipFor(?User $user): ?ChannelUser
+    {
+        if ($user === null || ! $user->exists) {
+            return null;
+        }
+
+        return $this->memberships()
+            ->where('user_id', $user->id)
+            ->whereNull('left_at')
+            ->first();
+    }
+
+    /**
+     * Recomputes the denormalised counters from the messages table. Used after
+     * bulk operations (message moves, retention pruning, archiving) where
+     * tracking increments incrementally would be error-prone.
+     */
+    public function refreshMetadata(): static
+    {
+        $last = $this->messages()
+            ->whereNull('deleted_at')
+            ->orderByDesc('id')
+            ->first();
+
+        $this->messages_count = $this->messages()->whereNull('deleted_at')->count();
+        $this->last_message_id = $last?->id;
+        $this->last_message_at = $last?->created_at;
+        $this->user_count = $this->memberships()->whereNull('left_at')->count();
+
+        return $this;
+    }
+}

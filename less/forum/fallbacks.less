@@ -1,0 +1,71 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Avocado token fallbacks
+//
+// The chat is designed against Avocado's token set. On a forum running a
+// different theme those custom properties are simply undefined, and every rule
+// that reads one would collapse to an invalid value.
+//
+// CSS custom properties take a second argument as a fallback:
+//
+//     var(--avocado-surface-1, var(--control-bg))
+//
+// Writing that at every call site would be unreadable, so instead we declare the
+// full Avocado surface here in terms of Flarum core variables. Avocado's own
+// `:root` block loads after this one and wins by cascade order, so:
+//
+//   - Avocado active     → Avocado's values apply
+//   - any other theme    → these core-derived values apply
+//
+// This is why component styles below can reference --avocado-* unconditionally.
+// ─────────────────────────────────────────────────────────────────────────────
+
+:root {
+  // Surfaces
+  --avocado-surface-1:         var(--control-bg);
+  --avocado-surface-2:         var(--control-bg);
+
+  // Borders. Core has no dedicated border token, so these are derived from the
+  // text colour at low alpha, which reads correctly on light and dark alike.
+  --avocado-border-subtle:     rgba(0, 0, 0, 0.10);
+  --avocado-border-soft:       rgba(0, 0, 0, 0.07);
+  --avocado-border-chip:       rgba(0, 0, 0, 0.12);
+
+  // Muted text and icons
+  --avocado-muted-icon:        var(--muted-color);
+  --avocado-muted-placeholder: var(--muted-color);
+  --avocado-muted-label:       var(--muted-color);
+  --avocado-text-dark:         var(--text-color);
+
+  // Presence
+  --avocado-online:            #22c55e;
+  --avocado-online-ring:       var(--body-bg);
+
+  // Motion
+  --avocado-t-fast:            0.15s ease;
+  --avocado-t-normal:          0.16s ease;
+  --avocado-t-medium:          0.2s ease;
+
+  // Z-index scale
+  --avocado-z-sidebar:         10;
+  --avocado-z-topbar:          60;
+  --avocado-z-dropdown:        400;
+  --avocado-z-modal-backdrop:  500;
+  --avocado-z-tooltip:         9999;
+
+  // Elevation
+  --shadow-subtle:             0 1px 6px rgba(0, 0, 0, 0.06);
+  --shadow-medium:             0 8px 24px rgba(0, 0, 0, 0.12);
+  --shadow-lifted:             0 12px 32px rgba(0, 0, 0, 0.18);
+}
+
+// Dark-mode fallbacks. The light alphas above are invisible on a dark surface,
+// so borders and shadows need their own values rather than a tint of the same.
+[data-theme^="dark"] {
+  --avocado-border-subtle:     rgba(255, 255, 255, 0.08);
+  --avocado-border-soft:       rgba(255, 255, 255, 0.07);
+  --avocado-border-chip:       rgba(255, 255, 255, 0.10);
+
+  --shadow-subtle:             0 1px 6px rgba(0, 0, 0, 0.30);
+  --shadow-medium:             0 8px 24px rgba(0, 0, 0, 0.40);
+  --shadow-lifted:             0 12px 32px rgba(0, 0, 0, 0.50);
+}

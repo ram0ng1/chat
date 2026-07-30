@@ -1,0 +1,95 @@
+{
+    "name": "ramon/chat",
+    "description": "Discourse-style realtime chat for Flarum v2 — category-scoped public channels, threads, direct and group messages, reactions, mentions, uploads and search, natively integrated with discussions, notifications and search.",
+    "keywords": [
+        "flarum",
+        "chat",
+        "channels",
+        "threads",
+        "realtime",
+        "discourse"
+    ],
+    "type": "flarum-extension",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Ramon Guilherme",
+            "email": "ramon@ramonguilherme.com.br",
+            "homepage": "https://ramonguilherme.com.br",
+            "role": "Developer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/ram0ng1/flarum-chat/issues",
+        "source": "https://github.com/ram0ng1/flarum-chat"
+    },
+    "require": {
+        "php": "^8.3",
+        "flarum/core": "^2.0.0"
+    },
+    "require-dev": {
+        "flarum/tags": "^2.0.0",
+        "flarum/mentions": "^2.0.0",
+        "phpunit/phpunit": "^11.5 || ^13.2.0",
+        "mockery/mockery": "^1.6",
+        "phpstan/phpstan": "^2.2",
+        "flarum/testing": "^2.0.0"
+    },
+    "suggest": {
+        "flarum/tags": "Required for category-scoped channels, which inherit tag permissions (^2.0).",
+        "flarum/realtime": "Required for live message delivery, typing indicators and presence (^2.0).",
+        "flarum/mentions": "Enables @user and @group autocomplete parity with discussions (^2.0).",
+        "flarum/emoji": "Enables :shortcode: rendering in messages (^2.0)."
+    },
+    "autoload": {
+        "psr-4": {
+            "Ramon\\Chat\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Ramon\\Chat\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "flarum-extension": {
+            "title": "Chat",
+            "category": "feature",
+            "optional-dependencies": [
+                "flarum/tags",
+                "flarum/realtime",
+                "flarum/mentions",
+                "flarum/emoji"
+            ],
+            "icon": {
+                "image": "icon.svg",
+                "backgroundColor": "#244C4E",
+                "backgroundSize": "58%",
+                "backgroundPosition": "center",
+                "backgroundRepeat": "no-repeat"
+            }
+        },
+        "flarum-cli": {
+            "modules": {
+                "admin": true,
+                "forum": true,
+                "js": true,
+                "jsCommon": true,
+                "css": true,
+                "gitConf": true,
+                "prettier": true,
+                "typescript": true,
+                "backendTesting": true,
+                "editorConfig": true
+            }
+        }
+    },
+    "scripts": {
+        "analyse": "phpstan analyse",
+        "test": "phpunit",
+        "test:unit": "phpunit --testsuite unit",
+        "test:integration": "phpunit --testsuite integration"
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

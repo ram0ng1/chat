@@ -1,0 +1,264 @@
+<?php
+
+/*
+ * This file is part of ramon/chat.
+ *
+ * Copyright (c) Ramon Guilherme.
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
+namespace Ramon\Chat;
+
+use Flarum\Api\Context;
+use Flarum\Api\Resource\ForumResource;
+use Flarum\Api\Resource\UserResource;
+use Flarum\Api\Schema;
+use Flarum\Extend;
+use Flarum\Foundation\Paths;
+use Flarum\Http\UrlGenerator;
+use Flarum\User\User;
+use League\Flysystem\Visibility;
+use Ramon\Chat\Service\UnreadTracker;
+
+return [
+    (new Extend\Frontend('forum'))
+        ->js(__DIR__.'/js/dist/forum.js')
+        // Serves the lazily loaded chunks webpack splits out of forum.js — the
+        // 154 KB emoji map among them. Without this the dynamic import 404s and
+        // shortcodes silently stop resolving beyond the small built-in set.
+        ->jsDirectory(__DIR__.'/js/dist/forum')
+        ->css(__DIR__.'/less/forum.less')
+        // Full-screen mode. The drawer is rendered over whatever page is open,
+        // so it needs no route of its own.
+        ->route('/chat', 'chat.index')
+        ->route('/chat/c/{id}', 'chat.channel')
+        ->route('/chat/c/{id}/t/{threadId:\d+}', 'chat.thread')
+        ->route('/chat/browse', 'chat.browse')
+        ->route('/chat/browse/{filter}', 'chat.browse.filter')
+        ->route('/chat/threads', 'chat.threads')
+        ->route('/chat/search', 'chat.search'),
+
+    (new Extend\Frontend('admin'))
+        ->js(__DIR__.'/js/dist/admin.js')
+        ->css(__DIR__.'/less/admin.less'),
+
+    new Extend\Locales(__DIR__.'/locale'),
+
+    // Backs the `ramon-chat::emails.*` views used by ChatMentionBlueprint.
+    (new Extend\View())
+        ->namespace('ramon-chat', __DIR__.'/views'),
+
+    (new Extend\ServiceProvider())
+        ->register(ChatServiceProvider::class),
+
+    // ── Storage for message attachments ──────────────────────────────────────
+    (new Extend\Filesystem())
+        ->disk('chat', function (Paths $paths, UrlGenerator $url) {
+            return [
+                'root'       => "$paths->public/assets/chat",
+                'url'        => $url->to('forum')->path('assets/chat'),
+                'visibility' => Visibility::PUBLIC,
+            ];
+        }),
+
+    // ── Model wiring ─────────────────────────────────────────────────────────
+    (new Extend\Model(User::class))
+        ->belongsToMany('chatChannels', Channel::class, 'chat_channel_user', 'user_id', 'channel_id')
+        ->hasMany('chatMessages', Message::class, 'user_id'),
+
+    (new Extend\ModelVisibility(Channel::class))
+        ->scope(Access\ScopeChannelVisibility::class),
+
+    (new Extend\ModelVisibility(Message::class))
+        ->scope(Access\ScopeMessageVisibility::class),
+
+    (new Extend\ModelVisibility(Thread::class))
+        ->scope(Access\ScopeThreadVisibility::class),
+
+    (new Extend\Policy())
+        ->modelPolicy(Channel::class, Access\ChannelPolicy::class)
+        ->modelPolicy(Message::class, Access\MessagePolicy::class)
+        ->modelPolicy(Thread::class, Access\ThreadPolicy::class)
+        ->globalPolicy(Access\GlobalPolicy::class),
+
+    // ── API ──────────────────────────────────────────────────────────────────
+    new Extend\ApiResource(Api\Resource\ChannelResource::class),
+    new Extend\ApiResource(Api\Resource\MessageResource::class),
+    new Extend\ApiResource(Api\Resource\ThreadResource::class),
+    new Extend\ApiResource(Api\Resource\UploadResource::class),
+    new Extend\ApiResource(Api\Resource\WebhookResource::class),
+
+    (new Extend\ApiResource(ForumResource::class))
+        ->fields(fn () => [
+            Schema\Boolean::make('canUseChat')
+                ->get(fn ($forum, Context $context) => $context->getActor()->can('ramon-chat.use')),
+
+            Schema\Boolean::make('canCreateChatChannel')
+                ->get(fn ($forum, Context $context) => $context->getActor()->can('createChannel')),
+
+            // Drives the @here / @all rows in the composer's autocomplete. Offering
+            // them to someone the server would refuse is worse than not offering.
+            Schema\Boolean::make('canMentionChatChannelWide')
+                ->get(fn ($forum, Context $context) => $context->getActor()->hasPermission('ramon-chat.mentionChannelWide')),
+
+            // Gates the "move messages" control in the selection bar, which is the
+            // one selection action MoveMessagesController requires `moderate` for.
+            Schema\Boolean::make('canModerateChat')
+                ->get(fn ($forum, Context $context) => $context->getActor()->hasPermission('ramon-chat.moderate')),
+
+            Schema\Boolean::make('canStartChatDirect')
+                ->get(fn ($forum, Context $context) => $context->getActor()->can('startDirect')),
+        ]),
+
+    (new Extend\ApiResource(UserResource::class))
+        ->fields(fn () => [
+            // Only ever exposed to the user themselves — unread state is private.
+            Schema\Integer::make('chatUnreadChannelsCount')
+                ->visible(fn (User $user, Context $context) => $context->getActor()->is($user))
+                ->get(fn (User $user) => resolve(UnreadTracker::class)->totalUnreadFor($user)),
+
+            Schema\Integer::make('chatUnreadMentionsCount')
+                ->visible(fn (User $user, Context $context) => $context->getActor()->is($user))
+                ->get(fn (User $user) => resolve(UnreadTracker::class)->totalUnreadMentionsFor($user)),
+        ]),
+
+    // ── Settings ─────────────────────────────────────────────────────────────
+    (new Extend\Settings())
+        ->default('ramon-chat.channel_retention_days', 90)
+        ->default('ramon-chat.dm_retention_days', 0)
+        ->default('ramon-chat.max_messages_per_second', 2)
+        ->default('ramon-chat.min_message_length', 1)
+        ->default('ramon-chat.max_message_length', 3000)
+        ->default('ramon-chat.message_edit_window_minutes', 0)
+        ->default('ramon-chat.allow_uploads', true)
+        ->default('ramon-chat.max_upload_size', 10485760)
+        ->default('ramon-chat.allow_archiving_channels', true)
+        // `+1` first: it is the quick reaction on the hover bar, so the picker
+        // should open with the same emoji in the leading slot.
+        ->default('ramon-chat.default_reactions', '+1,heart,tada,eyes,laughing')
+        ->default('ramon-chat.threading_default', false)
+        // Branding: the label and icon used by the header button and the drawer
+        // header. Empty title falls back to the translated "Chat".
+        ->default('ramon-chat.title', '')
+        ->default('ramon-chat.icon', 'fas fa-comments')
+        ->default('ramon-chat.show_icon', true)
+        ->serializeToForum('ramon-chat.maxMessageLength', 'ramon-chat.max_message_length', 'intval')
+        ->serializeToForum('ramon-chat.minMessageLength', 'ramon-chat.min_message_length', 'intval')
+        ->serializeToForum('ramon-chat.maxUploadSize', 'ramon-chat.max_upload_size', 'intval')
+        ->serializeToForum('ramon-chat.allowUploads', 'ramon-chat.allow_uploads', 'boolval')
+        ->serializeToForum('ramon-chat.defaultReactions', 'ramon-chat.default_reactions')
+        ->serializeToForum('ramon-chat.threadingDefault', 'ramon-chat.threading_default', 'boolval')
+        ->serializeToForum('ramon-chat.title', 'ramon-chat.title')
+        ->serializeToForum('ramon-chat.icon', 'ramon-chat.icon')
+        ->serializeToForum('ramon-chat.showIcon', 'ramon-chat.show_icon', 'boolval')
+        ->serializeToForum('ramon-chat.allowArchivingChannels', 'ramon-chat.allow_archiving_channels', 'boolval'),
+
+    // ── Per-user chat preferences (/settings) ────────────────────────────────
+    (new Extend\User())
+        ->registerPreference('ramon-chat.enabled', 'boolVal', true)
+        ->registerPreference('ramon-chat.allowChannelWideMentions', 'boolVal', true)
+        ->registerPreference('ramon-chat.sound', 'strVal', 'default')
+        ->registerPreference('ramon-chat.emailNotifications', 'boolVal', false)
+        ->registerPreference('ramon-chat.openInDrawer', 'boolVal', true),
+
+    // ── Non-JSON:API routes ──────────────────────────────────────────────────
+    // These carry payloads JSON:API cannot express (multipart uploads) or are
+    // addressed by a secret rather than a resource id (webhooks).
+    (new Extend\Routes('api'))
+        ->post('/chat/uploads', 'chat.uploads.store', Api\Controller\UploadController::class)
+        ->post('/chat/typing', 'chat.typing', Api\Controller\TypingController::class)
+        ->post('/chat/drafts', 'chat.drafts.store', Api\Controller\DraftController::class)
+        ->get('/chat/drafts', 'chat.drafts.index', Api\Controller\ListDraftsController::class)
+        ->post('/chat/direct', 'chat.direct.start', Api\Controller\StartDirectController::class)
+        ->post('/chat/transcript', 'chat.transcript', Api\Controller\TranscriptController::class)
+        ->post('/chat/messages/move', 'chat.messages.move', Api\Controller\MoveMessagesController::class)
+        // Slack-compatible incoming webhook, authenticated by the secret path key.
+        ->post('/chat/hooks/{key}', 'chat.webhooks.deliver', Api\Controller\WebhookDeliveryController::class),
+
+    // The delivering service cannot hold a Flarum session token, so the webhook
+    // route authenticates by its key instead. See WebhookDeliveryController for
+    // the constant-time comparison that makes the key safe to use this way.
+    (new Extend\Csrf())
+        ->exemptRoute('chat.webhooks.deliver'),
+
+    // ── Notifications ────────────────────────────────────────────────────────
+    // Only mentions are mailable: a message notification can fire per message in
+    // a busy channel, and routing that to email would be a mail-bomb.
+    (new Extend\Notification())
+        ->type(Notification\ChatMentionBlueprint::class, ['alert', 'email'])
+        ->type(Notification\ChatMessageBlueprint::class, ['alert']),
+
+    // ── Domain listeners ─────────────────────────────────────────────────────
+    (new Extend\Event())
+        ->listen(Event\MessageWasSent::class, Listener\SendChatNotifications::class)
+        ->listen(Event\ChannelWasCreated::class, Listener\AutoJoinUsers::class)
+        ->listen(\Flarum\User\Event\Registered::class, Listener\JoinAutoJoinChannels::class)
+        ->listen(Event\MessageWasDeleted::class, Listener\RecalculateUnreadCounts::class)
+        ->listen(Event\MessageWasMoved::class, Listener\RecalculateUnreadCounts::class)
+        // Narrates membership changes into the stream, so a departure is visible to
+        // whoever is left rather than silent.
+        ->listen(Event\UserJoinedChannel::class, Listener\AnnounceMembershipChanges::class.'@whenJoined')
+        ->listen(Event\UserLeftChannel::class, Listener\AnnounceMembershipChanges::class.'@whenLeft'),
+
+    // ── Console ──────────────────────────────────────────────────────────────
+    (new Extend\Console())
+        ->command(Console\PruneChatCommand::class)
+        ->schedule(Console\PruneChatCommand::class, function ($event) {
+            // Retention is housekeeping: nightly is frequent enough, and 03:30
+            // keeps a destructive job away from peak traffic.
+            $event->daily()->at('03:30');
+        }),
+
+    // ── Search / filtering ───────────────────────────────────────────────────
+    // Flarum 2 has no JSON:API resource filters: AbstractDatabaseResource::filters()
+    // is final and throws, directing extensions to the search driver instead. Every
+    // `filter[...]` the client sends therefore arrives through a searcher, and
+    // Endpoint\Index routes through SearchManager once a model is searchable.
+    (new Extend\SearchDriver(\Flarum\Search\Database\DatabaseSearchDriver::class))
+        ->addSearcher(Channel::class, Search\ChannelSearcher::class)
+        ->addFilter(Search\ChannelSearcher::class, Search\Filter\ChannelTypeFilter::class)
+        ->addFilter(Search\ChannelSearcher::class, Search\Filter\ChannelStatusFilter::class)
+        ->addFilter(Search\ChannelSearcher::class, Search\Filter\ChannelFollowingFilter::class)
+        ->addFilter(Search\ChannelSearcher::class, Search\Filter\ChannelNameFilter::class)
+
+        ->addSearcher(Message::class, Search\MessageSearcher::class)
+        ->addFilter(Search\MessageSearcher::class, Search\Filter\MessageChannelFilter::class)
+        ->addFilter(Search\MessageSearcher::class, Search\Filter\MessageThreadFilter::class)
+        ->addFilter(Search\MessageSearcher::class, Search\Filter\MessageBeforeFilter::class)
+        ->addFilter(Search\MessageSearcher::class, Search\Filter\MessageAfterFilter::class)
+        ->addFilter(Search\MessageSearcher::class, Search\Filter\MessageBookmarkedFilter::class)
+        ->addFilter(Search\MessageSearcher::class, Search\Filter\MessagePinnedFilter::class)
+        ->addFilter(Search\MessageSearcher::class, Search\Filter\MessageTextFilter::class)
+
+        ->addSearcher(Thread::class, Search\ThreadSearcher::class)
+        ->addFilter(Search\ThreadSearcher::class, Search\Filter\ThreadChannelFilter::class)
+        ->addFilter(Search\ThreadSearcher::class, Search\Filter\ThreadParticipatingFilter::class),
+
+    // ── Category-driven auto-join, only meaningful with flarum/tags ──────────
+    // A channel bound to a tag can grow from participation in that category. The
+    // listener reads `$discussion->tags`, which only exists when tags is enabled.
+    (new Extend\Conditional())
+        ->whenExtensionEnabled('flarum-tags', fn () => [
+            (new Extend\Event())
+                ->listen(\Flarum\Post\Event\Posted::class, Listener\JoinChannelsOnReply::class),
+        ]),
+
+    // ── Realtime, only when flarum/realtime is present ───────────────────────
+    // Chat payloads are addressed to individual users' private channels, never to
+    // the shared `public` channel — see Realtime\ChatBroadcaster for why that
+    // distinction is a privacy boundary rather than an optimisation.
+    (new Extend\Conditional())
+        ->whenExtensionEnabled('flarum-realtime', fn () => [
+            (new Extend\Event())
+                ->listen(Event\MessageWasSent::class, Realtime\BroadcastListener::class.'@whenMessageSent')
+                ->listen(Event\MessageWasEdited::class, Realtime\BroadcastListener::class.'@whenMessageChanged')
+                ->listen(Event\MessageWasDeleted::class, Realtime\BroadcastListener::class.'@whenMessageChanged')
+                ->listen(Event\MessageWasRestored::class, Realtime\BroadcastListener::class.'@whenMessageChanged')
+                ->listen(Event\MessagePinToggled::class, Realtime\BroadcastListener::class.'@whenMessageChanged')
+                ->listen(Event\ReactionToggled::class, Realtime\BroadcastListener::class.'@whenReactionToggled')
+                ->listen(Event\ThreadWasCreated::class, Realtime\BroadcastListener::class.'@whenThreadChanged')
+                ->listen(Event\ChannelStatusChanged::class, Realtime\BroadcastListener::class.'@whenChannelChanged'),
+        ]),
+];

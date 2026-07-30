@@ -1,0 +1,26 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// ramon/chat — forum styles
+//
+// Anchored to the Avocado design system. This file defines only chat-specific
+// tokens; everything else (surfaces, borders, muted text, elevation, motion,
+// radii) is consumed from Avocado's `:root` custom properties, so the chat
+// inherits theme and dark-mode changes without a parallel palette to maintain.
+//
+// Avocado tokens relied on — see avocado-v2/less/common/variables.less:
+//   --avocado-surface-1 / -2                 input + composer backgrounds
+//   --avocado-border-subtle / -soft / -chip  borders
+//   --avocado-muted-icon / -placeholder      muted text + icons
+//   --avocado-text-dark                      primary content
+//   --avocado-online                         presence ring
+//   --avocado-t-fast / -normal / -medium     transitions
+//   --avocado-z-*                            z-index scale
+//   --shadow-subtle / -medium / -lifted      elevation scale
+//
+// `fallbacks` maps each of those onto a Flarum core variable when Avocado is not
+// the active theme, so the chat stays legible on any theme.
+// ─────────────────────────────────────────────────────────────────────────────
+
+@import "forum/fallbacks";
+@import "forum/variables";
+@import "forum/mixins";
+@import "forum/components";

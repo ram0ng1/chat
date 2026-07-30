@@ -1,0 +1,22 @@
+# Normalise to LF in the repository regardless of the checkout platform. Without
+# this, committing from Windows stores CRLF and every Linux clone shows the whole
+# file as changed.
+* text=auto eol=lf
+
+# Binary assets must not be touched by the text filter.
+*.png binary
+*.jpg binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+
+# Kept out of the Composer dist archive: they are needed to develop the extension,
+# not to run it, and they are a large share of the download.
+/tests           export-ignore
+/docs            export-ignore
+/.github         export-ignore
+/js/src          export-ignore
+/js/node_modules export-ignore
+phpunit.xml      export-ignore
+.gitattributes   export-ignore
+.gitignore       export-ignore

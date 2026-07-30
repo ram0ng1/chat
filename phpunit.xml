@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Two suites, deliberately separate.
+
+    `unit` needs nothing but the autoloader: it asserts on the SQL filters build and
+    on the model's derived state, so it runs anywhere and fast. `integration` needs
+    flarum/testing and a throwaway database, configured through the usual
+    tests/integration/setup.php, and is the only place API endpoints and permissions
+    are exercised end to end.
+-->
+<phpunit
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+    bootstrap="vendor/autoload.php"
+    colors="true"
+    cacheDirectory=".phpunit.cache"
+    failOnWarning="true"
+    failOnRisky="true"
+>
+    <testsuites>
+        <testsuite name="unit">
+            <directory>tests/unit</directory>
+        </testsuite>
+
+        <testsuite name="integration">
+            <directory>tests/integration</directory>
+        </testsuite>
+    </testsuites>
+
+    <source>
+        <include>
+            <directory>src</directory>
+        </include>
+    </source>
+</phpunit>

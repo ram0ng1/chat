@@ -1,0 +1,126 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// ramon/chat — admin styles
+// ─────────────────────────────────────────────────────────────────────────────
+
+.ChatSettingsPage {
+  &-section {
+    margin-bottom: 28px;
+
+    &-title {
+      font-size: 18px;
+      font-weight: 800;
+      margin-bottom: 4px;
+    }
+
+    &-help {
+      margin-bottom: 14px;
+      color: var(--muted-color);
+      font-size: 14px;
+    }
+  }
+
+  // Retention values are destructive, so their inputs get an explicit warning
+  // rather than only a help string.
+  &-retentionWarning {
+    padding: 10px 12px;
+    margin-bottom: 12px;
+    border-left: 3px solid var(--alert-error-color, #c0392b);
+    background: var(--control-bg);
+    font-size: 13px;
+  }
+}
+
+.ChatWebhookList {
+  &-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    margin-bottom: 8px;
+  }
+
+  &-name {
+    font-weight: 800;
+  }
+
+  &-channel {
+    color: var(--muted-color);
+    font-size: 13px;
+  }
+
+  &-url {
+    flex: 1;
+    min-width: 0;
+    font-family: monospace;
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--muted-color);
+  }
+
+  &-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 6px;
+  }
+}
+
+// ── Inbound webhooks ─────────────────────────────────────────────────────────
+.ChatWebhooks {
+  &-create {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 20px;
+
+    .FormControl {
+      width: auto;
+      flex: 1 1 200px;
+    }
+  }
+
+  &-list {
+    display: grid;
+    gap: 10px;
+  }
+
+  &-row {
+    padding: 12px 14px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+
+    &-main {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+
+    &-meta {
+      font-size: 12px;
+      opacity: 0.7;
+    }
+
+    // Shown once, right after the key is minted. Monospace because it is meant
+    // to be copied verbatim into another system.
+    &-url {
+      margin-top: 8px;
+
+      .FormControl {
+        font-family: monospace;
+        font-size: 12px;
+      }
+    }
+
+    &-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      margin-top: 10px;
+    }
+  }
+}

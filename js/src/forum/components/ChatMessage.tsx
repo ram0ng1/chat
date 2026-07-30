@@ -1,0 +1,512 @@
+import app from 'flarum/forum/app';
+import Component from 'flarum/common/Component';
+import type { ComponentAttrs } from 'flarum/common/Component';
+import Button from 'flarum/common/components/Button';
+import Avatar from 'flarum/common/components/Avatar';
+import username from 'flarum/common/helpers/username';
+import humanTime from 'flarum/common/helpers/humanTime';
+import classList from 'flarum/common/utils/classList';
+import type Mithril from 'mithril';
+
+import type Message from '../../common/models/Message';
+import type ChatState from '../state/ChatState';
+import { displayEmoji } from '../utils/emoji';
+import { isOnline } from '../utils/presence';
+import RevisionsModal from './RevisionsModal';
+
+export interface ChatMessageAttrs extends ComponentAttrs {
+  message: Message;
+  /** The row above, used to decide grouping. */
+  previous?: Message | null;
+  state: ChatState;
+  onReply?: (message: Message) => void;
+  onEdit?: (message: Message) => void;
+  onOpenThread?: (message: Message) => void;
+}
+
+/**
+ * The one-click reaction on the hover bar.
+ *
+ * `+1` (👍) rather than a heart, so the quick reaction means the same thing here
+ * as a Like does on a post — Flarum's own convention. Any other emoji is still
+ * reachable through the picker, and hearts already stored on old messages keep
+ * rendering as hearts.
+ */
+const LIKE_REACTION = '+1';
+
+/**
+ * One row in the message stream.
+ *
+ * Grouping, mention highlighting and tombstones are all decided from the model
+ * rather than passed in, so a row rendered from a realtime push looks identical
+ * to one rendered from a fetch.
+ */
+export default class ChatMessage extends Component<ChatMessageAttrs> {
+  view(): Mithril.Children {
+    const { message, previous, state } = this.attrs;
+
+    // A pinned message never collapses into the run above it: grouping hides the
+    // meta row, which is where the pin is stated.
+    const grouped = message.isGroupedWith(previous) && !message.isPinned();
+    const deleted = Boolean(message.isDeleted());
+    const selected = state.selected.has(Number(message.id()));
+
+    if (message.isSystem()) {
+      return this.systemRow(message);
+    }
+
+    return (
+      <div
+        className={classList('ChatMessage', {
+          'ChatMessage--grouped': grouped,
+          'ChatMessage--pinned': !deleted && Boolean(message.isPinned()),
+          'ChatMessage--mentioned': !deleted && message.mentionsActor(),
+          'ChatMessage--selected': selected,
+          // Only meaningful on an ungrouped row, which is the one showing an
+          // avatar for the halo to sit on.
+          'ChatMessage--online': !grouped && isOnline(message.user() || null),
+        })}
+        data-id={message.id()}
+        onclick={state.selecting ? () => state.toggleSelected(Number(message.id())) : undefined}
+      >
+        <div className="ChatMessage-gutter">
+          {grouped ? this.shortTime(message) : <Avatar user={message.user()} className="Avatar" />}
+        </div>
+
+        <div className="ChatMessage-body">
+          {grouped ? null : (
+            <div className="ChatMessage-meta">
+              <span className="ChatMessage-author">{username(message.user())}</span>
+              {message.createdAt() ? (
+                <span className="ChatMessage-time">{humanTime(message.createdAt()!)}</span>
+              ) : null}
+              {/* A pin is channel-wide, so it is stated on the row itself and not
+                  only in the pinned list — otherwise nobody scrolling past would
+                  know why the message is highlighted. */}
+              {!deleted && message.isPinned() ? (
+                <span className="ChatMessage-pinMark" title={String(message.pinnedAt() ?? '')}>
+                  <i className="fas fa-thumbtack" aria-hidden="true" />
+                  {app.translator.trans('ramon-chat.forum.message.pinned')}
+                </span>
+              ) : null}
+            </div>
+          )}
+
+          {this.replyPreview(message)}
+          {deleted ? this.tombstone(message) : this.content(message)}
+          {deleted ? null : this.reactions(message)}
+          {deleted ? null : this.uploads(message)}
+          {deleted ? null : this.threadIndicator(message)}
+        </div>
+
+        {state.selecting ? null : this.actions(message)}
+      </div>
+    );
+  }
+
+  /**
+   * Deleted rows keep their place in the stream. Removing them would silently
+   * reflow the conversation and make replies to them incoherent.
+   */
+  protected tombstone(message: Message): Mithril.Children {
+    const key = message.isRedacted()
+      ? 'ramon-chat.forum.message.deleted_by_moderator'
+      : 'ramon-chat.forum.message.deleted';
+
+    return <div className="ChatMessage-tombstone">{app.translator.trans(key)}</div>;
+  }
+
+  protected content(message: Message): Mithril.Children {
+    const html = message.contentHtml();
+
+    return (
+      <div className="ChatMessage-content">
+        {html ? m.trust(html) : message.content()}
+        {/* The "edited" marker is the affordance for the history — the same place
+            core puts it on a post. A button, not a span, so it is reachable by
+            keyboard and reads as interactive. */}
+        {message.isEdited() ? (
+          <button
+            type="button"
+            className="ChatMessage-editedMark"
+            title={app.translator.trans('ramon-chat.forum.revisions.title', {}, true)}
+            onclick={(e: Event) => {
+              e.stopPropagation();
+              app.modal.show(RevisionsModal, { message });
+            }}
+          >
+            ({app.translator.trans('ramon-chat.forum.message.edited')})
+          </button>
+        ) : null}
+      </div>
+    );
+  }
+
+  protected systemRow(message: Message): Mithril.Children {
+    const key = message.systemKey();
+
+    return (
+      <div className="ChatMessage ChatMessage--system">
+        <div className="ChatMessage-gutter" />
+        <div className="ChatMessage-body">
+          <div className="ChatMessage-tombstone">
+            {key
+              ? app.translator.trans(`ramon-chat.forum.message.system.${key}`, message.systemData() ?? {})
+              : null}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  protected shortTime(message: Message): Mithril.Children {
+    const at = message.createdAt();
+
+    if (!at) return null;
+
+    return <span>{at.getHours().toString().padStart(2, '0')}:{at.getMinutes().toString().padStart(2, '0')}</span>;
+  }
+
+  protected replyPreview(message: Message): Mithril.Children {
+    const target = message.replyTo();
+
+    if (!target) return null;
+
+    return (
+      <div className="ChatMessage-replyTo">
+        <i className="fas fa-reply" aria-hidden="true" />
+        <span>{username(target.user())}</span>
+        <span className="ChatMessage-replyTo-content">{target.content() ?? ''}</span>
+      </div>
+    );
+  }
+
+  protected reactions(message: Message): Mithril.Children {
+    const summary = message.reactionSummary() ?? {};
+    const emojis = Object.keys(summary);
+
+    if (emojis.length === 0) return null;
+
+    return (
+      <div className="ChatReactions">
+        {emojis.map((emoji) => {
+          const entry = summary[emoji];
+
+          return (
+            <button
+              key={emoji}
+              type="button"
+              className={classList('ChatReactions-chip', { 'ChatReactions-chip--active': entry.reacted })}
+              disabled={!message.canReact()}
+              onclick={(e: Event) => {
+                e.stopPropagation();
+                this.react(message, emoji);
+              }}
+            >
+              {/* The like is drawn as the thumbs-up glyph, not 👍: it is the same
+                  affordance flarum/likes uses on a post, and a font icon inherits
+                  the chip's colour where an emoji stays fixed. Every other
+                  reaction is a real emoji and renders as one. */}
+              {emoji === LIKE_REACTION ? (
+                <i className="ChatReactions-icon fas fa-thumbs-up" aria-hidden="true" />
+              ) : (
+                <span className="ChatReactions-emoji">{displayEmoji(emoji)}</span>
+              )}
+              <span>{entry.count}</span>
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
+  protected uploads(message: Message): Mithril.Children {
+    // `hasMany` yields `false` when unloaded, and its entries are optional when a
+    // related record has not been pushed to the store yet.
+    const related = message.uploads();
+
+    if (!related) return null;
+
+    const uploads = related.filter((upload): upload is NonNullable<typeof upload> => Boolean(upload));
+
+    if (uploads.length === 0) return null;
+
+    return (
+      <div className="ChatUploads">
+        {uploads.map((upload) =>
+          upload.isImage() ? (
+            <a key={upload.id()} href={upload.url()} target="_blank" rel="noopener noreferrer">
+              <img
+                className="ChatUploads-image"
+                src={upload.url()}
+                alt={upload.fileName()}
+                // Intrinsic size from the stored dimensions, so the row does not
+                // reflow as the image loads.
+                width={upload.width() ?? undefined}
+                height={upload.height() ?? undefined}
+                loading="lazy"
+              />
+            </a>
+          ) : (
+            <a
+              key={upload.id()}
+              className="ChatUploads-file"
+              href={upload.url()}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <i className="fas fa-paperclip" aria-hidden="true" />
+              <span className="ChatUploads-file-name">{upload.fileName()}</span>
+              <span className="ChatUploads-file-size">{upload.humanSize()}</span>
+            </a>
+          )
+        )}
+      </div>
+    );
+  }
+
+  protected threadIndicator(message: Message): Mithril.Children {
+    const thread = message.thread();
+
+    // Only the thread's root carries the indicator; replies live inside the panel.
+    if (!thread || thread.originalMessageId() !== Number(message.id())) return null;
+
+    const last = thread.lastMessage();
+
+    return (
+      <button
+        type="button"
+        className="ChatThreadIndicator"
+        onclick={(e: Event) => {
+          e.stopPropagation();
+          this.attrs.onOpenThread?.(message);
+        }}
+      >
+        <i className="fas fa-comments" aria-hidden="true" />
+        <span className="ChatThreadIndicator-count">
+          {app.translator.trans('ramon-chat.forum.thread.replies', { count: thread.repliesCount() })}
+        </span>
+        {last ? <span className="ChatThreadIndicator-preview">{last.content() ?? ''}</span> : null}
+      </button>
+    );
+  }
+
+  protected actions(message: Message): Mithril.Children {
+    const items: Mithril.Children[] = [];
+
+    if (message.canReact()) {
+      const liked = Boolean(message.reactionSummary()?.[LIKE_REACTION]?.reacted);
+
+      items.push(
+        <Button
+          className={classList('ChatMessage-action', { 'ChatMessage-action--active': liked })}
+          // Filled while liked, outlined otherwise — the same read as flarum/likes.
+          icon={liked ? 'fas fa-thumbs-up' : 'far fa-thumbs-up'}
+          title={app.translator.trans(
+            liked ? 'ramon-chat.forum.message.unlike' : 'ramon-chat.forum.message.like'
+          )}
+          onclick={() => this.react(message, LIKE_REACTION)}
+        />
+      );
+    }
+
+    if (message.canCreateThread()) {
+      items.push(
+        <Button
+          className="ChatMessage-action"
+          icon="fas fa-comments"
+          title={app.translator.trans('ramon-chat.forum.message.reply_in_thread')}
+          onclick={() => this.attrs.onOpenThread?.(message)}
+        />
+      );
+    }
+
+    if (message.canReply()) {
+      items.push(
+        <Button
+          className="ChatMessage-action"
+          icon="fas fa-reply"
+          title={app.translator.trans('ramon-chat.forum.message.reply')}
+          onclick={() => this.attrs.onReply?.(message)}
+        />
+      );
+    }
+
+    if (message.canEdit()) {
+      items.push(
+        <Button
+          className="ChatMessage-action"
+          icon="fas fa-pencil"
+          title={app.translator.trans('ramon-chat.forum.message.edit')}
+          onclick={() => this.attrs.onEdit?.(message)}
+        />
+      );
+    }
+
+    if (app.session.user) {
+      items.push(
+        <Button
+          className="ChatMessage-action"
+          icon={message.isBookmarked() ? 'fas fa-bookmark' : 'far fa-bookmark'}
+          title={app.translator.trans(
+            message.isBookmarked()
+              ? 'ramon-chat.forum.message.remove_bookmark'
+              : 'ramon-chat.forum.message.bookmark'
+          )}
+          onclick={() => this.bookmark(message)}
+        />
+      );
+    }
+
+    // Entering selection mode. Offered on every readable row, because quoting a
+    // conversation elsewhere is not a moderator-only act — only *moving* is, and
+    // that button is gated separately inside the selection bar.
+    items.push(
+      <Button
+        className="ChatMessage-action"
+        icon="fas fa-list-check"
+        title={app.translator.trans('ramon-chat.forum.message.select')}
+        onclick={() => {
+          const state = this.attrs.state;
+
+          state.selecting = true;
+          state.selected.add(Number(message.id()));
+          m.redraw();
+        }}
+      />
+    );
+
+    if (message.canPin()) {
+      const pinned = Boolean(message.isPinned());
+
+      items.push(
+        <Button
+          className={classList('ChatMessage-action', { 'ChatMessage-action--active': pinned })}
+          icon="fas fa-thumbtack"
+          title={app.translator.trans(
+            pinned ? 'ramon-chat.forum.message.unpin' : 'ramon-chat.forum.message.pin'
+          )}
+          onclick={() => this.pin(message)}
+        />
+      );
+    }
+
+    if (message.canDelete()) {
+      items.push(
+        <Button
+          className="ChatMessage-action"
+          icon="fas fa-trash"
+          title={app.translator.trans('ramon-chat.forum.message.delete')}
+          onclick={() => this.delete(message)}
+        />
+      );
+    }
+
+    if (items.length === 0) return null;
+
+    return <div className="ChatMessage-actions">{items}</div>;
+  }
+
+  // ── Actions ────────────────────────────────────────────────────────────────
+
+  protected async react(message: Message, emoji: string): Promise<void> {
+    // Optimistic toggle: reactions are the highest-frequency interaction and a
+    // round-trip before feedback feels broken.
+    const summary = { ...(message.reactionSummary() ?? {}) };
+    const entry = summary[emoji] ?? { count: 0, reacted: false };
+
+    summary[emoji] = {
+      count: entry.count + (entry.reacted ? -1 : 1),
+      reacted: !entry.reacted,
+    };
+
+    if (summary[emoji].count <= 0) delete summary[emoji];
+
+    message.pushAttributes({ reactionSummary: summary });
+    m.redraw();
+
+    try {
+      const payload = await app.request<any>({
+        method: 'POST',
+        url: `${app.forum.attribute('apiUrl')}/chat-messages/${message.id()}/react`,
+        body: { data: { attributes: { emoji } } },
+      });
+
+      app.store.pushPayload(payload);
+    } catch (e) {
+      // Put the server's version back rather than guessing at a rollback.
+      message.pushAttributes({ reactionSummary: message.reactionSummary() });
+    } finally {
+      m.redraw();
+    }
+  }
+
+  protected async bookmark(message: Message): Promise<void> {
+    const was = Boolean(message.isBookmarked());
+
+    message.pushAttributes({ isBookmarked: !was });
+    m.redraw();
+
+    try {
+      await app.request({
+        method: 'POST',
+        url: `${app.forum.attribute('apiUrl')}/chat-messages/${message.id()}/bookmark`,
+        body: { data: { attributes: {} } },
+      });
+    } catch {
+      message.pushAttributes({ isBookmarked: was });
+    } finally {
+      m.redraw();
+    }
+  }
+
+  /**
+   * Toggles the pin.
+   *
+   * Optimistic like the reaction toggle, and rolled back from the server's own
+   * response rather than from a guess — a failed pin must not leave the row
+   * claiming to be pinned to the one person who clicked.
+   */
+  protected async pin(message: Message): Promise<void> {
+    const was = Boolean(message.isPinned());
+
+    message.pushAttributes({ isPinned: !was });
+    m.redraw();
+
+    try {
+      const payload = await app.request<any>({
+        method: 'POST',
+        url: `${app.forum.attribute('apiUrl')}/chat-messages/${message.id()}/pin`,
+        body: { data: { attributes: {} } },
+      });
+
+      app.store.pushPayload(payload);
+    } catch (e: any) {
+      message.pushAttributes({ isPinned: was });
+
+      app.alerts.show(
+        { type: 'error' },
+        e?.response?.errors?.[0]?.detail ?? app.translator.trans('ramon-chat.forum.message.pin_failed')
+      );
+    } finally {
+      m.redraw();
+    }
+  }
+
+  protected async delete(message: Message): Promise<void> {
+    if (!confirm(app.translator.trans('ramon-chat.forum.message.delete_confirm', {}, true))) return;
+
+    try {
+      await app.request({
+        method: 'POST',
+        url: `${app.forum.attribute('apiUrl')}/chat-messages/${message.id()}/delete`,
+      });
+
+      message.pushAttributes({ isDeleted: true, content: null, contentHtml: null });
+    } catch (e) {
+      app.alerts.show({ type: 'error' }, app.translator.trans('ramon-chat.forum.message.delete_failed'));
+    } finally {
+      m.redraw();
+    }
+  }
+}
