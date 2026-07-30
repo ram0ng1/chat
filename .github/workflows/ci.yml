@@ -1,7 +1,8 @@
 name: CI
 
-# Gerado a partir do padrão usado em ramon/backup. Os jobs abaixo são só os que
-# esta extensão tem como executar — ver o gerador para o porquê.
+# Mesmo formato dos demais repositórios ramon/*. Os jobs abaixo são só os que esta
+# extensão tem como executar: um passo que roda contra algo inexistente não é
+# cobertura, é um X vermelho que ensina a ignorar X vermelhos.
 
 on:
   push:
@@ -112,3 +113,31 @@ jobs:
       - name: Build (webpack production)
         working-directory: js
         run: npm run build
+
+  phpstan:
+    name: PHPStan (nível 6, baseline)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411  # v2.19.4
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240  # v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_mysql, pdo_pgsql, pdo_sqlite, intl, gd, bcmath, sodium
+          coverage: none
+          tools: composer:v2
+
+      - name: Instalar dependências
+        run: composer update --no-interaction --no-progress --prefer-dist --no-scripts
+
+      - name: PHPStan analyse
+        run: vendor/bin/phpstan analyse --no-progress --memory-limit=1G --error-format=github

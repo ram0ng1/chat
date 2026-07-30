@@ -1,0 +1,613 @@
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Call to method addType\(\) on an unknown class Flarum\\Gdpr\\Extend\\UserData\.$#'
+			identifier: class.notFound
+			count: 1
+			path: extend.php
+
+		-
+			message: '#^Call to method group\(\) on an unknown class Flarum\\Audit\\Extend\\Audit\.$#'
+			identifier: class.notFound
+			count: 1
+			path: extend.php
+
+		-
+			message: '#^Instantiated class Flarum\\Audit\\Extend\\Audit not found\.$#'
+			identifier: class.notFound
+			count: 1
+			path: extend.php
+
+		-
+			message: '#^Instantiated class Flarum\\Gdpr\\Extend\\UserData not found\.$#'
+			identifier: class.notFound
+			count: 1
+			path: extend.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between Carbon\\Carbon and null will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: src/Access/MessagePolicy.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Flarum\\Tags\\Tag\>\:\:whereHasPermission\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Access/ScopeChannelVisibility.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Ramon\\Chat\\Channel\>\:\:whereVisibleTo\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Access/ScopeMessageVisibility.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Ramon\\Chat\\Channel\>\:\:whereVisibleTo\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Access/ScopeThreadVisibility.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:imageUrl\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Api/Controller/ChannelImageController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Ramon\\Chat\\Channel\>\:\:whereVisibleTo\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Api/Controller/DraftController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Ramon\\Chat\\Thread\>\:\:whereVisibleTo\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Api/Controller/DraftController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Ramon\\Chat\\Channel\>\:\:whereVisibleTo\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Api/Controller/ListDraftsController.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,stdClass\>\:\:map\(\) expects callable\(stdClass, int\)\: array\{type\: ''chat\-drafts'', id\: decimal\-int\-string, attributes\: array\{channelId\: int, threadId\: int\|null, content\: string\|null\}\}, Closure\(Ramon\\Chat\\Draft\)\: array\{type\: ''chat\-drafts'', id\: decimal\-int\-string, attributes\: array\{channelId\: int, threadId\: int\|null, content\: string\|null\}\} given\.$#'
+			identifier: argument.type
+			count: 1
+			path: src/Api/Controller/ListDraftsController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Ramon\\Chat\\Channel\>\:\:whereVisibleTo\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Api/Controller/MoveMessagesController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Ramon\\Chat\\Message\>\:\:whereVisibleTo\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Api/Controller/MoveMessagesController.php
+
+		-
+			message: '#^Anonymous function has an unused use \$participantIds\.$#'
+			identifier: closure.unusedUse
+			count: 1
+			path: src/Api/Controller/StartDirectController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\ConnectionInterface\:\:getTablePrefix\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Api/Controller/StartDirectController.php
+
+		-
+			message: '#^Method Ramon\\Chat\\Api\\Controller\\StartDirectController\:\:findExisting\(\) should return Ramon\\Chat\\Channel\|null but returns stdClass\|null\.$#'
+			identifier: return.type
+			count: 1
+			path: src/Api/Controller/StartDirectController.php
+
+		-
+			message: '#^Parameter \#2 \$user of method Ramon\\Chat\\Service\\MembershipManager\:\:join\(\) expects Flarum\\User\\User, stdClass given\.$#'
+			identifier: argument.type
+			count: 1
+			path: src/Api/Controller/StartDirectController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Ramon\\Chat\\Message\>\:\:whereVisibleTo\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Api/Controller/TranscriptController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Ramon\\Chat\\Channel\>\:\:whereVisibleTo\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Api/Controller/TypingController.php
+
+		-
+			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Api/Controller/UploadController.php
+
+		-
+			message: '#^Access to protected property Ramon\\Chat\\ChannelUser\:\:\$hidden\.$#'
+			identifier: property.protected
+			count: 1
+			path: src/Api/Resource/ChannelResource.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Flarum\\User\\User\>\:\:whereVisibleTo\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: src/Api/Resource/ChannelResource.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Ramon\\Chat\\Channel\>\:\:whereVisibleTo\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Api/Resource/ChannelResource.php
+
+		-
+			message: '#^Call to an undefined method Tobyz\\JsonApiServer\\Context\:\:creating\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Api/Resource/ChannelResource.php
+
+		-
+			message: '#^Call to an undefined method Tobyz\\JsonApiServer\\Context\:\:getActor\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Api/Resource/ChannelResource.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>following" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Api/Resource/ChannelResource.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>hidden" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Api/Resource/ChannelResource.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>last_read_message_id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Api/Resource/ChannelResource.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>muted" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Api/Resource/ChannelResource.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>notification_level" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Api/Resource/ChannelResource.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>unread_count" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Api/Resource/ChannelResource.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>unread_mentions_count" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Api/Resource/ChannelResource.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Ramon\\Chat\\Channel\>\:\:whereVisibleTo\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Api/Resource/MessageResource.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Ramon\\Chat\\Message\>\:\:whereVisibleTo\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: src/Api/Resource/MessageResource.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Ramon\\Chat\\Thread\>\:\:whereVisibleTo\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Api/Resource/MessageResource.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,stdClass\>\:\:map\(\) expects callable\(stdClass, int\)\: array\{id\: int, content\: string\|null, createdAt\: string\|null, editedBy\: array\{id\: int, username\: string, displayName\: string, avatarUrl\: string\|null\}\|null\}, Closure\(Ramon\\Chat\\MessageRevision\)\: array\{id\: int, content\: string\|null, createdAt\: string\|null, editedBy\: array\{id\: int, username\: string, displayName\: string, avatarUrl\: string\|null\}\|null\} given\.$#'
+			identifier: argument.type
+			count: 1
+			path: src/Api/Resource/MessageResource.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Ramon\\Chat\\Thread\>\:\:whereVisibleTo\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Api/Resource/ThreadResource.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>last_read_message_id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Api/Resource/ThreadResource.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>notification_level" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Api/Resource/ThreadResource.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>unread_count" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Api/Resource/ThreadResource.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Ramon\\Chat\\Message\>\:\:whereVisibleTo\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Api/Resource/UploadResource.php
+
+		-
+			message: '#^Call to an undefined method Tobyz\\JsonApiServer\\Context\:\:getActor\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Api/Resource/WebhookResource.php
+
+		-
+			message: '#^Method Ramon\\Chat\\Channel\:\:membershipFor\(\) should return Ramon\\Chat\\ChannelUser\|null but returns stdClass\|null\.$#'
+			identifier: return.type
+			count: 1
+			path: src/Channel.php
+
+		-
+			message: '#^Method Ramon\\Chat\\Channel\:\:participants\(\) should return Illuminate\\Database\\Eloquent\\Relations\\BelongsToMany but returns Illuminate\\Database\\Query\\Builder\.$#'
+			identifier: return.type
+			count: 1
+			path: src/Channel.php
+
+		-
+			message: '#^Unsafe usage of new static\(\)\.$#'
+			identifier: new.static
+			count: 1
+			path: src/Channel.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Query\\Builder\:\:each\(\) expects callable\(stdClass, int\)\: mixed, Closure\(Ramon\\Chat\\Channel\)\: bool given\.$#'
+			identifier: argument.type
+			count: 1
+			path: src/Console/PruneChatCommand.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Query\\Builder\:\:each\(\) expects callable\(stdClass, int\)\: mixed, Closure\(Ramon\\Chat\\Upload\)\: void given\.$#'
+			identifier: argument.type
+			count: 1
+			path: src/Console/PruneChatCommand.php
+
+		-
+			message: '#^Unsafe usage of new static\(\)\.$#'
+			identifier: new.static
+			count: 1
+			path: src/Draft.php
+
+		-
+			message: '#^Cannot call method acceptsMessages\(\) on stdClass\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: src/Listener/AnnounceDiscussions.php
+
+		-
+			message: '#^Cannot call method refreshMetadata\(\) on stdClass\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: src/Listener/AnnounceDiscussions.php
+
+		-
+			message: '#^Dead catch \- Throwable is never thrown in the try block\.$#'
+			identifier: catch.neverThrown
+			count: 1
+			path: src/Listener/AnnounceDiscussions.php
+
+		-
+			message: '#^Parameter \#1 \$channel of static method Ramon\\Chat\\Message\:\:build\(\) expects Ramon\\Chat\\Channel, stdClass given\.$#'
+			identifier: argument.type
+			count: 1
+			path: src/Listener/AnnounceDiscussions.php
+
+		-
+			message: '#^Parameter \#1 \$channel of static method Ramon\\Chat\\Message\:\:buildBot\(\) expects Ramon\\Chat\\Channel, stdClass given\.$#'
+			identifier: argument.type
+			count: 1
+			path: src/Listener/AnnounceDiscussions.php
+
+		-
+			message: '#^Cannot call method refreshMetadata\(\) on stdClass\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: src/Listener/JoinAutoJoinChannels.php
+
+		-
+			message: '#^Parameter \#1 \$channel of method Ramon\\Chat\\Service\\MembershipManager\:\:join\(\) expects Ramon\\Chat\\Channel, stdClass given\.$#'
+			identifier: argument.type
+			count: 1
+			path: src/Listener/JoinAutoJoinChannels.php
+
+		-
+			message: '#^Cannot call method refreshMetadata\(\) on stdClass\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: src/Listener/JoinChannelsOnReply.php
+
+		-
+			message: '#^Dead catch \- Throwable is never thrown in the try block\.$#'
+			identifier: catch.neverThrown
+			count: 1
+			path: src/Listener/JoinChannelsOnReply.php
+
+		-
+			message: '#^Parameter \#1 \$channel of class Ramon\\Chat\\Event\\UserJoinedChannel constructor expects Ramon\\Chat\\Channel, stdClass given\.$#'
+			identifier: argument.type
+			count: 1
+			path: src/Listener/JoinChannelsOnReply.php
+
+		-
+			message: '#^Parameter \#1 \$channel of method Ramon\\Chat\\Service\\MembershipManager\:\:join\(\) expects Ramon\\Chat\\Channel, stdClass given\.$#'
+			identifier: argument.type
+			count: 1
+			path: src/Listener/JoinChannelsOnReply.php
+
+		-
+			message: '#^Parameter \#1 \$membership of method Ramon\\Chat\\Service\\UnreadTracker\:\:recalculate\(\) expects Ramon\\Chat\\ChannelUser, stdClass given\.$#'
+			identifier: argument.type
+			count: 1
+			path: src/Listener/RecalculateUnreadCounts.php
+
+		-
+			message: '#^Cannot call method getPreference\(\) on stdClass\.$#'
+			identifier: method.nonObject
+			count: 2
+			path: src/Listener/SendChatNotifications.php
+
+		-
+			message: '#^Method Ramon\\Chat\\Listener\\SendChatNotifications\:\:recipientsFor\(\) should return array\<Flarum\\User\\User\> but returns list\<stdClass\>\.$#'
+			identifier: return.type
+			count: 1
+			path: src/Listener/SendChatNotifications.php
+
+		-
+			message: '#^Parameter \#1 \$user of static method Ramon\\Chat\\Message\:\:whereVisibleTo\(\) expects Flarum\\User\\User, stdClass given\.$#'
+			identifier: argument.type
+			count: 1
+			path: src/Listener/SendChatNotifications.php
+
+		-
+			message: '#^Offset ''plain'' on \*NEVER\* on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Mention/MentionResolver.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between non\-empty\-string and '''' will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: src/Mention/MentionResolver.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between mixed and null will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 1
+			path: src/Mention/MentionResolver.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between non\-empty\-string and '''' will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 1
+			path: src/Mention/MentionResolver.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\ConnectionInterface\:\:getTablePrefix\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Message.php
+
+		-
+			message: '#^Property Ramon\\Chat\\Message\:\:\$number \(int\|null\) does not accept Illuminate\\Database\\Query\\Expression\<float\|int\|string\>\.$#'
+			identifier: assign.propertyType
+			count: 1
+			path: src/Message.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between int and null will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: src/Message.php
+
+		-
+			message: '#^Unsafe usage of new static\(\)\.$#'
+			identifier: new.static
+			count: 3
+			path: src/Message.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Notification/ChatMentionBlueprint.php
+
+		-
+			message: '#^Using nullsafe method call on non\-nullable type Carbon\\Carbon\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: src/Realtime/BroadcastListener.php
+
+		-
+			message: '#^Call to method trigger\(\) on an unknown class Pusher\\Pusher\.$#'
+			identifier: class.notFound
+			count: 2
+			path: src/Realtime/ChatBroadcaster.php
+
+		-
+			message: '#^Method Ramon\\Chat\\Realtime\\ChatBroadcaster\:\:pusher\(\) has invalid return type Pusher\\Pusher\.$#'
+			identifier: class.notFound
+			count: 1
+			path: src/Realtime/ChatBroadcaster.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,stdClass\>\:\:filter\(\) expects \(callable\(stdClass, int\)\: bool\)\|null, Closure\(Flarum\\User\\User\)\: bool given\.$#'
+			identifier: argument.type
+			count: 1
+			path: src/Realtime/ChatBroadcaster.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,stdClass\>\:\:map\(\) expects callable\(stdClass, int\)\: int, Closure\(Flarum\\User\\User\)\: int given\.$#'
+			identifier: argument.type
+			count: 1
+			path: src/Realtime/ChatBroadcaster.php
+
+		-
+			message: '#^Parameter \$pusher of method Ramon\\Chat\\Realtime\\ChatBroadcaster\:\:recipients\(\) has invalid type Pusher\\Pusher\.$#'
+			identifier: class.notFound
+			count: 1
+			path: src/Realtime/ChatBroadcaster.php
+
+		-
+			message: '#^Method Ramon\\Chat\\Search\\ChannelSearcher\:\:getQuery\(\) should return Illuminate\\Database\\Eloquent\\Builder but returns Illuminate\\Database\\Query\\Builder\.$#'
+			identifier: return.type
+			count: 1
+			path: src/Search/ChannelSearcher.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Ramon\\Chat\\Channel\>\:\:whereVisibleTo\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Search/Filter/UserChatChannelFilter.php
+
+		-
+			message: '#^Method Ramon\\Chat\\Search\\MessageSearcher\:\:getQuery\(\) should return Illuminate\\Database\\Eloquent\\Builder but returns Illuminate\\Database\\Query\\Builder\.$#'
+			identifier: return.type
+			count: 1
+			path: src/Search/MessageSearcher.php
+
+		-
+			message: '#^Method Ramon\\Chat\\Search\\ThreadSearcher\:\:getQuery\(\) should return Illuminate\\Database\\Eloquent\\Builder but returns Illuminate\\Database\\Query\\Builder\.$#'
+			identifier: return.type
+			count: 1
+			path: src/Search/ThreadSearcher.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Flarum\\Discussion\\Discussion\>\:\:whereVisibleTo\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Service/ChannelArchiver.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Query\\Builder\:\:with\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Service/ChannelArchiver.php
+
+		-
+			message: '#^Access to protected property Ramon\\Chat\\ChannelUser\:\:\$hidden\.$#'
+			identifier: property.protected
+			count: 3
+			path: src/Service/MembershipManager.php
+
+		-
+			message: '#^Call to protected method decrement\(\) of class Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: method.protected
+			count: 2
+			path: src/Service/MembershipManager.php
+
+		-
+			message: '#^Call to protected method increment\(\) of class Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: method.protected
+			count: 1
+			path: src/Service/MembershipManager.php
+
+		-
+			message: '#^Parameter \#2 \$user of method Ramon\\Chat\\Service\\MembershipManager\:\:join\(\) expects Flarum\\User\\User, stdClass given\.$#'
+			identifier: argument.type
+			count: 1
+			path: src/Service/MembershipManager.php
+
+		-
+			message: '#^Property Illuminate\\Database\\Eloquent\\Model\:\:\$hidden \(array\<string\>\) does not accept bool\.$#'
+			identifier: assign.propertyType
+			count: 1
+			path: src/Service/MembershipManager.php
+
+		-
+			message: '#^Method Illuminate\\Contracts\\Cache\\Store\:\:get\(\) invoked with 2 parameters, 1 required\.$#'
+			identifier: arguments.count
+			count: 1
+			path: src/Service/RateLimiter.php
+
+		-
+			message: '#^Expression on left side of \?\? is not nullable\.$#'
+			identifier: nullCoalesce.expr
+			count: 2
+			path: src/Service/TranscriptRenderer.php
+
+		-
+			message: '#^Using nullsafe method call on non\-nullable type Carbon\\Carbon\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: src/Service/TranscriptRenderer.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>display_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: src/Service/TranscriptRenderer.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>username" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: src/Service/TranscriptRenderer.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Query\\Builder\:\:whereKeyNot\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Thread.php
+
+		-
+			message: '#^Method Ramon\\Chat\\Thread\:\:membershipFor\(\) should return Ramon\\Chat\\ThreadUser\|null but returns Illuminate\\Database\\Eloquent\\Model\|null\.$#'
+			identifier: return.type
+			count: 1
+			path: src/Thread.php
+
+		-
+			message: '#^Unable to resolve the template type TWhenReturnType in call to method Illuminate\\Database\\Query\\Builder\:\:when\(\)$#'
+			identifier: argument.templateType
+			count: 1
+			path: src/Thread.php
+
+		-
+			message: '#^Unsafe usage of new static\(\)\.$#'
+			identifier: new.static
+			count: 1
+			path: src/Thread.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Thread.php
+
+		-
+			message: '#^Unsafe usage of new static\(\)\.$#'
+			identifier: new.static
+			count: 1
+			path: src/Webhook.php

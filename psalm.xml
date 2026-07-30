@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<psalm
+    errorLevel="8"
+    resolveFromConfigFile="true"
+    findUnusedCode="false"
+    findUnusedBaselineEntry="false"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns="https://getpsalm.org/schema/config"
+>
+    <!--
+        Level 8 with taint analysis, matching the other ramon/* extensions. The
+        point here is not general type strictness — phpstan already runs for that —
+        but the source-to-sink flows Semgrep's pattern rules cannot see: a request
+        value reaching raw SQL, a filename reaching the filesystem, unescaped input
+        reaching rendered output.
+    -->
+    <projectFiles>
+        <directory name="src" />
+        <file name="extend.php" />
+        <ignoreFiles>
+            <directory name="vendor" />
+            <!--
+                Migrations are closures the framework calls with a schema builder,
+                and they touch no request data at all, so there is no flow for taint
+                analysis to follow through them.
+            -->
+            <directory name="migrations" />
+        </ignoreFiles>
+    </projectFiles>
+</psalm>

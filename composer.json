@@ -28,12 +28,13 @@
         "flarum/core": "^2.0.0"
     },
     "require-dev": {
-        "flarum/tags": "^2.0.0",
         "flarum/mentions": "^2.0.0",
-        "phpunit/phpunit": "^11.5 || ^13.2.0",
+        "flarum/tags": "^2.0.0",
+        "flarum/testing": "^2.0.0",
         "mockery/mockery": "^1.6",
         "phpstan/phpstan": "^2.2",
-        "flarum/testing": "^2.0.0"
+        "phpunit/phpunit": "^11.5 || ^13.2.0",
+        "vimeo/psalm": "^6.0"
     },
     "suggest": {
         "flarum/tags": "Required for category-scoped channels, which inherit tag permissions (^2.0).",
@@ -88,6 +89,7 @@
     },
     "scripts": {
         "analyse": "phpstan analyse",
+        "taint": "psalm --taint-analysis",
         "test": "phpunit",
         "test:unit": "phpunit --testsuite unit",
         "test:integration": "phpunit --testsuite integration"
