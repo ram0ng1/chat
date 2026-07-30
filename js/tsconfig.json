@@ -1,0 +1,37 @@
+{
+  "extends": "flarum-tsconfig",
+  "include": [
+    "src/**/*",
+    "../vendor/*/*/js/dist-typings/@types/**/*",
+    "../../../vendor/*/*/js/dist-typings/@types/**/*",
+    "@types/**/*"
+  ],
+  "compilerOptions": {
+    "rootDir": "./src",
+    "declarationDir": "./dist-typings",
+    // flarum-tsconfig sets module=es2015, under which `import()` is an error.
+    // esnext leaves the dynamic import for webpack to turn into a chunk, which
+    // is how the emoji map stays out of the main bundle.
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "baseUrl": ".",
+    "paths": {
+      "flarum/*": [
+        "../vendor/flarum/core/js/dist-typings/*",
+        "../../../vendor/flarum/core/js/dist-typings/*"
+      ],
+      "flarum/tags/*": [
+        "../vendor/flarum/tags/js/dist-typings/*",
+        "../../../vendor/flarum/tags/js/dist-typings/*"
+      ],
+      "flarum/mentions/*": [
+        "../vendor/flarum/mentions/js/dist-typings/*",
+        "../../../vendor/flarum/mentions/js/dist-typings/*"
+      ],
+      "flarum/realtime/*": [
+        "../vendor/flarum/realtime/js/dist-typings/*",
+        "../../../vendor/flarum/realtime/js/dist-typings/*"
+      ]
+    }
+  }
+}

@@ -1,0 +1,343 @@
+ramon-chat:
+
+  api:
+    message_empty: Você não pode enviar uma mensagem vazia.
+    message_too_short: "As mensagens devem ter ao menos {min} caracteres."
+    message_too_long: "As mensagens não podem passar de {max} caracteres."
+    rate_limited: Você está enviando mensagens rápido demais. Aguarde um instante.
+    invalid_reaction: Essa não é uma reação de emoji válida.
+    invalid_reply_target: Você não pode responder a uma mensagem de outro canal.
+    invalid_thread_target: Esse tópico não pertence a este canal.
+    invalid_channel_status: Um canal só pode ser definido como aberto ou fechado.
+    threading_disabled: Tópicos não estão habilitados neste canal.
+    channel_not_found: Esse canal não existe ou você não tem acesso a ele.
+    archive_discussion_not_found: Essa discussão não existe ou você não tem acesso a ela.
+    archive_title_required: O arquivamento precisa de um título de discussão.
+    archive_empty: Este canal foi arquivado sem mensagens.
+    direct_channel_self: Só você
+
+    uploads_disabled: O envio de arquivos está desabilitado no chat.
+    upload_missing: Nenhum arquivo foi enviado.
+    upload_too_large: Esse arquivo é muito grande.
+    upload_unsupported: "Tipo de arquivo não suportado: {type}"
+
+    direct_needs_participant: Escolha ao menos uma pessoa para conversar.
+    direct_too_many: "Uma conversa em grupo aceita no máximo {max} participantes."
+    direct_unknown_user: Um desses usuários não existe.
+
+    transcript_empty: Nenhuma mensagem foi selecionada, ou você não pode lê-las.
+    transcript_too_many: "Você pode citar no máximo {max} mensagens por vez."
+
+    move_empty: Nenhuma mensagem selecionada, ou já estão nesse canal.
+    move_too_many: "Você pode mover no máximo {max} mensagens por vez."
+    move_target_frozen: Você não pode mover mensagens para um canal fechado ou arquivado.
+
+    webhook_channel_unavailable: O canal desse webhook está fechado ou indisponível.
+    webhook_empty: O payload do webhook não continha texto.
+
+  email:
+    mentioned:
+      subject: "Você foi mencionado em {channel}"
+      direct_channel: uma mensagem direta
+      unknown_author: Alguém
+      plain:
+        body: |
+          {author} mencionou você em {channel}:
+
+          {content}
+
+          Responder: {url}
+      html:
+        body: |
+          <p>**{author}** mencionou você em **{channel}**.</p>
+          <p><a href="{url}">Abrir o canal</a></p>
+
+  notifications:
+    chat_mention: "{username} mencionou você em {channel}"
+    chat_message: "{username} publicou em {channel}"
+
+  forum:
+    nav:
+      chat: Chat
+      unread_channels: "{count} canais com mensagens não lidas"
+
+    drawer:
+      title: Chat
+      expand: Expandir
+      collapse: Recolher
+      full_screen: Abrir em tela cheia
+      close: Fechar o chat
+
+    sidebar:
+      my_threads: Meus tópicos
+      search: Buscar
+      channels: Canais
+      direct_messages: Mensagens diretas
+      browse_channels: Navegar por canais
+      new_channel: Novo canal
+      new_direct_message: Nova mensagem
+      no_channels: Você ainda não entrou em nenhum canal.
+
+    channel:
+      threading_enabled: Tópicos habilitados
+      closed: Este canal está fechado. Não é possível enviar novas mensagens.
+      archived: Este canal foi arquivado.
+      archived_link: Ver a transcrição arquivada
+      no_messages: Nenhuma mensagem ainda. Diga algo.
+      members: "{count} membros"
+      view_info: Detalhes do canal
+      search_in_channel: Buscar neste canal
+      pinned_messages: Mensagens fixadas
+      close_pinned: Fechar mensagens fixadas
+      no_pinned_messages: Nenhuma mensagem fixada neste canal.
+      edit: Editar canal
+      join: Entrar no canal
+      leave: Sair do canal
+      leave_confirm: Sair deste canal? Você pode voltar depois e seu histórico é mantido.
+      leave_failed: Não foi possível sair do canal.
+
+    message:
+      edited: editada
+      deleted: Esta mensagem foi excluída.
+      deleted_by_moderator: Esta mensagem foi removida por um moderador.
+      reply: Responder
+      reply_in_thread: Responder no tópico
+      react: Reagir
+      like: Curtir
+      unlike: Descurtir
+      pin: Fixar mensagem
+      unpin: Desfixar mensagem
+      pinned: Fixada
+      pin_failed: Não foi possível alterar a fixação.
+      copy_link: Copiar link
+      copy_text: Copiar
+      bookmark: Salvar
+      remove_bookmark: Remover dos salvos
+      edit: Editar
+      delete: Excluir
+      restore: Restaurar
+      flag: Denunciar
+      move: Mover para canal
+      quote_in_discussion: Citar em discussão
+      select: Selecionar
+      replying_to: "Respondendo a {username}"
+      delete_confirm: Excluir esta mensagem?
+      delete_failed: Não foi possível excluir a mensagem.
+      system:
+        user_joined: "{username} entrou no canal."
+        user_left: "{username} saiu do canal."
+        channel_closed: O canal foi fechado.
+        channel_reopened: O canal foi reaberto.
+        channel_archived: O canal foi arquivado.
+
+    thread:
+      title: Tópico
+      untitled: Tópico sem título
+      replies: "{count} respostas"
+      set_title: Definir título do tópico
+      tracking: Notificações
+      tracking_always: Acompanhando
+      tracking_mentions: Apenas menções
+      tracking_never: Silenciado
+      no_threads: Você não está acompanhando nenhum tópico.
+      no_replies: Nenhuma resposta ainda. Seja o primeiro.
+      close: Fechar painel do tópico
+
+    composer:
+      placeholder: "Mensagem para {channel}"
+      placeholder_thread: Responder ao tópico
+      placeholder_closed: Este canal está fechado
+      send: Enviar
+      attach: Anexar um arquivo
+      emoji: Emoji
+      insert_date: Inserir data
+      cancel_edit: Cancelar
+      editing: Editando mensagem
+      mention_here: Notificar quem está aqui
+      mention_all: Notificar todos os membros
+      uploading: Enviando…
+      upload_failed: Falha no envio do arquivo.
+      too_large: Esse arquivo é muito grande.
+      send_failed: Não foi possível enviar sua mensagem.
+
+    typing:
+      one: "{username} está digitando…"
+      several: "{count} pessoas estão digitando…"
+
+    stream:
+      new_messages: Novas mensagens
+      today: Hoje
+      yesterday: Ontem
+      jump_to_latest: Ir para a mais recente
+
+    new_channel:
+      name: Nome do canal
+      name_placeholder: "ex.: geral"
+      description: Descrição
+      emoji: Emoji
+      category: Categoria
+      no_category: Sem categoria (todo o fórum)
+      category_help: O canal herda as permissões desta categoria. Deixe vazio para valer em todo o fórum.
+      submit: Criar canal
+      failed: Não foi possível criar o canal.
+
+    edit_channel:
+      title: Configurações do canal
+      submit: Salvar alterações
+      failed: Não foi possível salvar as alterações.
+      saved: Canal atualizado.
+
+    emoji_picker:
+      placeholder: Buscar emoji
+      clear: Remover emoji
+      empty: Nenhum emoji corresponde.
+
+    user_controls:
+      start_chat: Enviar mensagem
+      start_chat_failed: Não foi possível iniciar a conversa.
+
+    browse:
+      title: Navegar por canais
+      filter_all: Todos
+      filter_open: Abertos
+      filter_closed: Fechados
+      filter_archived: Arquivados
+      filter_mine: Meus canais
+      search_placeholder: Buscar canais
+      empty: Nenhum canal corresponde.
+      new_channel: Novo canal
+
+    info:
+      tab_settings: Configurações
+      tab_members: Membros
+      description: Descrição
+      category: Categoria
+      notifications: Notificações
+      notification_level: Avise-me sobre
+      level_always: Todas as mensagens
+      level_mentions: Apenas menções
+      level_never: Nada
+      mute: Silenciar este canal
+      mute_help: Canais silenciados não exibem contadores de não lidas.
+      auto_join: Adicionar todos os usuários automaticamente
+      auto_join_help: Todos os usuários atuais e futuros serão adicionados a este canal.
+      auto_join_on_reply: Adicionar quem responder nesta categoria
+      auto_join_on_reply_help: Requer uma categoria acima. O usuário entra na primeira vez que responde a uma discussão lá, e não é readicionado se sair depois.
+      threading: Habilitar tópicos
+      close_channel: Fechar canal
+      reopen_channel: Reabrir canal
+      archive_channel: Arquivar canal
+      delete_channel: Excluir canal
+      delete_confirm: Excluir um canal não pode ser desfeito. Excluir mesmo assim?
+      member_search: Filtrar membros
+      no_members: Nenhum membro corresponde.
+      save_failed: Não foi possível salvar a alteração.
+
+    selection:
+      count: "{count} selecionadas"
+      cancel: Cancelar
+      move_to: Mover para…
+      moved: "{count} mensagens movidas."
+      copied: Copiado para a área de transferência.
+      copy_failed: Seu navegador não permitiu a cópia.
+      omitted: "{count} mensagens ficaram de fora porque você não pode lê-las."
+      failed: Não foi possível concluir a ação.
+
+    search:
+      title: Buscar no chat
+      placeholder: Buscar em todos os canais
+      in_channel: "em {channel}"
+      prompt: Digite para buscar mensagens.
+      empty: Nenhuma mensagem corresponde.
+
+    revisions:
+      title: Histórico de edições
+      current: Versão atual
+      unknown_editor: Desconhecido
+      failed: Não foi possível carregar o histórico.
+
+    settings:
+      title: Chat
+      enabled: Habilitar o chat na minha conta
+      channel_wide_mentions: Avise-me sobre @here e @all
+      email_notifications: Enviar e-mail sobre menções no chat
+      open_in_drawer: Abrir o chat em painel flutuante em vez de tela cheia
+      sound: Som de notificação
+      sound_none: Nenhum
+
+  admin:
+    settings:
+      title: Chat
+      retention_title: Retenção de mensagens
+      retention_help: Mensagens antigas são removidas pela tarefa noturna de limpeza.
+      retention_warning: A retenção exclui mensagens permanentemente. Não há como desfazer.
+      channel_retention_days: Retenção em canais (dias)
+      channel_retention_help: Dias para manter mensagens em canais de categoria. 0 mantém para sempre.
+      dm_retention_days: Retenção em mensagens diretas (dias)
+      dm_retention_help: Dias para manter mensagens diretas e de grupo. 0 mantém para sempre.
+
+      limits_title: Limites e segurança
+      max_messages_per_second: Máximo de mensagens por segundo, por usuário
+      min_message_length: Tamanho mínimo da mensagem
+      max_message_length: Tamanho máximo da mensagem
+      message_edit_window_minutes: Janela de edição (minutos)
+      message_edit_window_help: Por quanto tempo o autor pode editar a mensagem. 0 significa sem limite.
+
+      uploads_title: Envio de arquivos
+      allow_uploads: Permitir envio de arquivos no chat
+      max_upload_size: Tamanho máximo de envio (bytes)
+
+      behaviour_title: Comportamento
+      default_reactions: Reações de emoji padrão
+      default_reactions_help: Códigos de emoji separados por vírgula, sem dois-pontos.
+      title_label: Nome do chat
+      title_help: Exibido no botão do cabeçalho e no painel. Deixe vazio para usar "Chat".
+      icon_label: Ícone do chat
+      icon_help: "Uma classe do Font Awesome, ex.: fas fa-comments."
+      show_icon_label: Exibir o ícone do chat
+      show_icon_help: Desligue para mostrar apenas o nome.
+
+      threading_default: Habilitar tópicos por padrão em novos canais
+      allow_archiving_channels: Permitir arquivar canais
+
+      webhooks_title: Webhooks de entrada
+      webhooks_help: Endpoints compatíveis com Slack que publicam em um canal.
+      webhook_new: Novo webhook de entrada
+      webhook_name: Nome
+      webhook_description: Descrição
+      webhook_username: Publica como
+      webhook_emoji: Emoji
+      webhook_channel: Canal
+      webhook_url: URL
+      webhook_copy: Copiar URL
+      webhook_regenerate: Regerar chave
+      webhook_delete: Excluir
+      webhook_empty: Nenhum webhook de entrada ainda.
+
+    permissions:
+      use: Usar o chat
+      start_direct: Iniciar mensagens diretas
+      create_channel: Criar canais
+      edit_channel: Editar canais
+      moderate: Moderar o chat
+      upload: Enviar arquivos no chat
+      react: Reagir a mensagens
+      create_thread: Criar tópicos a partir de uma resposta
+      pin_message: Fixar e desfixar mensagens
+      mention_channel_wide: Usar @here e @all
+
+    webhooks:
+      title: Webhooks de entrada
+      help: Um serviço externo pode publicar uma mensagem em um canal usando uma URL secreta. A URL é exibida uma única vez, ao criar ou ao rotacionar.
+      name: Nome do webhook
+      pick_channel: Escolha um canal
+      create: Criar webhook
+      empty: Nenhum webhook ainda.
+      active: Ativo
+      rotate: Rotacionar chave
+      rotate_confirm: Rotacionar a chave quebra quem estiver usando a URL antiga. Continuar?
+      delete: Excluir
+      delete_confirm: Excluir este webhook? Quem usa a URL dele vai parar de funcionar.
+      deliveries: "{count} entregas"
+      url_once: Copie esta URL agora — ela não é exibida de novo.
+      failed: Não foi possível salvar a alteração.

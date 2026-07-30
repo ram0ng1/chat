@@ -1,0 +1,1700 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Chat components
+//
+// Structure mirrors the component tree in js/src/forum/components, so a rule is
+// always findable from the element it styles.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Header trigger ───────────────────────────────────────────────────────────
+// The speech bubble that sits beside search, per Discourse.
+// The mention count uses core's `.Bubble`, which already positions itself against
+// a header button — only the ambient-unread dot is ours.
+.ChatNavButton {
+  position: relative;
+
+  &-dot {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    box-shadow: 0 0 0 2px var(--header-bg, var(--body-bg));
+  }
+}
+
+// ── Drawer ───────────────────────────────────────────────────────────────────
+// Floating panel pinned bottom-right, over whatever page is open.
+.ChatDrawer {
+  position: fixed;
+  right: 16px;
+  bottom: 0;
+  z-index: var(--avocado-z-dropdown);
+
+  display: flex;
+  flex-direction: column;
+  width: @chat-drawer-width;
+  height: @chat-drawer-height;
+  max-height: ~"calc(100vh - 80px)";
+
+  background: var(--body-bg);
+  border: 1px solid var(--avocado-border-subtle);
+  border-bottom: 0;
+  border-radius: @chat-radius-md @chat-radius-md 0 0;
+  box-shadow: var(--shadow-lifted);
+
+  transition: height var(--avocado-t-medium);
+
+  &--collapsed {
+    height: @chat-drawer-collapsed;
+    overflow: hidden;
+  }
+
+  &-header {
+    .chat-flex-row(8px);
+    flex-shrink: 0;
+    height: @chat-drawer-collapsed;
+    padding: 0 8px 0 14px;
+    border-bottom: 1px solid var(--avocado-border-soft);
+    cursor: pointer;
+  }
+
+  &-title {
+    .chat-truncate();
+    flex: 1;
+    font-size: @chat-font-label;
+    font-weight: 800;
+    color: var(--avocado-text-dark);
+  }
+
+  &-actions {
+    .chat-flex-row(2px);
+    flex-shrink: 0;
+  }
+
+  &-body {
+    display: flex;
+    flex: 1;
+    min-height: 0; // lets the message list scroll instead of the drawer growing
+  }
+
+  @media (max-width: @chat-mobile-breakpoint) {
+    right: 0;
+    left: 0;
+    width: auto;
+    height: 100vh;
+    max-height: 100vh;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+  }
+}
+
+// ── Full-screen page ─────────────────────────────────────────────────────────
+.ChatPage {
+  display: flex;
+  height: ~"calc(100vh - var(--header-height, 60px))";
+  overflow: hidden;
+
+  &-main {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+
+    // The containing block for the thread panel, which goes `position: absolute;
+    // inset: 0` below the mobile breakpoint to cover the channel instead of
+    // squeezing beside it.
+    position: relative;
+  }
+
+  @media (max-width: @chat-mobile-breakpoint) {
+    // `--header-height-phone`, not `--header-height`: core pads `.App` with the
+    // phone value at this width, so using the desktop one leaves the page a few
+    // pixels short of the viewport.
+    height: ~"calc(100vh - var(--header-height-phone, 46px))";
+
+    // On mobile the sidebar and the channel are separate views rather than
+    // adjacent panes; the router decides which is mounted.
+    &-sidebar,
+    &-main {
+      flex: 1 1 100%;
+    }
+  }
+}
+
+// ── Sidebar ──────────────────────────────────────────────────────────────────
+.ChatSidebar {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  width: @chat-sidebar-width;
+  border-right: 1px solid var(--avocado-border-soft);
+  background: var(--body-bg);
+
+  &-top {
+    flex-shrink: 0;
+    padding: 12px 12px 8px;
+    border-bottom: 1px solid var(--avocado-border-soft);
+  }
+
+  // "My Threads" and "Search" links above the channel list.
+  &-quickLink {
+    .chat-flex-row(8px);
+    width: 100%;
+    padding: 7px 10px;
+    border-radius: @chat-radius-sm;
+    font-size: @chat-font-label;
+    font-weight: 700;
+    color: var(--avocado-text-dark);
+    background: none;
+    border: 0;
+    cursor: pointer;
+    transition: background var(--avocado-t-fast);
+
+    &:hover {
+      background: var(--chat-row-hover-bg);
+    }
+
+    &-icon {
+      color: var(--avocado-muted-icon);
+      width: 16px;
+      text-align: center;
+    }
+
+    &-count {
+      margin-left: auto;
+      font-size: @chat-font-meta;
+      font-weight: 800;
+      color: var(--avocado-muted-label);
+    }
+  }
+
+  &-scroll {
+    .chat-scroll-y();
+    flex: 1;
+    min-height: 0;
+    padding: 8px;
+  }
+
+  &-sectionHeader {
+    .chat-flex-row(6px);
+    padding: 10px 10px 6px;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 1.1px;
+    text-transform: uppercase;
+    color: var(--avocado-muted-label);
+
+    // The + / pencil affordance for creating a channel or DM.
+    &-action {
+      margin-left: auto;
+      color: var(--avocado-muted-icon);
+      background: none;
+      border: 0;
+      cursor: pointer;
+      padding: 2px 4px;
+      border-radius: 4px;
+
+      &:hover {
+        color: var(--avocado-text-dark);
+        background: var(--chat-row-hover-bg);
+      }
+    }
+  }
+}
+
+// A channel row in the sidebar.
+.ChatChannelRow {
+  .chat-flex-row(8px);
+  width: 100%;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: @chat-radius-sm;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--avocado-text-dark);
+  transition: background var(--avocado-t-fast);
+
+  &:hover {
+    background: var(--chat-row-hover-bg);
+  }
+
+  &--active {
+    background: var(--chat-row-selected-bg);
+    font-weight: 800;
+  }
+
+  // Muted channels stay listed but visually recede.
+  &--muted {
+    opacity: 0.55;
+  }
+
+  &-icon {
+    .chat-flex-center();
+    width: 20px;
+    flex-shrink: 0;
+    color: var(--avocado-muted-icon);
+    font-size: 14px;
+  }
+
+  &-name {
+    .chat-truncate();
+    flex: 1;
+    font-size: @chat-font-label;
+  }
+
+  &-badge {
+    flex-shrink: 0;
+    min-width: 18px;
+    padding: 1px 5px;
+    border-radius: @chat-radius-pill;
+    background: var(--avocado-surface-1);
+    color: var(--avocado-muted-label);
+    font-size: 11px;
+    font-weight: 800;
+    text-align: center;
+
+    // A mention badge is the one case that earns colour in the sidebar.
+    &--mention {
+      background: var(--chat-unread-line);
+      color: #fff;
+    }
+  }
+
+  // Avatar stack for group DMs.
+  &-avatars {
+    display: flex;
+    flex-shrink: 0;
+
+    .Avatar {
+      width: @chat-avatar-size-compact;
+      height: @chat-avatar-size-compact;
+      border: 2px solid var(--body-bg);
+
+      & + .Avatar {
+        margin-left: -10px;
+      }
+    }
+  }
+
+  &--online &-avatars .Avatar:first-child {
+    .chat-online-ring(2px);
+  }
+}
+
+// ── Channel view ─────────────────────────────────────────────────────────────
+.ChatChannel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+
+  &-header {
+    .chat-flex-row(10px);
+    flex-shrink: 0;
+    height: @chat-header-height;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--avocado-border-soft);
+    background: var(--body-bg);
+  }
+
+  // The title is a button: clicking it opens the info panel, per Discourse.
+  &-title {
+    .chat-flex-row(8px);
+    .chat-truncate();
+    flex: 1;
+    min-width: 0;
+    padding: 4px 8px;
+    margin-left: -8px;
+    border: 0;
+    border-radius: @chat-radius-sm;
+    background: none;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--avocado-text-dark);
+
+    &:hover {
+      background: var(--chat-row-hover-bg);
+    }
+  }
+
+  &-description {
+    .chat-truncate();
+    font-size: @chat-font-meta;
+    font-weight: 500;
+    color: var(--avocado-muted-label);
+  }
+
+  &-headerActions {
+    .chat-flex-row(2px);
+    flex-shrink: 0;
+  }
+
+  // WhatsApp's arrangement: a slim strip under the header carrying the pinned
+  // message. Present in the drawer too, which has no room for the pinned panel.
+  &-pinnedBar {
+    .chat-flex-row(10px);
+    flex-shrink: 0;
+    width: 100%;
+    padding: 7px 14px;
+    border: 0;
+    border-bottom: 1px solid var(--avocado-border-soft);
+    background: var(--chat-pinned-bg);
+    text-align: left;
+    cursor: pointer;
+
+    &:disabled {
+      // Still shown, just inert: the message is pinned but not in the loaded
+      // window, so there is nowhere to jump to yet.
+      cursor: default;
+    }
+
+    &:hover:not(:disabled) {
+      filter: brightness(0.97);
+    }
+
+    &-icon {
+      flex-shrink: 0;
+      font-size: 12px;
+      color: var(--chat-pinned-border);
+    }
+
+    &-text {
+      .chat-truncate();
+      flex: 1;
+      font-size: @chat-font-label;
+      color: var(--avocado-muted-label);
+    }
+  }
+
+  &-stream {
+    .chat-scroll-y();
+    flex: 1;
+    min-height: 0;
+    padding: 12px 0;
+
+    // The stream is anchored to the bottom: new messages should not push the
+    // reading position when the user is already at the latest message.
+    overflow-anchor: auto;
+    display: flex;
+    flex-direction: column;
+
+    // Deliberately NOT `justify-content: flex-end`. In a scrollable flex
+    // container that pushes overflowing items past the *start* edge, and no
+    // browser lets you scroll there — the scroll origin stays pinned to the top
+    // of the content box. The older messages render, and are unreachable.
+    //
+    // An auto margin on the first item gives the same bottom anchoring while a
+    // short channel has slack, and collapses to zero once the content overflows,
+    // so scrolling up keeps working.
+    justify-content: flex-start;
+
+    > :first-child {
+      margin-top: auto;
+    }
+  }
+
+  // Shown when the channel is closed or archived — the composer is replaced
+  // rather than merely disabled, so the reason is legible.
+  &-frozen {
+    .chat-flex-row(8px);
+    margin: 8px 12px 12px;
+    padding: 10px 12px;
+    border: 1px dashed var(--avocado-border-subtle);
+    border-radius: @chat-radius-md;
+    font-size: @chat-font-label;
+    color: var(--avocado-muted-label);
+  }
+
+  &-liveRegion {
+    .chat-sr-only();
+  }
+}
+
+// Date separator between days.
+.ChatDateSeparator {
+  .chat-flex-row(10px);
+  margin: @chat-message-group-gap 16px;
+
+  &::before,
+  &::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--avocado-border-soft);
+  }
+
+  &-label {
+    flex-shrink: 0;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 1.1px;
+    text-transform: uppercase;
+    color: var(--avocado-muted-label);
+  }
+}
+
+// The "new messages" rule. Coloured and labelled, so it is not mistaken for a
+// date separator.
+.ChatUnreadDivider {
+  .chat-flex-row(10px);
+  margin: @chat-message-group-gap 16px;
+  color: var(--chat-unread-line);
+
+  &::before,
+  &::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: currentColor;
+  }
+
+  &-label {
+    flex-shrink: 0;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 1.1px;
+    text-transform: uppercase;
+  }
+}
+
+// ── Message ──────────────────────────────────────────────────────────────────
+.ChatMessage {
+  position: relative;
+  display: flex;
+  gap: 12px;
+  padding: 3px 16px;
+  margin-top: @chat-message-group-gap;
+
+  // Consecutive messages from the same author collapse: no repeated avatar or
+  // name, and a tighter gap.
+  &--grouped {
+    margin-top: @chat-message-gap;
+  }
+
+  &:hover {
+    background: var(--chat-row-hover-bg);
+  }
+
+  // Addressed to you.
+  &--mentioned {
+    background: var(--chat-mention-bg);
+    box-shadow: inset 3px 0 0 var(--chat-mention-border);
+  }
+
+  &--selected {
+    background: var(--chat-row-selected-bg);
+  }
+
+  // Pinned by a moderator: channel-wide, so it is marked on the row and not only
+  // in the pinned panel.
+  &--pinned {
+    background: var(--chat-pinned-bg);
+    box-shadow: inset 3px 0 0 var(--chat-pinned-border);
+  }
+
+  // Applied briefly by the pinned bar when it jumps to a row, so it is obvious
+  // which message was meant when more than one is pinned.
+  &--flash {
+    animation: chat-flash 1.2s ease-out;
+  }
+
+  &-pinMark {
+    .chat-flex-row(4px);
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--chat-pinned-border);
+  }
+
+  // Optimistic row, still in flight.
+  &--pending {
+    opacity: 0.6;
+  }
+
+  &--failed {
+    background: var(--alert-error-bg, rgba(224, 62, 62, 0.10));
+  }
+
+  &-gutter {
+    flex-shrink: 0;
+    width: @chat-avatar-size;
+
+    .Avatar {
+      width: @chat-avatar-size;
+      height: @chat-avatar-size;
+    }
+  }
+
+  // In a grouped message the gutter holds the timestamp on hover instead of an
+  // avatar, which is how Discourse keeps dense runs scannable.
+  &--grouped &-gutter {
+    .chat-flex-center();
+    align-items: flex-start;
+    font-size: 10px;
+    color: var(--avocado-muted-icon);
+    opacity: 0;
+    transition: opacity var(--avocado-t-fast);
+  }
+
+  &--grouped:hover &-gutter {
+    opacity: 1;
+  }
+
+  &--online &-gutter .Avatar {
+    .chat-online-ring(2px);
+  }
+
+  &-body {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &-meta {
+    .chat-flex-row(8px);
+    margin-bottom: 2px;
+  }
+
+  &-author {
+    font-size: @chat-font-label;
+    font-weight: 800;
+    color: var(--avocado-text-dark);
+  }
+
+  &-time {
+    font-size: 11px;
+    color: var(--avocado-muted-label);
+  }
+
+  &-badge {
+    padding: 0 5px;
+    border-radius: 4px;
+    background: var(--avocado-surface-1);
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--avocado-muted-label);
+  }
+
+  &-content {
+    font-size: @chat-font-message;
+    line-height: 1.45;
+    color: var(--text-color);
+    overflow-wrap: break-word;
+
+    p:last-child {
+      margin-bottom: 0;
+    }
+
+    // Chat lines are short; full paragraph spacing wastes vertical space.
+    p {
+      margin-bottom: 4px;
+    }
+  }
+
+  // A button, since it opens the edit history, but styled as the inline marker it
+  // reads as rather than as a control.
+  &-editedMark {
+    font-size: 11px;
+    color: var(--avocado-muted-label);
+    margin-left: 4px;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  // Deleted message tombstone.
+  &-tombstone {
+    font-size: @chat-font-label;
+    font-style: italic;
+    color: var(--chat-tombstone-color);
+  }
+
+  // Inline reply preview above the message body.
+  &-replyTo {
+    .chat-flex-row(6px);
+    margin-bottom: 3px;
+    padding-left: 8px;
+    border-left: 2px solid var(--avocado-border-subtle);
+    font-size: @chat-font-meta;
+    color: var(--avocado-muted-label);
+
+    &-content {
+      .chat-truncate();
+      max-width: 420px;
+    }
+  }
+
+  // Hover action bar, top-right.
+  &-actions {
+    position: absolute;
+    top: -12px;
+    right: 16px;
+    .chat-flex-row(2px);
+    padding: 2px;
+    border: 1px solid var(--avocado-border-subtle);
+    border-radius: @chat-radius-sm;
+    background: var(--body-bg);
+    box-shadow: var(--shadow-medium);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--avocado-t-fast);
+  }
+
+  &:hover &-actions,
+  &-actions:focus-within {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  &-action {
+    .chat-icon-circle(26px; transparent);
+    border: 0;
+    color: var(--avocado-muted-icon);
+    cursor: pointer;
+
+    &:hover {
+      background: var(--chat-row-hover-bg);
+      color: var(--avocado-text-dark);
+    }
+
+    // Currently liked. Matches the reaction chip's active state rather than
+    // inventing a third "on" colour.
+    &--active {
+      color: var(--primary-color);
+    }
+  }
+
+  // Every message sits on the left, the sender's included — the Discord model.
+  // A mirrored right-hand column reads well for a two-person conversation and
+  // poorly for a busy channel, where it splits one thread of talk into two.
+}
+
+// The header's pinned toggle, while the panel is open.
+.ChatChannel-headerAction--active {
+  color: var(--primary-color);
+}
+
+// Reaction chips under a message.
+.ChatReactions {
+  .chat-flex-row(4px);
+  flex-wrap: wrap;
+  margin-top: 4px;
+
+  &-chip {
+    .chat-flex-row(4px);
+    padding: 1px 7px;
+    border: 1px solid var(--chat-reaction-border);
+    border-radius: @chat-radius-pill;
+    background: var(--chat-reaction-bg);
+    font-size: @chat-font-meta;
+    font-weight: 700;
+    color: var(--avocado-muted-label);
+    cursor: pointer;
+    transition:
+      background var(--avocado-t-fast),
+      border-color var(--avocado-t-fast);
+
+    &:hover {
+      border-color: var(--avocado-muted-icon);
+    }
+
+    // The actor's own reaction.
+    &--active {
+      background: var(--chat-reaction-bg-active);
+      border-color: var(--primary-color);
+      color: var(--avocado-text-dark);
+    }
+
+    img.emoji {
+      width: 14px;
+      height: 14px;
+    }
+  }
+
+  // The like chip's icon, which inherits the chip's colour — including the
+  // active state — where an emoji glyph would not.
+  &-icon {
+    font-size: 12px;
+  }
+
+  &-chip--active &-icon {
+    color: var(--primary-color);
+  }
+}
+
+// Attachments.
+.ChatUploads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+
+  &-image {
+    max-width: 320px;
+    max-height: 240px;
+    border-radius: @chat-radius-sm;
+    border: 1px solid var(--avocado-border-subtle);
+    // Set from the stored width/height so the row does not reflow on load.
+    background: var(--avocado-surface-1);
+  }
+
+  &-file {
+    .chat-flex-row(8px);
+    padding: 7px 10px;
+    .chat-surface(@chat-radius-sm);
+    font-size: @chat-font-label;
+    max-width: 320px;
+
+    &-name {
+      .chat-truncate();
+    }
+
+    &-size {
+      flex-shrink: 0;
+      font-size: 11px;
+      color: var(--avocado-muted-label);
+    }
+  }
+}
+
+// Thread indicator strip below a threaded root message.
+.ChatThreadIndicator {
+  .chat-flex-row(8px);
+  margin-top: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--chat-thread-strip);
+  border-radius: @chat-radius-sm;
+  background: none;
+  cursor: pointer;
+  font-size: @chat-font-meta;
+  color: var(--avocado-muted-label);
+  transition: background var(--avocado-t-fast);
+  width: 100%;
+  text-align: left;
+
+  &:hover {
+    background: var(--chat-row-hover-bg);
+  }
+
+  &-count {
+    font-weight: 800;
+    color: var(--primary-color);
+  }
+
+  &-preview {
+    .chat-truncate();
+    flex: 1;
+  }
+}
+
+// ── Composer ─────────────────────────────────────────────────────────────────
+.ChatComposer {
+  flex-shrink: 0;
+  padding: 8px 12px 12px;
+  background: var(--body-bg);
+
+  // The containing block for .ChatAutocomplete, which sits at `bottom: 100%` so
+  // the suggestion list opens upwards over the stream rather than downwards off
+  // the bottom of the panel.
+  position: relative;
+
+  &-shell {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    padding: 6px 6px 6px 12px;
+    border: 1px solid var(--avocado-border-subtle);
+    border-radius: @chat-radius-md;
+    background: var(--avocado-surface-2);
+    transition: border-color var(--avocado-t-fast);
+
+    &:focus-within {
+      border-color: var(--primary-color);
+    }
+  }
+
+  // Auto-growing textarea, capped so the composer cannot eat the stream.
+  &-input {
+    flex: 1;
+    min-height: @chat-composer-min-height;
+    max-height: @chat-composer-max-height;
+    padding: 10px 0;
+    border: 0;
+    background: none;
+    resize: none;
+    font-size: @chat-font-message;
+    line-height: 1.4;
+    color: var(--avocado-text-dark);
+    .chat-scroll-y();
+
+    &:focus {
+      outline: none;
+      box-shadow: none;
+    }
+
+    &::placeholder {
+      color: var(--avocado-muted-placeholder);
+    }
+  }
+
+  &-tools {
+    .chat-flex-row(2px);
+    flex-shrink: 0;
+    padding-bottom: 6px;
+  }
+
+  &-tool {
+    .chat-icon-circle(30px; transparent);
+    border: 0;
+    color: var(--avocado-muted-icon);
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+      background: var(--chat-row-hover-bg);
+      color: var(--avocado-text-dark);
+    }
+
+    &:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+  }
+
+  &-send {
+    // `--button-primary-*`, not `--primary-color` + `--header-color`. The latter
+    // pair silently self-destructs: core defines --header-color as the primary
+    // colour itself unless the admin turns on the coloured header, so on a plain
+    // header the icon was drawn in exactly the button's own background colour and
+    // vanished. These two are the pair core computes for a primary-filled button,
+    // with the text colour chosen by YIQ contrast against the fill.
+    .chat-icon-circle(32px; var(--button-primary-bg, var(--primary-color)));
+    border: 0;
+    color: var(--button-primary-color, #fff);
+    cursor: pointer;
+
+    &:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+  }
+
+  // Reply / edit context bar above the input.
+  &-context {
+    .chat-flex-row(8px);
+    margin-bottom: 6px;
+    padding: 6px 10px;
+    border-radius: @chat-radius-sm;
+    background: var(--avocado-surface-1);
+    font-size: @chat-font-meta;
+    color: var(--avocado-muted-label);
+
+    &-label {
+      font-weight: 800;
+      color: var(--avocado-text-dark);
+    }
+
+    &-preview {
+      .chat-truncate();
+      flex: 1;
+    }
+  }
+
+  // Pending attachments, before send.
+  &-pending {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+
+  // Character counter, only rendered as the limit approaches.
+  &-counter {
+    margin-top: 4px;
+    text-align: right;
+    font-size: 11px;
+    color: var(--avocado-muted-label);
+
+    &--warning {
+      color: var(--chat-unread-line);
+      font-weight: 800;
+    }
+  }
+}
+
+// Autocomplete dropdown for @mentions and :emoji:.
+.ChatAutocomplete {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  z-index: var(--avocado-z-dropdown);
+  max-height: 260px;
+  margin-bottom: 6px;
+  .chat-scroll-y();
+  .chat-surface(@chat-radius-md);
+  box-shadow: var(--shadow-medium);
+
+  &-item {
+    .chat-flex-row(8px);
+    width: 100%;
+    padding: 7px 12px;
+    border: 0;
+    background: none;
+    cursor: pointer;
+    text-align: left;
+    font-size: @chat-font-label;
+    color: var(--avocado-text-dark);
+
+    &--active,
+    &:hover {
+      background: var(--chat-row-hover-bg);
+    }
+
+    .Avatar {
+      width: 22px;
+      height: 22px;
+    }
+
+    &-hint {
+      margin-left: auto;
+      font-size: 11px;
+      color: var(--avocado-muted-label);
+    }
+  }
+}
+
+// Typing indicator.
+.ChatTyping {
+  .chat-flex-row(6px);
+  min-height: 18px;
+  padding: 0 12px 4px;
+  font-size: 11px;
+  color: var(--avocado-muted-label);
+
+  &-dots {
+    .chat-flex-row(2px);
+
+    span {
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+  }
+
+  .chat-motion-safe({
+    &-dots span {
+      animation: chat-typing 1.2s infinite ease-in-out;
+
+      &:nth-child(2) { animation-delay: 0.15s; }
+      &:nth-child(3) { animation-delay: 0.3s; }
+    }
+  });
+}
+
+@keyframes chat-typing {
+  0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
+  30%           { opacity: 1;    transform: translateY(-2px); }
+}
+
+// The jump-to-pinned highlight. Fades out rather than toggling, so it reads as
+// "here" instead of as a state the row is now stuck in.
+@keyframes chat-flash {
+  0%   { background: var(--chat-pinned-bg); }
+  100% { background: transparent; }
+}
+
+// ── Thread panel ─────────────────────────────────────────────────────────────
+.ChatThreadPanel {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  width: @chat-thread-panel-width;
+  min-height: 0;
+  border-left: 1px solid var(--avocado-border-soft);
+  background: var(--body-bg);
+
+  &-header {
+    .chat-flex-row(8px);
+    flex-shrink: 0;
+    height: @chat-header-height;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--avocado-border-soft);
+  }
+
+  &-title {
+    .chat-truncate();
+    flex: 1;
+    font-size: @chat-font-label;
+    font-weight: 800;
+    color: var(--avocado-text-dark);
+  }
+
+  &-stream {
+    .chat-scroll-y();
+    flex: 1;
+    min-height: 0;
+    padding: 12px 0;
+  }
+
+  // On narrow viewports the thread takes over the channel pane instead of
+  // squeezing beside it.
+  @media (max-width: @chat-mobile-breakpoint) {
+    position: absolute;
+    inset: 0;
+    width: auto;
+    border-left: 0;
+    z-index: var(--avocado-z-sidebar);
+  }
+}
+
+// ── Message search ───────────────────────────────────────────────────────────
+// Fills the channel pane on the `chat.search` route, either scoped to one channel
+// (from the channel header's search button) or across all of them.
+.ChatSearch {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: 12px;
+
+  &-bar {
+    .chat-flex-row(8px);
+    flex-shrink: 0;
+    padding: 0 10px;
+    border-radius: @chat-radius-pill;
+    background: var(--avocado-surface-1);
+  }
+
+  &-icon {
+    flex-shrink: 0;
+    color: var(--avocado-muted-icon);
+  }
+
+  &-input {
+    flex: 1;
+    min-width: 0;
+    height: 38px;
+    border: 0;
+    background: none;
+    font-size: @chat-font-message;
+    color: var(--avocado-text-dark);
+
+    &:focus {
+      outline: none;
+    }
+
+    // Chrome draws its own clear button; ours is the only one.
+    &::-webkit-search-cancel-button {
+      display: none;
+    }
+  }
+
+  &-scope {
+    flex-shrink: 0;
+    padding: 8px 12px 0;
+    font-size: @chat-font-meta;
+    color: var(--avocado-muted-label);
+  }
+
+  &-results {
+    .chat-scroll-y();
+    flex: 1;
+    min-height: 0;
+    margin-top: 8px;
+  }
+
+  &-result {
+    .chat-flex-row(10px);
+    align-items: flex-start;
+    width: 100%;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: @chat-radius-sm;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--chat-row-hover-bg);
+    }
+
+    .Avatar {
+      width: @chat-avatar-size-compact;
+      height: @chat-avatar-size-compact;
+      flex-shrink: 0;
+    }
+
+    &-body {
+      flex: 1;
+      min-width: 0;
+    }
+
+    &-meta {
+      .chat-flex-row(8px);
+      margin-bottom: 2px;
+    }
+
+    &-author {
+      font-size: @chat-font-label;
+      font-weight: 800;
+      color: var(--avocado-text-dark);
+    }
+
+    &-channel,
+    &-time {
+      font-size: 11px;
+      color: var(--avocado-muted-label);
+    }
+
+    &-excerpt {
+      .chat-truncate();
+      font-size: @chat-font-label;
+      color: var(--text-color);
+    }
+  }
+}
+
+// ── My threads ───────────────────────────────────────────────────────────────
+.ChatThreadsList {
+  .chat-scroll-y();
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: 12px;
+
+  &-row {
+    .chat-flex-row(10px);
+    width: 100%;
+    padding: 9px 10px;
+    border: 0;
+    border-radius: @chat-radius-sm;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--chat-row-hover-bg);
+    }
+
+    &--unread .ChatThreadsList-title {
+      font-weight: 900;
+    }
+  }
+
+  &-icon {
+    flex-shrink: 0;
+    color: var(--avocado-muted-icon);
+  }
+
+  &-body {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &-title {
+    .chat-truncate();
+    font-size: @chat-font-label;
+    font-weight: 700;
+    color: var(--avocado-text-dark);
+  }
+
+  &-meta {
+    .chat-flex-row(8px);
+    margin-top: 2px;
+    font-size: 11px;
+    color: var(--avocado-muted-label);
+  }
+
+  &-badge {
+    flex-shrink: 0;
+    padding: 0 6px;
+    border-radius: @chat-radius-pill;
+    background: var(--primary-color);
+    color: var(--button-primary-color, #fff);
+    font-size: 11px;
+    font-weight: 800;
+  }
+}
+
+// ── Edit history ─────────────────────────────────────────────────────────────
+.ChatRevisions {
+  &-list {
+    display: grid;
+    gap: 10px;
+  }
+
+  &-entry {
+    padding: 10px 12px;
+    border-radius: @chat-radius-sm;
+    background: var(--avocado-surface-1);
+
+    // The live text, set apart so the list reads as "…and now this".
+    &--current {
+      background: var(--chat-pinned-bg);
+    }
+  }
+
+  &-meta {
+    .chat-flex-row(8px);
+    margin-bottom: 4px;
+    font-size: 11px;
+    color: var(--avocado-muted-label);
+  }
+
+  &-author {
+    font-weight: 800;
+    color: var(--avocado-text-dark);
+  }
+
+  &-content {
+    font-size: @chat-font-label;
+    // Revisions are shown as written, so newlines have to survive.
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    color: var(--text-color);
+  }
+}
+
+// ── Selection bar target picker ───────────────────────────────────────────────
+.ChatSelectionBar-target {
+  width: auto;
+  max-width: 180px;
+}
+
+// ── Browse channels ──────────────────────────────────────────────────────────
+.ChatBrowse {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 20px 12px 48px;
+
+  &-header {
+    .chat-flex-row(12px);
+    margin-bottom: 16px;
+  }
+
+  &-title {
+    flex: 1;
+    font-size: 26px;
+    font-weight: 900;
+    letter-spacing: -0.3px;
+    color: var(--avocado-text-dark);
+  }
+
+  &-filters {
+    .chat-flex-row(6px);
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+
+  &-filter {
+    .chat-pill-btn(30px; 14px);
+    background: var(--avocado-surface-1);
+    color: var(--avocado-muted-label);
+
+    // Same trap as ChatComposer-send: --header-color equals --primary-color on a
+    // plain header, which would render the label invisible on its own fill.
+    &--active {
+      background: var(--button-primary-bg, var(--primary-color));
+      color: var(--button-primary-color, #fff);
+    }
+  }
+
+  &-list {
+    display: grid;
+    gap: 10px;
+  }
+
+  &-empty {
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--avocado-muted-label);
+  }
+}
+
+.ChatBrowseCard {
+  .chat-surface(@chat-radius-md);
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+
+  &:hover {
+    box-shadow: var(--shadow-subtle);
+  }
+
+  &-icon {
+    .chat-icon-circle(38px);
+    font-size: 18px;
+  }
+
+  &-body {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &-name {
+    .chat-flex-row(8px);
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--avocado-text-dark);
+  }
+
+  &-description {
+    .chat-line-clamp(2);
+    margin-top: 3px;
+    font-size: @chat-font-label;
+    color: var(--avocado-muted-label);
+  }
+
+  &-meta {
+    .chat-flex-row(12px);
+    margin-top: 8px;
+    font-size: @chat-font-meta;
+    color: var(--avocado-muted-label);
+  }
+
+  &-status {
+    padding: 1px 7px;
+    border-radius: @chat-radius-pill;
+    background: var(--avocado-surface-1);
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  &-action {
+    align-self: center;
+    flex-shrink: 0;
+  }
+}
+
+// ── Channel info panel ───────────────────────────────────────────────────────
+.ChatChannelInfo {
+  &-tabs {
+    .chat-flex-row(4px);
+    padding: 0 4px;
+    border-bottom: 1px solid var(--avocado-border-soft);
+  }
+
+  &-tab {
+    padding: 10px 14px;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    background: none;
+    cursor: pointer;
+    font-size: @chat-font-label;
+    font-weight: 700;
+    color: var(--avocado-muted-label);
+
+    &--active {
+      color: var(--avocado-text-dark);
+      border-bottom-color: var(--primary-color);
+    }
+  }
+
+  &-section {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--avocado-border-soft);
+
+    &-label {
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 1.1px;
+      text-transform: uppercase;
+      color: var(--avocado-muted-label);
+      margin-bottom: 6px;
+    }
+  }
+
+  &-memberList {
+    .chat-scroll-y();
+    max-height: 320px;
+  }
+
+  &-member {
+    .chat-flex-row(8px);
+    padding: 7px 4px;
+    font-size: @chat-font-label;
+
+    &--online .Avatar {
+      .chat-online-ring(2px);
+    }
+
+    .Avatar {
+      width: 26px;
+      height: 26px;
+    }
+  }
+
+  // Destructive actions are separated so they are not adjacent to routine ones.
+  &-danger {
+    padding: 14px 16px;
+
+    .Button {
+      color: var(--alert-error-color, #c0392b);
+    }
+  }
+}
+
+// ── Selection mode ───────────────────────────────────────────────────────────
+// Bulk bar for "Quote in discussion" / "Copy" / "Move".
+.ChatSelectionBar {
+  .chat-flex-row(8px);
+  position: sticky;
+  bottom: 0;
+  z-index: var(--avocado-z-sidebar);
+  padding: 10px 12px;
+  border-top: 1px solid var(--avocado-border-subtle);
+  background: var(--body-bg);
+  box-shadow: var(--shadow-medium);
+
+  &-count {
+    font-size: @chat-font-label;
+    font-weight: 800;
+    color: var(--avocado-text-dark);
+  }
+
+  &-actions {
+    .chat-flex-row(6px);
+    margin-left: auto;
+    flex-wrap: wrap;
+  }
+}
+
+// ── Skeletons ────────────────────────────────────────────────────────────────
+// Rendered while a channel's first page loads, so the panel does not flash empty.
+.ChatSkeleton {
+  padding: 12px 16px;
+
+  &-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: @chat-message-group-gap;
+  }
+
+  &-avatar {
+    .chat-icon-circle(@chat-avatar-size; var(--avocado-surface-1));
+  }
+
+  &-lines {
+    flex: 1;
+  }
+
+  &-line {
+    height: 10px;
+    margin-bottom: 6px;
+    border-radius: 4px;
+    background: var(--avocado-surface-1);
+
+    &--short { width: 30%; }
+    &--long  { width: 75%; }
+  }
+
+  .chat-motion-safe({
+    &-avatar,
+    &-line {
+      animation: chat-pulse 1.4s ease-in-out infinite;
+    }
+  });
+}
+
+@keyframes chat-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.5; }
+}
+
+// Empty-sidebar state. A fresh install has no channels, so this is the only
+// route to creating the first one — it must not be a dead end.
+.ChatSidebar-empty {
+  padding: 16px 12px;
+  text-align: center;
+
+  p {
+    margin-bottom: 12px;
+    font-size: @chat-font-label;
+    color: var(--avocado-muted-label);
+  }
+
+  .Button {
+    margin-bottom: 6px;
+  }
+}
+
+.NewChannelModal {
+  .Form-group .helpText {
+    margin-top: 4px;
+    font-size: @chat-font-meta;
+    color: var(--avocado-muted-label);
+  }
+
+  label.checkbox {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+}
+
+// ── Drawer overrides ─────────────────────────────────────────────────────────
+// Inside the drawer, the sidebar and the channel are alternative views rather
+// than adjacent panes — only one is mounted at a time. The sidebar's fixed
+// 280px width is meant for the full-screen page, where it sits *beside* a
+// channel; in a 420px drawer it leaves ~140px of empty flex space to its right,
+// which reads as the panel being split in two.
+.ChatDrawer-body {
+  > .ChatSidebar {
+    width: auto;
+    flex: 1;
+    min-width: 0;
+    border-right: 0;
+  }
+
+  > .ChatChannel {
+    min-width: 0;
+  }
+}
+
+// ── Emoji ────────────────────────────────────────────────────────────────────
+// A reaction chip's emoji needs its own line-height: the glyphs are taller than
+// the surrounding digits and would otherwise stretch the chip.
+.ChatReactions-emoji {
+  font-size: 14px;
+  line-height: 1;
+}
+
+// The channel icon slot is a fixed 38px circle. Before emoji were resolved, an
+// unrendered `:speech_balloon:` overflowed it and pushed the card's text sideways.
+// Clipping here means no future bad value can break the layout either.
+.ChatBrowseCard-icon,
+.ChatChannelRow-icon,
+.ChatChannel-title > span:first-child {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: clip;
+  line-height: 1;
+}
+
+.EmojiPicker {
+  position: relative;
+
+  &-control {
+    .chat-flex-row(8px);
+  }
+
+  &-preview {
+    .chat-icon-circle(36px);
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  &-input {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &-clear {
+    flex-shrink: 0;
+  }
+
+  &-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: var(--avocado-z-dropdown);
+    margin-top: 4px;
+    max-height: 220px;
+    padding: 6px;
+    .chat-scroll-y();
+    .chat-surface(@chat-radius-md);
+    box-shadow: var(--shadow-medium);
+  }
+
+  // auto-fill rather than a fixed count, so the grid adapts to the modal width
+  // instead of overflowing on a narrow viewport.
+  &-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(34px, 1fr));
+    gap: 2px;
+  }
+
+  &-option {
+    .chat-flex-center();
+    height: 34px;
+    border: 0;
+    border-radius: @chat-radius-sm;
+    background: none;
+    cursor: pointer;
+    font-size: 19px;
+    line-height: 1;
+    transition: background var(--avocado-t-fast);
+
+    &:hover,
+    &--active {
+      background: var(--chat-row-hover-bg);
+    }
+  }
+
+  &-empty {
+    padding: 10px;
+    text-align: center;
+    font-size: @chat-font-meta;
+    color: var(--avocado-muted-label);
+  }
+}
+
+// ── Collapsed-drawer activity ────────────────────────────────────────────────
+// Collapsed, the drawer is a 48px bar with no stream visible, so unread activity
+// has to surface on the header itself. Mentions get a count; ambient traffic a dot.
+.ChatDrawer {
+  &-badge {
+    flex-shrink: 0;
+    min-width: 18px;
+    padding: 1px 6px;
+    border-radius: @chat-radius-pill;
+    background: var(--chat-unread-line);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 16px;
+    text-align: center;
+  }
+
+  &-dot {
+    flex-shrink: 0;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--primary-color);
+  }
+}
+
+// A system row (joined / left / channel closed) is narration, not conversation:
+// centred, quiet, and without the avatar gutter a message needs.
+.ChatMessage--system {
+  .ChatMessage-body {
+    text-align: center;
+  }
+
+  .ChatMessage-tombstone {
+    font-style: normal;
+    font-size: @chat-font-meta;
+  }
+
+  &:hover {
+    background: none;
+  }
+}

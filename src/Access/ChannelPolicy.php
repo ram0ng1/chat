@@ -1,0 +1,181 @@
+<?php
+
+/*
+ * This file is part of ramon/chat.
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
+namespace Ramon\Chat\Access;
+
+use Flarum\Settings\SettingsRepositoryInterface;
+use Flarum\User\Access\AbstractPolicy;
+use Flarum\User\User;
+use Ramon\Chat\Channel;
+
+/**
+ * Return semantics matter here. Flarum's Gate only applies its admin fallback
+ * when *no* policy reached a decision, so returning `false` denies admins too.
+ * We therefore return:
+ *
+ *   - `true`  to grant,
+ *   - `false` only for structural invariants that must hold for everyone
+ *             (posting into an archived channel, editing a system message),
+ *   - `null`  when the actor merely lacks a permission, letting the Gate fall
+ *             through to its `isAdmin() || hasPermission()` default.
+ */
+class ChannelPolicy extends AbstractPolicy
+{
+    public function __construct(
+        protected SettingsRepositoryInterface $settings
+    ) {
+    }
+
+    public function view(User $actor, Channel $channel): ?bool
+    {
+        return Channel::whereVisibleTo($actor)->whereKey($channel->id)->exists() ?: null;
+    }
+
+    /**
+     * Whether the actor may post into the channel. Visibility alone is not
+     * enough: closed and archived channels stay readable but frozen.
+     */
+    public function postMessage(User $actor, Channel $channel): ?bool
+    {
+        // Structural: nobody posts into a frozen channel, admins included. An
+        // admin who wants to post reopens the channel first.
+        if (! $channel->acceptsMessages()) {
+            return false;
+        }
+
+        if (! $this->view($actor, $channel)) {
+            return null;
+        }
+
+        // Live membership is required in a direct channel — retaining read
+        // access to history after leaving does not grant the right to post.
+        if ($channel->isDirect()) {
+            return $channel->membershipFor($actor) !== null ? true : false;
+        }
+
+        return true;
+    }
+
+    public function join(User $actor, Channel $channel): ?bool
+    {
+        // Structural: direct channels are joined by invitation, never self-served.
+        if ($channel->isDirect() || ! $channel->isOpen()) {
+            return false;
+        }
+
+        return $this->view($actor, $channel);
+    }
+
+    /**
+     * Editing a channel's name, description, emoji, bound tag and threading.
+     *
+     * Three independent grants, checked in order of specificity:
+     *  - the creator of a direct group chat manages their own conversation;
+     *  - `editChannel` is the dedicated right, for a group that should curate
+     *    channels without being able to create or moderate them;
+     *  - `moderate` implies it, since a chat moderator manages channels anyway.
+     */
+    public function edit(User $actor, Channel $channel): ?bool
+    {
+        // A direct channel has no settings worth editing: no name of its own (it is
+        // labelled from the participant list), no category, no threading, no
+        // auto-join. Granting `edit` to its creator handed them the whole
+        // category-channel form — including the bound tag, which decides who can
+        // see a channel. Only a chat moderator has any business there.
+        //
+        // Renaming a group DM is a narrower right and belongs in `manageMembers`
+        // alongside the participant list, not here.
+        if ($channel->isDirect()) {
+            return $actor->hasPermission('ramon-chat.moderate') ? true : false;
+        }
+
+        if ($actor->hasPermission('ramon-chat.editChannel')) {
+            return true;
+        }
+
+        return $actor->hasPermission('ramon-chat.moderate') ? true : null;
+    }
+
+    public function close(User $actor, Channel $channel): ?bool
+    {
+        if ($channel->isDirect()) {
+            return false;
+        }
+
+        return $actor->can('ramon-chat.moderate') ? true : null;
+    }
+
+    /**
+     * Archiving copies the transcript into a discussion, so it is only offered
+     * once the channel is closed — otherwise the transcript would be a moving
+     * target while messages keep arriving.
+     */
+    public function archive(User $actor, Channel $channel): ?bool
+    {
+        if (! (bool) $this->settings->get('ramon-chat.allow_archiving_channels', true)) {
+            return false;
+        }
+
+        if ($channel->isDirect() || ! $channel->isClosed()) {
+            return false;
+        }
+
+        return $actor->can('ramon-chat.moderate') ? true : null;
+    }
+
+    public function delete(User $actor, Channel $channel): ?bool
+    {
+        if ($channel->isDirect()) {
+            // Direct history belongs to its participants; only an admin may
+            // destroy it outright.
+            return $actor->isAdmin() ? true : false;
+        }
+
+        return $actor->can('ramon-chat.moderate') ? true : null;
+    }
+
+    public function manageMembers(User $actor, Channel $channel): ?bool
+    {
+        if ($channel->isDirect()) {
+            if ($channel->creator_id === $actor->id && $channel->membershipFor($actor) !== null) {
+                return true;
+            }
+        }
+
+        return $actor->can('ramon-chat.moderate') ? true : null;
+    }
+
+    /**
+     * @see \Ramon\Chat\MessageMention::TYPE_HERE
+     * @see \Ramon\Chat\MessageMention::TYPE_ALL
+     */
+    public function mentionChannelWide(User $actor, Channel $channel): ?bool
+    {
+        // Structural: the channel has opted out of @here/@all entirely.
+        if (! $channel->allow_channel_wide_mentions) {
+            return false;
+        }
+
+        if (! $actor->can('postMessage', $channel)) {
+            return false;
+        }
+
+        return $actor->can('ramon-chat.mentionChannelWide') ? true : null;
+    }
+
+    public function viewMembers(User $actor, Channel $channel): ?bool
+    {
+        return $this->view($actor, $channel);
+    }
+
+    public function manageWebhooks(User $actor, Channel $channel): ?bool
+    {
+        return $actor->isAdmin() ? true : null;
+    }
+}
