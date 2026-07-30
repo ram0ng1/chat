@@ -38,7 +38,13 @@ return [
         ->route('/chat/browse', 'chat.browse')
         ->route('/chat/browse/{filter}', 'chat.browse.filter')
         ->route('/chat/threads', 'chat.threads')
-        ->route('/chat/search', 'chat.search'),
+        ->route('/chat/search', 'chat.search')
+        // Both halves are needed for every chat route: this one so a direct load or
+        // a refresh of the URL is served the forum page at all, and the matching
+        // `app.routes[...]` in js/src/forum/index.tsx so the client knows what to
+        // mount once it boots. Registering only the client side leaves a route that
+        // works while navigating and 404s on reload.
+        ->route('/chat/bookmarks', 'chat.bookmarks'),
 
     (new Extend\Frontend('admin'))
         ->js(__DIR__.'/js/dist/admin.js')
@@ -108,6 +114,12 @@ return [
             Schema\Boolean::make('canModerateChat')
                 ->get(fn ($forum, Context $context) => $context->getActor()->hasPermission('ramon-chat.moderate')),
 
+            // The paperclip is drawn from this. The permission was enforced only in
+            // UploadController, so someone without it still saw the control and got
+            // a 403 on use — the server was right and the interface was lying.
+            Schema\Boolean::make('canUploadChatFiles')
+                ->get(fn ($forum, Context $context) => $context->getActor()->hasPermission('ramon-chat.upload')),
+
             Schema\Boolean::make('canStartChatDirect')
                 ->get(fn ($forum, Context $context) => $context->getActor()->can('startDirect')),
         ]),
@@ -118,6 +130,12 @@ return [
             Schema\Integer::make('chatUnreadChannelsCount')
                 ->visible(fn (User $user, Context $context) => $context->getActor()->is($user))
                 ->get(fn (User $user) => resolve(UnreadTracker::class)->totalUnreadFor($user)),
+
+            // The message count, not the channel count: the drawer header shows
+            // "how much am I behind", which is a number of messages.
+            Schema\Integer::make('chatUnreadMessagesCount')
+                ->visible(fn (User $user, Context $context) => $context->getActor()->is($user))
+                ->get(fn (User $user) => resolve(UnreadTracker::class)->totalUnreadMessagesFor($user)),
 
             Schema\Integer::make('chatUnreadMentionsCount')
                 ->visible(fn (User $user, Context $context) => $context->getActor()->is($user))
@@ -157,7 +175,24 @@ return [
         ->serializeToForum('ramon-chat.title', 'ramon-chat.title')
         ->serializeToForum('ramon-chat.icon', 'ramon-chat.icon')
         ->serializeToForum('ramon-chat.showIcon', 'ramon-chat.show_icon', 'boolval')
-        ->serializeToForum('ramon-chat.allowArchivingChannels', 'ramon-chat.allow_archiving_channels', 'boolval'),
+        ->serializeToForum('ramon-chat.allowArchivingChannels', 'ramon-chat.allow_archiving_channels', 'boolval')
+
+        // The bot's identity. Public on purpose: it is drawn on every announcement
+        // in the stream, so it is no more secret than a username. Only the name and
+        // the avatar are here — there is no account and no credential behind them.
+        ->serializeToForum('ramon-chat.botName', 'ramon-chat.bot_name')
+
+        // An external URL the admin typed. Kept alongside the uploaded file rather
+        // than replaced by it, so switching to an upload and back does not lose it.
+        ->serializeToForum('ramon-chat.botAvatarUrl', 'ramon-chat.bot_avatar_url')
+
+        // The uploaded file, stored as a path on the assets disk and turned into a
+        // URL where the assets base is known.
+        ->serializeToForum('ramon-chat.botAvatarPath', 'ramon-chat.bot_avatar_path')
+
+        // When set, announcements are posted as this user and there is no bot at
+        // all — see AnnounceDiscussions.
+        ->serializeToForum('ramon-chat.botUserId', 'ramon-chat.bot_user_id', fn ($v) => $v ? (int) $v : null),
 
     // ── Per-user chat preferences (/settings) ────────────────────────────────
     (new Extend\User())
@@ -179,7 +214,17 @@ return [
         ->post('/chat/transcript', 'chat.transcript', Api\Controller\TranscriptController::class)
         ->post('/chat/messages/move', 'chat.messages.move', Api\Controller\MoveMessagesController::class)
         // Slack-compatible incoming webhook, authenticated by the secret path key.
-        ->post('/chat/hooks/{key}', 'chat.webhooks.deliver', Api\Controller\WebhookDeliveryController::class),
+        ->post('/chat/hooks/{key}', 'chat.webhooks.deliver', Api\Controller\WebhookDeliveryController::class)
+
+        // The bot's avatar. Multipart, so it cannot be a JSON:API field; both
+        // controllers assert admin themselves rather than relying on the route.
+        ->post('/chat/bot-avatar', 'chat.bot.avatar.upload', Api\Controller\UploadBotAvatarController::class)
+        ->delete('/chat/bot-avatar', 'chat.bot.avatar.delete', Api\Controller\DeleteBotAvatarController::class)
+
+        // The channel's picture. Guarded by the channel's own `edit` policy rather
+        // than by admin, so whoever may rename a channel may also give it a mark.
+        ->post('/chat/channels/{id}/image', 'chat.channels.image.set', Api\Controller\ChannelImageController::class)
+        ->delete('/chat/channels/{id}/image', 'chat.channels.image.clear', Api\Controller\ChannelImageController::class),
 
     // The delivering service cannot hold a Flarum session token, so the webhook
     // route authenticates by its key instead. See WebhookDeliveryController for
@@ -192,7 +237,8 @@ return [
     // a busy channel, and routing that to email would be a mail-bomb.
     (new Extend\Notification())
         ->type(Notification\ChatMentionBlueprint::class, ['alert', 'email'])
-        ->type(Notification\ChatMessageBlueprint::class, ['alert']),
+        ->type(Notification\ChatMessageBlueprint::class, ['alert'])
+        ->type(Notification\ChannelInviteBlueprint::class, ['alert']),
 
     // ── Domain listeners ─────────────────────────────────────────────────────
     (new Extend\Event())
@@ -236,6 +282,9 @@ return [
         ->addFilter(Search\MessageSearcher::class, Search\Filter\MessagePinnedFilter::class)
         ->addFilter(Search\MessageSearcher::class, Search\Filter\MessageTextFilter::class)
 
+        // The composer's @ autocomplete, restricted to people in the channel.
+        ->addFilter(\Flarum\User\Search\UserSearcher::class, Search\Filter\UserChatChannelFilter::class)
+
         ->addSearcher(Thread::class, Search\ThreadSearcher::class)
         ->addFilter(Search\ThreadSearcher::class, Search\Filter\ThreadChannelFilter::class)
         ->addFilter(Search\ThreadSearcher::class, Search\Filter\ThreadParticipatingFilter::class),
@@ -246,7 +295,8 @@ return [
     (new Extend\Conditional())
         ->whenExtensionEnabled('flarum-tags', fn () => [
             (new Extend\Event())
-                ->listen(\Flarum\Post\Event\Posted::class, Listener\JoinChannelsOnReply::class),
+                ->listen(\Flarum\Post\Event\Posted::class, Listener\JoinChannelsOnReply::class)
+                ->listen(\Flarum\Post\Event\Posted::class, Listener\AnnounceDiscussions::class),
         ]),
 
     // ── Realtime, only when flarum/realtime is present ───────────────────────
@@ -263,6 +313,22 @@ return [
                 ->listen(Event\MessagePinToggled::class, Realtime\BroadcastListener::class.'@whenMessageChanged')
                 ->listen(Event\ReactionToggled::class, Realtime\BroadcastListener::class.'@whenReactionToggled')
                 ->listen(Event\ThreadWasCreated::class, Realtime\BroadcastListener::class.'@whenThreadChanged')
-                ->listen(Event\ChannelStatusChanged::class, Realtime\BroadcastListener::class.'@whenChannelChanged'),
+                ->listen(Event\ChannelStatusChanged::class, Realtime\BroadcastListener::class.'@whenChannelChanged')
+                ->listen(Event\ChannelWasEdited::class, Realtime\BroadcastListener::class.'@whenChannelChanged'),
+        ]),
+
+    // ── Privacy and auditing ─────────────────────────────────────────────────
+    // Both integrations reference classes that ship with the other extension, so
+    // each is built inside its own closure: the Conditional only evaluates it when
+    // that extension is enabled, and a forum without it never loads the class.
+    (new Extend\Conditional())
+        ->whenExtensionEnabled('flarum-gdpr', fn () => [
+            (new \Flarum\Gdpr\Extend\UserData())
+                ->addType(Gdpr\ChatData::class),
+        ])
+        ->whenExtensionEnabled('flarum-audit', fn () => [
+            (new \Flarum\Audit\Extend\Audit())
+                ->group('ramon-chat')
+                ->using(new Audit\AuditIntegration()),
         ]),
 ];

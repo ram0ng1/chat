@@ -8,6 +8,8 @@ import username from 'flarum/common/helpers/username';
 import humanTime from 'flarum/common/helpers/humanTime';
 import type Mithril from 'mithril';
 
+import userLink from '../utils/userLink';
+
 import type Message from '../../common/models/Message';
 import type ChatState from '../state/ChatState';
 import { SearchResultsSkeleton } from './Skeletons';
@@ -118,7 +120,7 @@ export default class ChatSearch extends Component<ChatSearchAttrs> {
 
         <div className="ChatSearch-result-body">
           <div className="ChatSearch-result-meta">
-            <span className="ChatSearch-result-author">{username(message.user())}</span>
+            <span className="ChatSearch-result-author">{userLink(message.user())}</span>
             {channel ? <span className="ChatSearch-result-channel">{channel.displayName()}</span> : null}
             {at ? <span className="ChatSearch-result-time">{humanTime(at)}</span> : null}
           </div>

@@ -132,6 +132,40 @@ class Thread extends AbstractModel
     }
 
     /**
+     * Records one freshly-posted reply.
+     *
+     * The append path deliberately does not call refreshMetadata(): the new message
+     * is by definition the newest, and the count can only have gone up by one, so
+     * recounting asks the database to rediscover what the caller already knows. That
+     * cost is not constant — the COUNT scans every message in the thread — so the
+     * busiest threads were the slowest to reply in, which is exactly backwards.
+     *
+     * The channel counters next to this in the dispatcher have always been
+     * incremental; this makes the thread behave the same way.
+     */
+    public function noteReply(Message $message): static
+    {
+        // The root is not a reply. It cannot normally arrive here — the dispatcher
+        // only ever passes the message it just created — but guarding keeps the
+        // invariant local to the method that maintains the counter.
+        if ($this->original_message_id !== null && (int) $message->id === (int) $this->original_message_id) {
+            return $this;
+        }
+
+        $this->replies_count = (int) $this->replies_count + 1;
+        $this->last_message_id = $message->id;
+        $this->last_message_at = $message->created_at;
+
+        return $this;
+    }
+
+    /**
+     * Recomputes the counters from the messages themselves.
+     *
+     * Needed wherever the change is not a simple append — deleting, restoring or
+     * moving messages can invalidate both the count and the last-message pointer,
+     * and neither can be derived from the event alone. New replies use noteReply().
+     *
      * Replies exclude the root message, which is why this is not simply a count
      * of the messages relation.
      */

@@ -10,6 +10,7 @@
 namespace Ramon\Chat\Realtime;
 
 use Ramon\Chat\Event\ChannelStatusChanged;
+use Ramon\Chat\Event\ChannelWasEdited;
 use Ramon\Chat\Event\MessagePinToggled;
 use Ramon\Chat\Event\MessageWasDeleted;
 use Ramon\Chat\Event\MessageWasEdited;
@@ -120,7 +121,7 @@ class BroadcastListener
         );
     }
 
-    public function whenChannelChanged(ChannelStatusChanged $event): void
+    public function whenChannelChanged(ChannelStatusChanged|ChannelWasEdited $event): void
     {
         $this->broadcaster->toChannelMembers(
             $event->channel,
@@ -128,8 +129,28 @@ class BroadcastListener
             [
                 'channelId' => (int) $event->channel->id,
                 'status'    => $event->channel->status,
+
+                // Settings that change what the client may draw. `postPermission`
+                // in particular decides whether the composer appears at all, and
+                // an admin flipping it should take effect without every member
+                // reloading the page.
+                //
+                // What is deliberately *not* here is `canPostMessage`: that answer
+                // differs per user — a moderator may post in a channel a member may
+                // not — and one broadcast payload cannot carry a different value
+                // for each recipient. The client refetches its own record instead,
+                // so the server stays the only thing deciding who may post.
+                'postPermission' => $event->channel->post_permission,
+                'isPrivate'      => (bool) $event->channel->is_private,
+                'threadingEnabled' => (bool) $event->channel->threading_enabled,
+                'name'           => $event->channel->name,
+                'emoji'          => $event->channel->emoji,
+                'description'    => $event->channel->description,
             ],
-            $event->actor?->id
+            // Not excluded: the actor's own client has already applied the change
+            // optimistically, and pushing it again is harmless — whereas excluding
+            // them would leave a moderator with two browser tabs out of step.
+            null
         );
     }
 
@@ -159,6 +180,14 @@ class BroadcastListener
             'userId'      => $message->user_id,
             'type'        => $message->type,
             'systemKey'   => $message->system_key,
+
+            // The placeholders the system string is built from. Omitting these was
+            // not a partial payload but a broken one: a system message renders by
+            // interpolating this data into a translation, so the pushed copy showed
+            // "{undefined} started a discussion: {undefined}" while the same row
+            // fetched from the API read correctly. Anyone in the channel at the
+            // moment it was posted saw the broken form.
+            'systemData'  => $message->system_data,
             'contentHtml' => $deleted || $message->isSystem() ? null : $message->formatContent(),
             'createdAt'   => $message->created_at?->toIso8601String(),
             'editedAt'    => $message->edited_at?->toIso8601String(),

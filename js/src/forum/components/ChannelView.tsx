@@ -16,12 +16,20 @@ import ChatComposer from './ChatComposer';
 import ChannelFormModal from './ChannelFormModal';
 import ChannelInfoModal from './ChannelInfoModal';
 import ChatSelectionBar from './ChatSelectionBar';
+import { MessageStreamSkeleton } from './Skeletons';
+import { channelIcon } from '../utils/channelIcon';
 
 export interface ChannelViewAttrs extends ComponentAttrs {
   channel: Channel;
   state: ChatState;
   /** Rendered in the header; lets the drawer show a back button the page doesn't need. */
   onBack?: () => void;
+  /**
+   * The view is inside a container that shows the thread panel itself — the
+   * drawer. Opening a thread then sets the state and stops, instead of routing
+   * away to the full-screen page and closing the drawer to do it.
+   */
+  embedded?: boolean;
 }
 
 /**
@@ -101,9 +109,13 @@ export default class ChannelView extends Component<ChannelViewAttrs> {
 
         <div className="ChatChannel-stream" onscroll={(e: Event) => this.onScroll(e)}>
           {stream.loading && stream.messages.length === 0 ? this.skeleton() : null}
+          {/* Paging upwards. A skeleton row rather than a spinner: it occupies
+              roughly the height the arriving messages will, so the stream does not
+              lurch when they land — and it says "messages are coming" rather than
+              "something is happening". */}
           {stream.hasMore && stream.messages.length > 0 ? (
             <div className="ChatChannel-loadMore">
-              {stream.loading ? <LoadingIndicator display="inline" size="small" /> : null}
+              {stream.loading ? MessageStreamSkeleton(2) : null}
             </div>
           ) : null}
 
@@ -188,7 +200,7 @@ export default class ChannelView extends Component<ChannelViewAttrs> {
         {onBack ? <Button className="Button Button--icon Button--flat" icon="fas fa-chevron-left" onclick={onBack} /> : null}
 
         <button type="button" className="ChatChannel-title" onclick={() => this.openInfo()}>
-          {channel.emoji() ? <span>{displayEmoji(channel.emoji())}</span> : <i className="fas fa-hashtag" aria-hidden="true" />}
+          {channelIcon(channel)}
           <span>{channel.displayName()}</span>
           {channel.description() ? (
             <span className="ChatChannel-description">{channel.description()}</span>
@@ -493,10 +505,20 @@ export default class ChannelView extends Component<ChannelViewAttrs> {
 
   protected openThread(message: Message): void {
     const thread = message.thread();
-    const { channel, state } = this.attrs;
+    const { channel, state, embedded } = this.attrs;
 
     if (thread) {
       state.activeThreadId = Number(thread.id());
+
+      // In the drawer the panel opens over the conversation, the way the pinned
+      // list does. Routing here would throw the drawer away and reopen the whole
+      // thing full-screen, which is not what clicking a reply count asks for.
+      if (embedded) {
+        m.redraw();
+
+        return;
+      }
+
       m.route.set(app.route('chat.thread', { id: channel.id(), threadId: thread.id() }));
 
       return;

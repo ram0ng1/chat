@@ -29,6 +29,10 @@ ramon-chat:
     direct_needs_participant: Choose at least one person to message.
     direct_too_many: "A group chat can have at most {max} participants."
     direct_unknown_user: One of those users does not exist.
+    members_empty: Choose at least one person to add.
+    members_too_many: "You can add at most {max} people at once."
+    cannot_remove_self: Use "Leave channel" to remove yourself.
+    not_a_member: That person is not in this channel.
 
     # Transcripts
     transcript_empty: No messages were selected, or you cannot read them.
@@ -70,14 +74,26 @@ ramon-chat:
   notifications:
     chat_mention: "{username} mentioned you in {channel}"
     chat_message: "{username} posted in {channel}"
+    chat_channel_invite: "{username} added you to {channel}"
 
   ##
   # Forum-facing strings.
   ##
+  ##
+  # Shown by flarum/gdpr when a user reviews an export or erasure request.
+  ##
+  lib:
+    gdpr:
+      export_description: Your chat messages, their attachments' details, and the channels you belonged to.
+      anonymize_description: Your chat messages stay so the conversations remain readable, but are no longer attributed to you. Attachments, reactions, drafts and channel memberships are deleted.
+      delete_description: Your chat messages and attachments are deleted, along with your reactions, drafts and channel memberships.
+
   forum:
     nav:
       chat: Chat
       unread_channels: "{count} channels with unread messages"
+      unread_messages: "{count} unread messages"
+      unread_mentions: "{count} unread mentions"
 
     drawer:
       title: Chat
@@ -88,6 +104,7 @@ ramon-chat:
 
     sidebar:
       my_threads: My Threads
+      bookmarks: Bookmarks
       search: Search
       channels: Channels
       direct_messages: Direct Messages
@@ -99,6 +116,8 @@ ramon-chat:
     channel:
       threading_enabled: Threads enabled
       closed: This channel is closed. New messages cannot be sent.
+      join_to_post: Join this channel to send messages.
+      moderators_only: Only moderators can post in this channel.
       archived: This channel has been archived.
       archived_link: View the archived transcript
       no_messages: No messages yet. Say something.
@@ -151,6 +170,15 @@ ramon-chat:
         channel_closed: The channel was closed.
         channel_reopened: The channel was reopened.
         channel_archived: The channel was archived.
+        discussion_started: "{username} started a discussion: {title}"
+
+    # Messages the actor saved. The bookmark button has always existed; this is
+    # where they are read back.
+    bookmarks:
+      empty: You have not saved any messages yet.
+      no_text: (attachment only)
+      remove: Remove bookmark
+      remove_failed: The bookmark could not be removed.
 
     thread:
       title: Thread
@@ -197,6 +225,11 @@ ramon-chat:
       name_placeholder: e.g. general
       description: Description
       emoji: Emoji
+      image: Picture
+      image_help: Replaces the emoji while it is set. Square images work best.
+      image_upload: Upload picture
+      image_remove: Remove picture
+      image_failed: That picture could not be uploaded.
       category: Category
       no_category: No category (whole forum)
       visibility: Who can see this channel
@@ -204,6 +237,10 @@ ramon-chat:
       public_help: Anyone allowed by the category can find it in Browse and join it themselves.
       private: Private
       private_help: Invitation-only. It does not appear in Browse and only members can see it.
+      post_permission: Who can post
+      post_all: Everyone in the channel
+      post_moderators: Moderators only
+      post_permission_help: Moderators only turns the channel into an announcement board — everyone reads, only moderators write.
       category_help: The channel inherits this category's permissions. Leave blank to make it forum-wide.
       submit: Create channel
       failed: That channel could not be created.
@@ -254,6 +291,8 @@ ramon-chat:
       auto_join_help: Every existing and future user will be added to this channel.
       auto_join_on_reply: Add users who reply in this category
       auto_join_on_reply_help: Requires a category above. A user joins the first time they reply to a discussion there, and is not re-added if they later leave.
+      post_discussions: Announce new discussions from this category
+      post_discussions_help: Requires a category above. Each new discussion started there is announced in the channel.
       threading: Enable threads
       close_channel: Close channel
       reopen_channel: Reopen channel
@@ -261,6 +300,13 @@ ramon-chat:
       delete_channel: Delete channel
       delete_confirm: Deleting a channel cannot be undone. Delete it anyway?
       member_search: Filter members
+      add_member: Add someone by name
+      add_member_hint: Type at least two letters to find someone.
+      no_candidates: Nobody found, or everyone matching is already here.
+      member_added: "{username} was added to the channel."
+      member_removed: "{username} was removed from the channel."
+      remove_member: "Remove {username}"
+      remove_member_confirm: "Remove {username} from this channel?"
       no_members: No members match.
       save_failed: Could not save that change.
 
@@ -287,6 +333,15 @@ ramon-chat:
       unknown_editor: Unknown
       failed: The edit history could not be loaded.
 
+    notifications:
+      channel_invite: "{username} added you to {channel}"
+      someone: Someone
+
+    # The chat's own author label, used on messages it posts itself.
+    bot:
+      default_name: Bot
+      tag: BOT
+
     settings:
       title: Chat
       enabled: Enable chat for my account
@@ -295,6 +350,7 @@ ramon-chat:
       open_in_drawer: Open chat in a drawer instead of full screen
       sound: Notification sound
       sound_none: None
+      notify_channel_invite: Someone adds me to a chat channel
 
   ##
   # Admin-facing strings.
@@ -329,6 +385,10 @@ ramon-chat:
       icon_label: Chat icon
       icon_help: A Font Awesome class, e.g. fas fa-comments.
       show_icon_label: Show the chat icon
+      bot_name_label: Bot name
+      bot_name_help: The author shown on messages the chat posts itself, such as new-discussion announcements.
+      bot_avatar_label: Bot avatar
+      bot_avatar_help: A URL to the bot's picture. Left empty, its initial is shown instead.
       show_icon_help: Turn off to show only the name.
 
       threading_default: Enable threads on new channels by default
@@ -364,6 +424,19 @@ ramon-chat:
       create_thread: Start threads from a reply
       pin_message: Pin and unpin messages
       mention_channel_wide: Use @here and @all
+
+    # Who the chat posts as when it announces something itself.
+    bot:
+      title: Announcer
+      intro: New discussions in a bound category are announced in the channel. Choose who they are posted as.
+      upload: Upload picture
+      remove_upload: Remove picture
+      upload_failed: That picture could not be uploaded.
+      user_label: Post as a member instead
+      user_help: Choose an account and announcements become ordinary messages from that member — no bot name, no picture, no BOT tag.
+      user_search: Search members
+      user_active: Announcements are posted as this member.
+      use_bot: Use the bot instead
 
     webhooks:
       title: Inbound webhooks

@@ -2,6 +2,7 @@ import app from 'flarum/forum/app';
 import FormModal from 'flarum/common/components/FormModal';
 import type { IFormModalAttrs } from 'flarum/common/components/FormModal';
 import Button from 'flarum/common/components/Button';
+import LoadingIndicator from 'flarum/common/components/LoadingIndicator';
 import Stream from 'flarum/common/utils/Stream';
 import withAttr from 'flarum/common/utils/withAttr';
 import type Mithril from 'mithril';
@@ -31,12 +32,15 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
   private name!: Stream<string>;
   private description!: Stream<string>;
   private emoji!: Stream<string>;
+  private uploadingImage = false;
   private tagId!: Stream<string>;
   private threading!: Stream<boolean>;
   private autoJoin!: Stream<boolean>;
   private allowChannelWide!: Stream<boolean>;
   private autoJoinOnReply!: Stream<boolean>;
   private isPrivate!: Stream<boolean>;
+  private postPermission!: Stream<string>;
+  private postDiscussions!: Stream<boolean>;
 
   oninit(vnode: Mithril.Vnode<ChannelFormModalAttrs>): void {
     super.oninit(vnode);
@@ -58,6 +62,8 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
     // Public by default: a channel nobody can find is the surprising outcome, so
     // it has to be chosen rather than fallen into.
     this.isPrivate = Stream(channel ? Boolean(channel.isPrivate()) : false);
+    this.postPermission = Stream(channel?.postPermission() ?? 'all');
+    this.postDiscussions = Stream(channel ? Boolean(channel.postDiscussions()) : false);
   }
 
   protected isEditing(): boolean {
@@ -104,7 +110,10 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
             />
           </div>
 
+          {this.image()}
+
           {this.visibility()}
+          {this.posting()}
           {this.tagOptions()}
 
           <div className="Form-group">
@@ -142,6 +151,21 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
             </label>
             <div className="helpText">
               {app.translator.trans('ramon-chat.forum.info.auto_join_on_reply_help')}
+            </div>
+
+            {/* Sits beside auto-join-on-reply because both key off the bound
+                category, and both are meaningless without one. */}
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={this.postDiscussions()}
+                onchange={withAttr('checked', this.postDiscussions)}
+                disabled={this.loading}
+              />
+              {app.translator.trans('ramon-chat.forum.info.post_discussions')}
+            </label>
+            <div className="helpText">
+              {app.translator.trans('ramon-chat.forum.info.post_discussions_help')}
             </div>
 
             {/* Auto-join is admin-only: it can add every account on the forum. */}
@@ -187,6 +211,118 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
    * decision about who can find the channel at all — not a toggle whose unchecked
    * state should be inferred from its label.
    */
+  /**
+   * A picture for the channel, instead of its emoji.
+   *
+   * Only offered once the channel exists: the upload is addressed to a channel id,
+   * so on the create form there is nothing to attach it to yet. Setting the emoji
+   * now and the picture after saving is a smaller surprise than a control that
+   * silently does nothing on first use.
+   */
+  protected image(): Mithril.Children {
+    const channel = this.attrs.channel;
+
+    if (!channel) return null;
+
+    const url = channel.imageUrl();
+
+    return (
+      <div className="Form-group ChatChannelForm-image">
+        <label>{app.translator.trans('ramon-chat.forum.new_channel.image')}</label>
+        <div className="helpText">{app.translator.trans('ramon-chat.forum.new_channel.image_help')}</div>
+
+        <div className="ChatChannelForm-imageRow">
+          <div className="ChatChannelForm-imagePreview">
+            {url ? <img src={url} alt="" /> : <i className="fas fa-hashtag" aria-hidden="true" />}
+          </div>
+
+          {this.uploadingImage ? (
+            <LoadingIndicator display="inline" size="small" />
+          ) : (
+            <>
+              <label className="Button">
+                {app.translator.trans('ramon-chat.forum.new_channel.image_upload')}
+                <input
+                  type="file"
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  onchange={(e: Event) => this.uploadImage(e)}
+                />
+              </label>
+
+              {url ? (
+                <Button className="Button" onclick={() => this.clearImage()}>
+                  {app.translator.trans('ramon-chat.forum.new_channel.image_remove')}
+                </Button>
+              ) : null}
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  protected async uploadImage(e: Event): Promise<void> {
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    const channel = this.attrs.channel;
+
+    if (!file || !channel) return;
+
+    this.uploadingImage = true;
+    m.redraw();
+
+    const body = new FormData();
+    body.append('image', file);
+
+    try {
+      const response = await app.request<any>({
+        method: 'POST',
+        url: `${app.forum.attribute('apiUrl')}/chat/channels/${channel.id()}/image`,
+        // The default serializer would JSON-encode the FormData into "[object
+        // FormData]" and the request would arrive with no file at all.
+        serialize: (raw: any) => raw,
+        body,
+      });
+
+      channel.pushAttributes({ imageUrl: response?.data?.imageUrl ?? null });
+    } catch (err: any) {
+      app.alerts.show(
+        { type: 'error' },
+        err?.response?.errors?.[0]?.detail ??
+          app.translator.trans('ramon-chat.forum.new_channel.image_failed')
+      );
+    } finally {
+      this.uploadingImage = false;
+      // Cleared so re-picking the same file still fires a change event.
+      input.value = '';
+      m.redraw();
+    }
+  }
+
+  protected async clearImage(): Promise<void> {
+    const channel = this.attrs.channel;
+
+    if (!channel) return;
+
+    this.uploadingImage = true;
+    m.redraw();
+
+    try {
+      await app.request({
+        method: 'DELETE',
+        url: `${app.forum.attribute('apiUrl')}/chat/channels/${channel.id()}/image`,
+      });
+
+      channel.pushAttributes({ imageUrl: null });
+    } catch {
+      app.alerts.show({ type: 'error' }, app.translator.trans('ramon-chat.forum.new_channel.image_failed'));
+    } finally {
+      this.uploadingImage = false;
+      m.redraw();
+    }
+  }
+
   protected visibility(): Mithril.Children {
     return (
       <div className="Form-group">
@@ -215,6 +351,37 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
           {app.translator.trans('ramon-chat.forum.new_channel.private')}
         </label>
         <div className="helpText">{app.translator.trans('ramon-chat.forum.new_channel.private_help')}</div>
+      </div>
+    );
+  }
+
+  /**
+   * Who may post.
+   *
+   * A separate question from visibility: "who can see this" and "who can write in
+   * it" are independent, and a private channel only moderators post in is a
+   * perfectly ordinary announcement channel for an invited audience.
+   */
+  protected posting(): Mithril.Children {
+    return (
+      <div className="Form-group">
+        <label>{app.translator.trans('ramon-chat.forum.new_channel.post_permission')}</label>
+
+        <select
+          className="FormControl"
+          value={this.postPermission()}
+          onchange={withAttr('value', this.postPermission)}
+          disabled={this.loading}
+        >
+          <option value="all">
+            {app.translator.trans('ramon-chat.forum.new_channel.post_all', {}, true)}
+          </option>
+          <option value="moderators">
+            {app.translator.trans('ramon-chat.forum.new_channel.post_moderators', {}, true)}
+          </option>
+        </select>
+
+        <div className="helpText">{app.translator.trans('ramon-chat.forum.new_channel.post_permission_help')}</div>
       </div>
     );
   }
@@ -367,6 +534,8 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
       autoJoin: this.autoJoin(),
       autoJoinOnReply: this.autoJoinOnReply(),
       isPrivate: this.isPrivate(),
+      postPermission: this.postPermission(),
+      postDiscussions: this.postDiscussions(),
       tagId: this.tagId() ? Number(this.tagId()) : null,
     };
 

@@ -6,6 +6,7 @@ import classList from 'flarum/common/utils/classList';
 import type Mithril from 'mithril';
 
 import ChatDrawer from './ChatDrawer';
+import chatState from '../state/chat';
 import { chatTitle, chatIcon } from '../utils/branding';
 
 /**
@@ -43,14 +44,29 @@ export default class ChatNavButton<
       >
         {icon ? <Icon name={icon} className="Button-icon" /> : null}
 
+        {/* A count, the way core's notification bell shows one — not a dot.
+            A dot says "something happened" and leaves you to open the chat to find
+            out how much, which is the one question the header is there to answer.
+
+            Mentions still take precedence and keep their own colour: they are
+            addressed to you specifically, and collapsing them into the same number
+            as ambient channel traffic loses that. */}
         {mentions > 0 ? (
-          <span className="Bubble" data-digits={String(mentions).length} aria-hidden="true">
+          <span
+            className="Bubble Bubble--highlighted ChatNavButton-bubble"
+            data-digits={String(Math.min(mentions, 99)).length}
+            aria-hidden="true"
+          >
             {mentions > 99 ? '99+' : mentions}
           </span>
         ) : unread > 0 ? (
-          // Ambient unreads get a dot, not a number: a count for ordinary channel
-          // traffic is noise in a busy chat.
-          <span className="ChatNavButton-dot" aria-hidden="true" />
+          <span
+            className="Bubble ChatNavButton-bubble"
+            data-digits={String(Math.min(unread, 99)).length}
+            aria-hidden="true"
+          >
+            {unread > 99 ? '99+' : unread}
+          </span>
         ) : null}
 
         <span className="Button-label">
@@ -79,21 +95,35 @@ export default class ChatNavButton<
     m.route.set(app.route('chat.index'));
   }
 
+  /**
+   * Read through ChatState rather than off the user record directly.
+   *
+   * The serialised attribute is a snapshot from page render; the summary prefers
+   * the loaded channel list when there is one and falls back to that attribute
+   * otherwise — and realtime keeps the attribute moving. Reading the attribute
+   * here meant the dot only ever appeared after a reload, which is precisely when
+   * it is least useful.
+   */
   protected unreadChannels(): number {
-    return Number(app.session.user?.attribute<number>('chatUnreadChannelsCount') ?? 0);
+    return chatState.unreadSummary().messages;
   }
 
   protected unreadMentions(): number {
-    return Number(app.session.user?.attribute<number>('chatUnreadMentionsCount') ?? 0);
+    return chatState.unreadSummary().mentions;
   }
 
+  /**
+   * The bubble is aria-hidden, so this is the only thing a screen reader gets —
+   * and it has to say which kind of unread it is, because the two carry different
+   * urgency and the colour that distinguishes them is not announced.
+   */
   protected ariaLabel(mentions: number, hasUnread: boolean, label: string): string {
     if (mentions > 0) {
-      return app.translator.trans('ramon-chat.forum.nav.unread_channels', { count: mentions }, true);
+      return app.translator.trans('ramon-chat.forum.nav.unread_mentions', { count: mentions }, true);
     }
 
     if (hasUnread) {
-      return app.translator.trans('ramon-chat.forum.nav.unread_channels', { count: this.unreadChannels() }, true);
+      return app.translator.trans('ramon-chat.forum.nav.unread_messages', { count: this.unreadChannels() }, true);
     }
 
     return label;

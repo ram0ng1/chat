@@ -53,12 +53,6 @@ class ChannelPolicy extends AbstractPolicy
             return null;
         }
 
-        // Live membership is required in a direct channel — retaining read
-        // access to history after leaving does not grant the right to post.
-        if ($channel->isDirect()) {
-            return $channel->membershipFor($actor) !== null ? true : false;
-        }
-
         // An announcement channel: everyone reads, moderators write. Administrators
         // pass because `hasPermission` grants them everything, so there is no
         // separate admin branch to keep in step with this one.
@@ -67,7 +61,20 @@ class ChannelPolicy extends AbstractPolicy
             return false;
         }
 
-        return true;
+        // Membership is required to post in *any* channel, not only a direct one.
+        //
+        // Reading and writing are deliberately different rights here. A public
+        // channel stays readable to anyone who can see its category — that is what
+        // makes it public — but writing into a room you are not in is not something
+        // a link should grant. Somebody removed from a channel who still holds the
+        // URL could otherwise keep talking in it, which is the whole point of having
+        // removed them.
+        //
+        // Joining is one click for a public channel, and the composer is replaced by
+        // that button when this returns false, so the cost to a legitimate visitor
+        // is a single deliberate act. For a private channel the join is refused
+        // outright, so removal is final until somebody adds them back.
+        return $channel->membershipFor($actor) !== null ? true : false;
     }
 
     public function join(User $actor, Channel $channel): ?bool

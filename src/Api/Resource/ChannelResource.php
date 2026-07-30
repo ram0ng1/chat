@@ -17,6 +17,7 @@ use Flarum\Api\Schema;
 use Flarum\Api\Sort\SortColumn;
 use Flarum\Foundation\ValidationException;
 use Flarum\Locale\Translator;
+use Flarum\Notification\NotificationSyncer;
 use Flarum\User\User;
 use Illuminate\Contracts\Events\Dispatcher as Events;
 use Illuminate\Database\Eloquent\Builder;
@@ -27,8 +28,10 @@ use Ramon\Chat\ChannelUser;
 use Ramon\Chat\Event\ChannelStatusChanged;
 use Ramon\Chat\Event\ChannelWasCreated;
 use Ramon\Chat\Event\ChannelWasDeleted;
+use Ramon\Chat\Event\ChannelWasEdited;
 use Ramon\Chat\Event\UserJoinedChannel;
 use Ramon\Chat\Event\UserLeftChannel;
+use Ramon\Chat\Notification\ChannelInviteBlueprint;
 use Ramon\Chat\Service\ChannelArchiver;
 use Ramon\Chat\Service\MembershipManager;
 use Ramon\Chat\Service\UnreadTracker;
@@ -45,7 +48,8 @@ class ChannelResource extends AbstractDatabaseResource
         protected Events $events,
         protected UnreadTracker $unread,
         protected MembershipManager $memberships,
-        protected ChannelArchiver $archiver
+        protected ChannelArchiver $archiver,
+        protected NotificationSyncer $notifications
     ) {
     }
 
@@ -84,8 +88,10 @@ class ChannelResource extends AbstractDatabaseResource
             $channel->threading_enabled = (bool) resolve(\Flarum\Settings\SettingsRepositoryInterface::class)
                 ->get('ramon-chat.threading_default', false);
             $channel->is_private = false;
+            $channel->post_permission = Channel::POST_ALL;
             $channel->auto_join = false;
             $channel->auto_join_on_reply = false;
+            $channel->post_discussions = false;
             $channel->allow_channel_wide_mentions = true;
             $channel->messages_count = 0;
             $channel->user_count = 0;
@@ -120,6 +126,13 @@ class ChannelResource extends AbstractDatabaseResource
         parent::saveModel($model, $context);
 
         if (! $isNew) {
+            // An edit that changed nothing is not worth broadcasting. `wasChanged`
+            // reflects what the save actually wrote, so re-saving identical values
+            // stays silent.
+            if ($model->wasChanged()) {
+                $this->events->dispatch(new ChannelWasEdited($model, $context->getActor()));
+            }
+
             return;
         }
 
@@ -225,6 +238,141 @@ class ChannelResource extends AbstractDatabaseResource
                     $this->events->dispatch(new UserJoinedChannel($channel, $actor, $actor, $hidden));
                 })
                 ->response(fn () => new EmptyResponse(204)),
+
+            // Adding other people. Separate from `join`, which is the actor letting
+            // themselves in: this puts someone else in a room, and for a private
+            // channel it is the only way in, so it is the invitation mechanism.
+            Endpoint\Endpoint::make('addMembers')
+                ->route('POST', '/{id}/members')
+                ->authenticated()
+                ->action(function (Context $context) {
+                    /** @var Channel $channel */
+                    $channel = $context->model;
+                    $actor = $context->getActor();
+
+                    if (! $actor->can('manageMembers', $channel)) {
+                        throw new ForbiddenException();
+                    }
+
+                    $ids = array_values(array_unique(array_filter(array_map(
+                        'intval',
+                        (array) Arr::get($context->body(), 'data.attributes.userIds', [])
+                    ))));
+
+                    if ($ids === []) {
+                        throw new ValidationException([
+                            'userIds' => $this->translator->trans('ramon-chat.api.members_empty'),
+                        ]);
+                    }
+
+                    if (count($ids) > 50) {
+                        throw new ValidationException([
+                            'userIds' => $this->translator->trans('ramon-chat.api.members_too_many', ['max' => 50]),
+                        ]);
+                    }
+
+                    // Only real users, and only ones the actor can see — a bare id
+                    // list must not be a way to discover which accounts exist.
+                    $users = User::query()
+                        ->whereVisibleTo($actor)
+                        ->whereIn('id', $ids)
+                        ->get();
+
+                    $added = [];
+
+                    foreach ($users as $user) {
+                        // Already here: joining again would be a no-op, but it would
+                        // still fire a notification telling them about a channel
+                        // they have been in for weeks.
+                        if ($channel->membershipFor($user) !== null) {
+                            continue;
+                        }
+
+                        $this->memberships->join($channel, $user);
+
+                        $this->events->dispatch(new UserJoinedChannel($channel, $user, $actor));
+
+                        $added[] = $user;
+                    }
+
+                    // Told after the fact rather than asked first: this endpoint
+                    // adds people, so the notification is "you were added", and its
+                    // job is to make sure a channel never just appears in someone's
+                    // sidebar with no explanation of where it came from.
+                    if ($added !== []) {
+                        $this->notifications->sync(
+                            new ChannelInviteBlueprint($channel, $actor),
+                            $added
+                        );
+                    }
+
+                    return $channel;
+                })
+                ->defaultInclude(['participants']),
+
+            // Removing someone else. `leave` is the self-service counterpart; this is
+            // the moderation one, and it is a separate endpoint precisely so the
+            // permission check is not a branch inside `leave` that has to distinguish
+            // "me" from "them" on every ordinary departure.
+            Endpoint\Endpoint::make('removeMember')
+                ->route('POST', '/{id}/members/remove')
+                ->authenticated()
+                ->action(function (Context $context) {
+                    /** @var Channel $channel */
+                    $channel = $context->model;
+                    $actor = $context->getActor();
+
+                    if (! $actor->can('manageMembers', $channel)) {
+                        throw new ForbiddenException();
+                    }
+
+                    $userId = (int) Arr::get($context->body(), 'data.attributes.userId', 0);
+
+                    // Visibility-scoped for the same reason `addMembers` is: an id
+                    // that resolves differently depending on who asks must not become
+                    // a way to probe for accounts.
+                    $user = $userId > 0
+                        ? User::query()->whereVisibleTo($actor)->whereKey($userId)->first()
+                        : null;
+
+                    if ($user === null) {
+                        throw new ValidationException([
+                            'userId' => $this->translator->trans('ramon-chat.api.members_empty'),
+                        ]);
+                    }
+
+                    // Removing yourself is what `leave` is for. Routing it here would
+                    // work, but it would let someone without manageMembers be refused
+                    // permission to leave a channel they are standing in.
+                    if ((int) $user->id === (int) $actor->id) {
+                        throw new ValidationException([
+                            'userId' => $this->translator->trans('ramon-chat.api.cannot_remove_self'),
+                        ]);
+                    }
+
+                    // A moderator must not be able to eject someone who outranks them;
+                    // otherwise the weaker permission removes the stronger one, and two
+                    // moderators can take turns throwing each other out. Administrators
+                    // are exempt — the whole point of the role is that it is final.
+                    if (! $actor->isAdmin() && $user->can('ramon-chat.moderate')) {
+                        throw new ForbiddenException();
+                    }
+
+                    $membership = $this->memberships->leave($channel, $user);
+
+                    // Not a member — nothing to do, and reporting success on a no-op
+                    // would tell the caller a removal happened that did not.
+                    if ($membership === null) {
+                        throw new ValidationException([
+                            'userId' => $this->translator->trans('ramon-chat.api.not_a_member'),
+                        ]);
+                    }
+
+                    $this->events->dispatch(new UserLeftChannel($channel, $user, $actor));
+
+                    return $channel;
+                })
+                ->defaultInclude(['participants']),
 
             Endpoint\Endpoint::make('leave')
                 ->route('POST', '/{id}/leave')
@@ -353,6 +501,11 @@ class ChannelResource extends AbstractDatabaseResource
             // shortcode (what an API client or an older row may carry). Anything
             // else was previously accepted and rendered as literal text, e.g.
             // ":speech_balloon:" spilling out of a 38px avatar circle.
+            // Read-only: the picture is set through its own multipart endpoint,
+            // not by writing a URL, so there is nothing for a client to assign here.
+            Schema\Str::make('imageUrl')
+                ->get(fn (Channel $c) => $c->imageUrl()),
+
             Schema\Str::make('emoji')
                 ->nullable()
                 ->maxLength(60)
@@ -368,6 +521,17 @@ class ChannelResource extends AbstractDatabaseResource
                 ->get(fn (Channel $c) => $c->isPrivate())
                 ->writable(fn (Channel $c, Context $context) => $this->mayWriteCategoryField($c, $context)),
 
+            // Who may post: everyone who can be here, or moderators only.
+            // Validated against the two known values rather than trusted, so a
+            // typo cannot silently produce a channel nobody can post in.
+            Schema\Str::make('postPermission')
+                ->writable(fn (Channel $c, Context $context) => $this->mayWriteCategoryField($c, $context))
+                ->set(function (Channel $channel, $value) {
+                    $channel->post_permission = $value === Channel::POST_MODERATORS
+                        ? Channel::POST_MODERATORS
+                        : Channel::POST_ALL;
+                }),
+
             Schema\Boolean::make('threadingEnabled')
                 ->writable(fn (Channel $c, Context $context) => $this->mayWriteCategoryField($c, $context)),
 
@@ -377,6 +541,10 @@ class ChannelResource extends AbstractDatabaseResource
 
             // Grows the channel from participation in its bound category, rather
             // than adding every account up front like autoJoin does.
+            // Carries the bound category's new discussions into the channel.
+            Schema\Boolean::make('postDiscussions')
+                ->writable(fn (Channel $c, Context $context) => $this->mayWriteCategoryField($c, $context)),
+
             Schema\Boolean::make('autoJoinOnReply')
                 ->writable(fn (Channel $c, Context $context) => $this->mayWriteCategoryField($c, $context)),
 

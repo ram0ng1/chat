@@ -13,18 +13,26 @@ app.initializers.add('ramon-chat', () => {
   app.store.models['chat-webhooks'] = Webhook;
   app.store.models['chat-channels'] = Channel;
 
-  // The extension page is replaced wholesale rather than adding webhooks as one
-  // more setting: webhook rows are records, not settings, and the settings grid
-  // has no shape for a list with per-row actions. WebhooksPage extends
-  // ExtensionPage, so the standard settings surface is still rendered above it.
-  app.routes['extension.ramon-chat'] = { path: '/extension/ramon-chat', component: WebhooksPage };
-
   // Flarum 2 exposes the admin registration surface as `app.registry`
   // (AdminRegistry). `app.extensionData` was the Flarum 1 name and does not
   // exist here — reaching for it throws during initialize(), before the admin
   // app has mounted anything.
   app.registry
     .for('ramon-chat')
+
+    // The extension page is replaced wholesale rather than adding webhooks and the
+    // announcer as more settings rows: webhooks are records, not settings, and the
+    // announcer is an exclusive choice — neither has a shape the settings grid can
+    // express.
+    //
+    // Through `registerPage`, not `app.routes`. Core registers ONE admin route,
+    // `extension: /extension/:id`, and picks the component through
+    // ExtensionPageResolver, which asks the registry for a page registered under
+    // the extension's id. Assigning `app.routes['extension.ramon-chat']` therefore
+    // created a route that nothing ever matched: the default ExtensionPage kept
+    // rendering, so the webhooks list and the announcer panel were simply absent
+    // with no error to explain why.
+    .registerPage(WebhooksPage)
 
     // ── Appearance ────────────────────────────────────────────────────────────
     .registerSetting({

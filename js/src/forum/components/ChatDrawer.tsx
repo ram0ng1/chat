@@ -10,6 +10,7 @@ import chatState from '../state/chat';
 import ChatSidebar from './ChatSidebar';
 import ChannelView from './ChannelView';
 import PinnedPanel from './PinnedPanel';
+import ThreadPanel from './ThreadPanel';
 import { chatTitle, chatIcon } from '../utils/branding';
 
 /**
@@ -51,13 +52,23 @@ export default class ChatDrawer extends Component<ComponentAttrs> {
 
           {/* Collapsed, the drawer is a bar with no stream to look at — so unread
               activity has to surface on the header itself or it goes unnoticed.
-              A mention shows its count; ambient traffic gets a quiet dot. */}
+              Both cases show a number: a dot says "something happened" and leaves
+              you to open the drawer to find out how much. Mentions keep their own
+              colour because they are addressed to you specifically. */}
           {chatState.drawerCollapsed && unread.mentions > 0 ? (
-            <span className="ChatDrawer-badge" aria-label={String(unread.mentions)}>
+            <span
+              className="ChatDrawer-badge ChatDrawer-badge--mention"
+              title={app.translator.trans('ramon-chat.forum.nav.unread_mentions', { count: unread.mentions }, true)}
+            >
               {unread.mentions > 99 ? '99+' : unread.mentions}
             </span>
-          ) : chatState.drawerCollapsed && unread.channels > 0 ? (
-            <span className="ChatDrawer-dot" aria-hidden="true" />
+          ) : chatState.drawerCollapsed && unread.messages > 0 ? (
+            <span
+              className="ChatDrawer-badge"
+              title={app.translator.trans('ramon-chat.forum.nav.unread_messages', { count: unread.messages }, true)}
+            >
+              {unread.messages > 99 ? '99+' : unread.messages}
+            </span>
           ) : null}
 
           <div className="ChatDrawer-actions">
@@ -96,33 +107,71 @@ export default class ChatDrawer extends Component<ComponentAttrs> {
         </div>
 
         {chatState.drawerCollapsed ? null : (
-          <div className="ChatDrawer-body">
-            {channel ? (
-              <ChannelView key={channel.id()} channel={channel} state={chatState} />
-            ) : (
-              <ChatSidebar state={chatState} onSelect={(c: Channel) => this.select(c)} />
-            )}
-
-            {/* The drawer has no room for a side panel, so the pinned list covers
-                the conversation instead — the same arrangement the thread panel
-                uses below the mobile breakpoint. Without this the header's pin
-                button toggled a state nothing rendered, and clicking it did
-                nothing at all. */}
-            {channel && chatState.showPinned ? (
-              <PinnedPanel
-                key={`pinned-${channel.id()}`}
-                channel={channel}
-                state={chatState}
-                onClose={() => {
-                  chatState.showPinned = false;
-                  m.redraw();
-                }}
-              />
-            ) : null}
-          </div>
+          <div className="ChatDrawer-body">{this.body(channel)}</div>
         )}
       </div>
     );
+  }
+
+  /**
+   * The drawer's contents: the conversation, or the channel list, plus the pinned
+   * panel over the top when it is open.
+   *
+   * Built as an array rather than a JSX fragment with a conditional slot. Mithril
+   * decides a fragment is keyed from its first child and then demands every other
+   * child be keyed too — and it counts `null` as unkeyed. `[<ChannelView key=…/>,
+   * null]`, which is what a closed pinned panel produced, therefore threw "In
+   * fragments, vnodes must either all have keys or none have keys" on every redraw.
+   * The drawer is mounted at the app root, so that fired on every page of the forum,
+   * not only inside the chat.
+   */
+  protected body(channel: Channel | null): Mithril.Children {
+    const panes: Mithril.Children[] = [
+      channel ? (
+        <ChannelView key={`channel-${channel.id()}`} channel={channel} state={chatState} embedded />
+      ) : (
+        <ChatSidebar key="sidebar" state={chatState} onSelect={(c: Channel) => this.select(c)} />
+      ),
+    ];
+
+    // A thread takes the same overlay slot as the pinned list. Only one of the two
+    // can be open: opening a thread is what the reply indicator does, and the
+    // pinned toggle clears the thread, so they cannot both claim the space.
+    if (channel && chatState.activeThreadId !== null) {
+      panes.push(
+        <ThreadPanel
+          key={`thread-${chatState.activeThreadId}`}
+          channel={channel}
+          threadId={chatState.activeThreadId}
+          state={chatState}
+          onClose={() => {
+            chatState.closeThread();
+            m.redraw();
+          }}
+        />
+      );
+
+      return panes;
+    }
+
+    // The drawer has no room for a side panel, so the pinned list covers the
+    // conversation instead — the arrangement the thread panel uses on a phone.
+    if (channel && chatState.showPinned) {
+      panes.push(
+        <PinnedPanel
+          key={`pinned-${channel.id()}`}
+          channel={channel}
+          state={chatState}
+          embedded
+          onClose={() => {
+            chatState.showPinned = false;
+            m.redraw();
+          }}
+        />
+      );
+    }
+
+    return panes;
   }
 
   protected select(channel: Channel): void {
@@ -147,11 +196,15 @@ export default class ChatDrawer extends Component<ComponentAttrs> {
   /**
    * Hands the current channel over to the full-screen page. The drawer closes so
    * the two never render the same conversation at once.
+   *
+   * Suspended rather than closed: the user did not dismiss the chat, they moved it,
+   * so leaving the full-screen page puts the drawer back where it was. See
+   * ChatPage.onremove, which is what restores it.
    */
   protected goFullScreen(): void {
     const id = chatState.activeChannelId;
 
-    chatState.setDrawerOpen(false);
+    chatState.suspendDrawer();
 
     m.route.set(id ? app.route('chat.channel', { id }) : app.route('chat.index'));
   }

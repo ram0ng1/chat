@@ -2,6 +2,7 @@ import app from 'flarum/admin/app';
 import ExtensionPage from 'flarum/admin/components/ExtensionPage';
 import Button from 'flarum/common/components/Button';
 import LoadingIndicator from 'flarum/common/components/LoadingIndicator';
+import BotSettings from './BotSettings';
 import Switch from 'flarum/common/components/Switch';
 import type Mithril from 'mithril';
 
@@ -40,16 +41,45 @@ export default class WebhooksPage extends ExtensionPage {
     this.load();
   }
 
-  content() {
+  /**
+   * `super.content()` first, and it is not optional.
+   *
+   * ExtensionPage.content() is where core renders the entire registered-settings
+   * grid — every `registerSetting` call, plus the save and reset buttons. This
+   * class overrode it without calling super, so none of those settings were ever
+   * drawn: the extension page showed webhooks and nothing else.
+   */
+  content(vnode: Mithril.VnodeDOM<any, any>) {
+    // A fragment, not a wrapper <div>.
+    //
+    // The base signature wants a single vnode, so the first attempt wrapped both
+    // halves in a plain div — and that extra DOM node broke the layout the core
+    // stylesheet builds around `.ExtensionPage-settings` being where it expects it,
+    // leaving the webhook form as a column of stretched boxes. A fragment satisfies
+    // the signature without adding an element, so the cascade is untouched.
+    //
+    // Both children are unkeyed, which matters: Mithril decides a fragment is keyed
+    // from its first child and then demands every sibling be keyed too.
     return (
-      <div className="ExtensionPage-settings">
-        <div className="container">
-          <h3>{app.translator.trans('ramon-chat.admin.webhooks.title')}</h3>
-          <p className="helpText">{app.translator.trans('ramon-chat.admin.webhooks.help')}</p>
+      <>
+        {super.content(vnode)}
 
-          {this.loadingHooks ? <LoadingIndicator /> : [this.createForm(), this.list()]}
+        <div className="ExtensionPage-settings">
+          <div className="container">
+            {/* Who the chat posts as. Its own component rather than settings rows
+                because the choice is exclusive — an announcing account makes the
+                bot's name and picture moot, so the form has to collapse rather
+                than show controls that do nothing. */}
+            <h3>{app.translator.trans('ramon-chat.admin.bot.title')}</h3>
+            <BotSettings />
+
+            <h3>{app.translator.trans('ramon-chat.admin.webhooks.title')}</h3>
+            <p className="helpText">{app.translator.trans('ramon-chat.admin.webhooks.help')}</p>
+
+            {this.loadingHooks ? <LoadingIndicator /> : [this.createForm(), this.list()]}
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 

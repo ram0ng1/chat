@@ -19,6 +19,5 @@ return Migration::addPermissions([
     'ramon-chat.upload'              => Group::MODERATOR_ID,
     'ramon-chat.react'               => Group::MODERATOR_ID,
     'ramon-chat.mentionChannelWide'  => Group::MODERATOR_ID,
-    'ramon-chat.createChannel'       => Group::ADMINISTRATOR_ID,
     'ramon-chat.moderate'            => Group::MODERATOR_ID,
 ]);

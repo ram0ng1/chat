@@ -1,232 +1,105 @@
-# Chat — `ramon/chat`
+<p align="center">
+  <img src="icon.svg" width="80" height="80" alt="Chat">
+</p>
 
-Discourse-style realtime chat for **Flarum v2**: category-scoped public channels,
-threads, direct and group messages, reactions, mentions, uploads and search —
-integrated with Flarum's discussions, notifications and search rather than bolted
-beside them.
+<h1 align="center">Chat</h1>
 
-Styled against the **Avocado** design system.
+<p align="center">
+  <a href="https://github.com/ram0ng1/chat/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/ram0ng1/chat/ci.yml?branch=main&style=flat-square&label=ci"></a>
+  <a href="https://packagist.org/packages/ramon/chat"><img alt="Packagist" src="https://img.shields.io/packagist/v/ramon/chat?style=flat-square&label=packagist"></a>
+  <a href="https://packagist.org/packages/ramon/chat"><img alt="Downloads" src="https://img.shields.io/packagist/dt/ramon/chat?style=flat-square"></a>
+  <img alt="Flarum" src="https://img.shields.io/badge/flarum-2.x-e7672e?style=flat-square">
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square"></a>
+  <a href="https://donate.stripe.com/fZe5o66nebkf39S28a"><img alt="Donate" src="https://img.shields.io/badge/donate-stripe-6772E5?style=flat-square"></a>
+</p>
 
----
+<p align="center">Discourse-style realtime chat for Flarum 2.</p>
 
-## Provenance
+Chat adds public channels, threads and direct messages to a Flarum forum, wired into
+the parts of Flarum you already run: a channel bound to a category inherits that
+category's permissions, mentions arrive through Flarum's notifications, and messages
+are searchable alongside everything else.
 
-This repository began as a clone of [`Push-EDX/flarum-ext-chat`][upstream], whose
-last release targeted **Flarum 0.1.0-beta.8 (2018)**. That codebase used Mithril
-0.2 (`controller`/`config`/`context`), the removed `ConfigureApiRoutes` and
-`Serializing` events, `app.pusher`, and inlined ~85 KB of base64 audio into a
-component file. None of it survives contact with Flarum 2, so this is a **ground-up
-rewrite**, not a migration.
+I started it because every chat extension I tried sat *beside* the forum rather than
+inside it — a second permission system to keep in sync, a second notification inbox,
+and a second place for conversations to go missing.
 
-The original tree is preserved in git history at `fa24070` (see
-`.legacy-upstream-ref.txt`). Nothing was silently discarded.
+## What it does
 
-[upstream]: https://github.com/Push-EDX/flarum-ext-chat
+- Public channels scoped to a category, so category permissions govern who reads and posts — there is no parallel permission surface to keep in sync
+- Threads on any message, each with its own reply tracking and notification level
+- Direct and group messages, with the invite delivered through Flarum's notifications
+- Private channels an admin adds people to, and removes people from
+- Realtime delivery through `flarum/realtime`, falling back to polling when it is not installed
+- Reactions, `@` mentions including `@here` and `@all`, image and file uploads, and full-text search across every channel you can read
+- Announces new discussions from a bound category into the channel, posted by the chat's bot or by a member you nominate
+- Pinned messages, edit history, and moderation with attribution — a removed message names the moderator who removed it
+- A drawer that follows you around the forum and a full-screen page, sharing one conversation state
 
----
+## Installation
 
-## Status
+```sh
+composer require ramon/chat
+php flarum migrate
+php flarum cache:clear
+```
 
-**Installed and verified** on Flarum **v2.0.0-rc.5** / PHP 8.5.4 / MySQL 8.0.30.
+Then enable Chat on the Extensions page of the admin panel.
 
-| Check | Result |
+Permissions start with moderators only, mirroring how Discourse ships chat
+staff-first. Grant `ramon-chat.use` to Members in **Admin → Permissions** once you
+are ready to open it up.
+
+## Permissions
+
+Channels inherit the `viewForum` permission of the tag they are bound to, so a
+private category produces a private channel with no extra configuration. On top of
+that, Chat registers the permissions a category cannot express:
+
+| Permission | Grants |
 |---|---|
-| `php -l` across the tree | 96 files, 0 errors |
-| `tsc --noEmit` | 0 errors |
-| `webpack --mode production` | compiles; `forum.js` ~48 KB, `admin.js` ~3.7 KB |
-| Migrations applied | 13/13 registered, 12 tables, 31 foreign keys |
-| Permissions seeded | 7 rows |
-| End-to-end smoke test | **35/35 passing** |
-| `GET /` and `GET /chat` | 200, chat bundle + `canUseChat` present |
-| `GET /api/chat-channels` unauthenticated | 401 `not_authenticated` (correct) |
+| `ramon-chat.use` | Open the chat at all |
+| `ramon-chat.createChannel` | Create channels |
+| `ramon-chat.editChannel` | Rename and reconfigure channels |
+| `ramon-chat.createThread` | Start a thread from a message |
+| `ramon-chat.pinMessage` | Pin and unpin messages |
+| `ramon-chat.startDirect` | Start direct and group messages |
+| `ramon-chat.upload` | Attach images and files |
+| `ramon-chat.react` | React to messages |
+| `ramon-chat.mentionChannelWide` | Use `@here` and `@all` |
+| `ramon-chat.moderate` | Delete anyone's message, manage members, join unseen |
 
-The smoke test exercises what only a real database can validate: the per-channel
-`number` sequence under repeated inserts, the visibility scopes (including that a
-guest sees nothing), `MessageDispatcher`'s transaction, thread creation and
-back-fill, mention resolution and fan-out targets, unread counters against
-`recalculate()`, every search filter, and the policy semantics — including that a
-closed channel blocks posting *for admins too*.
+Each channel additionally chooses who may post: everyone, or moderators only.
 
-### Complete
+## The announcer
 
-| Area | What's there |
-|---|---|
-| **Schema** | 13 migrations. `chat_channels`, `chat_channel_user`, `chat_threads`, `chat_thread_user`, `chat_messages`, `chat_message_reactions`, `chat_message_mentions`, `chat_uploads`, `chat_drafts`, `chat_bookmarks`, `chat_message_revisions`, `chat_webhooks`, plus default permissions. |
-| **Models** | 11 Eloquent models with relations, casts, and derived helpers. Per-channel monotonic `number` sequence assigned via SQL subquery so concurrent sends cannot collide. |
-| **Security** | 3 visibility scopes + 4 policies. Category channels **inherit their bound tag's `viewForum` permission**, so category permissions govern chat access with no parallel permission surface. Fails closed when `flarum/tags` is absent. |
-| **Service layer** | `MessageDispatcher` (single transactional send path), `MentionResolver`, `UnreadTracker`, `MembershipManager`, `RateLimiter`, `ChannelArchiver`, `TranscriptRenderer`. |
-| **API** | `ChannelResource`, `MessageResource`, `ThreadResource`, `UploadResource`. Custom endpoints for read/join/leave/notifications/status/archive, send/edit/delete/restore/react/bookmark, thread read/tracking. Filtering lives in `src/Search/` — 3 searchers, 12 filters. |
-| **Design system** | LESS anchored to Avocado tokens, with a fallback layer mapping every `--avocado-*` token onto a Flarum core variable so the chat is legible on any theme. Dark mode, reduced-motion, and a full component sheet. |
-| **Admin** | Settings page (retention, limits, uploads, behaviour) + 7 registered permissions. |
-| **Locale** | `en.yml` and `pt-BR.yml`, 194 keys each. |
+When a channel is bound to a category, new discussions in that category are posted
+into the channel. Admin chooses who posts them:
 
-Also complete: 7 controllers, 2 notification blueprints, 4 listeners, the retention
-command, realtime broadcasting, 3 searchers with 12 filters, and the frontend core
-(state, drawer, full-screen page, sidebar, channel view, message rows, composer,
-realtime client with a polling fallback). Locale is complete in **en** and
-**pt-BR**, 194 keys each, key sets verified identical.
-
-### Still to build — see [`docs/ROADMAP.md`](docs/ROADMAP.md)
-
-Phases 3–4: thread panel UI, `@`/`:` autocomplete and emoji picker, browse-channels
-page, channel info panel, search UI, selection mode (quote/copy/move), webhook admin
-CRUD, presence halo, edit-history viewer, flagging, keyboard shortcuts, and tests.
-
-The backend for most of these already exists — `TranscriptRenderer`,
-`ChannelArchiver`, `MoveMessagesController`, `Webhook`, and the bookmark and
-participating filters are all in place and unused by the UI so far.
-
----
-
-## Architecture notes
-
-Decisions that are load-bearing and non-obvious:
-
-**Channels inherit tag permissions.** A category channel stores a `tag_id` and its
-visibility scope resolves through `Tag::whereHasPermission($actor, 'viewForum')`.
-Creating a channel on a restricted category restricts the channel, with no second
-permission model to keep in sync. When `flarum/tags` is unavailable, tag-bound
-channels become **invisible** rather than public — the only safe direction for an
-inherited-permission model.
-
-**Policies return `?bool`, not `bool`.** Flarum's `Gate` only applies its
-`isAdmin()` fallback when *no* policy reached a decision. Returning `false` from a
-policy therefore denies admins too. Every policy here returns `true` to grant,
-`false` only for structural invariants that must hold for everyone (posting into an
-archived channel, editing a system message), and `null` when the actor merely
-lacks a permission. Getting this backwards silently locks admins out of their own
-forum, which is why it is called out here.
-
-**Moderators delete, authors edit.** `MessagePolicy::edit` refuses non-authors
-outright, including moderators. Silently rewriting attributed speech is a
-different power from removing it, and Discourse draws the same line.
-
-**Flarum 2 has no JSON:API resource filters.**
-`AbstractDatabaseResource::filters()` is `final` and throws, pointing extensions at
-the search driver. Every `filter[...]` therefore goes through a searcher
-(`ChannelSearcher`, `MessageSearcher`, `ThreadSearcher`) plus `FilterInterface`
-implementations in `src/Search/Filter/`; `Endpoint\Index` routes through
-`SearchManager` once a model is registered as searchable. Declaring a `filters()`
-method on a resource is a fatal error at boot, not a no-op.
-
-**Chat is never broadcast on the `public` websocket channel.** `flarum/realtime`
-offers only `public` (every connected client, guests included) and
-`private-user=<id>`. Since chat channels are permission-scoped, putting a message
-on `public` would hand every restricted channel to every browser. `ChatBroadcaster`
-addresses each recipient's private channel instead, choosing the audience as
-*connected ∩ members* and then re-checking the visibility scope — membership rows
-outlive permission changes, so the second check is not redundant.
-
-**Frontend startup runs from `extend(app, 'mount')` — the instance, not
-`ForumApplication.prototype`, and not `app.beforeMount()`.** Four constraints
-force this shape, and getting it wrong took the whole forum down once:
-
-- `Application.boot()` runs the initializers *before* it assigns `app.forum` and
-  `app.session`, so neither can be read at initializer time.
-- `mount()` is what calls `m.route()`. Core mounts its own secondary roots
-  (navigation, header) *after* that call, with a comment saying so. Mounting a
-  Mithril root earlier attaches it to a router that does not exist yet.
-- `runBeforeMount()` has **no** try/catch. Anything thrown there stops `mount()`
-  from ever running, and the symptom is not a chat error — it is a forum that
-  renders nothing, cannot open a discussion, and cannot create anything.
-- `ForumApplication` cannot be imported at initializer time. Core registers it via
-  `flarum.reg.addChunkModule`, so `flarum.reg.get('core', 'forum/ForumApplication')`
-  resolves to `undefined` until that chunk executes, and `.prototype` on it is a
-  TypeError. `flarum/forum/app` — the instance — is available, so extending the
-  instance installs an own property that shadows the prototype method; `boot()`
-  calls `this.mount()`, so the override is picked up.
-
-The startup block is additionally wrapped in try/catch. `extend()` already traps
-callback errors via `handleErrorOnce`, but the inner guard keeps a chat failure
-from even being reported as a forum error.
-
-The general rule this cost three attempts to learn: **only import core modules that
-are proven to resolve eagerly.** `forum/app`, `common/extend`, `common/Component`,
-`common/components/*` and `common/helpers/*` all do. Anything else should be reached
-through the string form of `extend()`/`override()`, which defers via
-`flarum.reg.onLoad`, or not imported at all.
-
-**Admin registration is `app.registry`, not `app.extensionData`.** `extensionData`
-is the Flarum 1 name and is simply absent in Flarum 2, where the surface is
-`AdminRegistry` exposed as `app.registry`. Reading `.for()` off `undefined` aborts
-the admin initializer loop and takes the entire admin panel with it.
-
-**A failed notification must not fail the message.** On the sync queue driver
-`NotificationSyncer` mails inline, so an unreachable mail server would otherwise
-propagate out of the listener and abort the send. `SendChatNotifications` catches
-and logs instead: a message that was accepted stays accepted.
-
-**Unread state is denormalised.** The sidebar renders every followed channel on
-every draw, so counters live on `chat_channel_user` rather than being computed as
-"rows newer than `last_read_message_id`". `UnreadTracker::recalculate()` rebuilds
-them from source after deletes and moves, where incremental drift is possible.
-
-**Muting ≠ level 0.** A muted channel stops contributing unread badges as well as
-notifications; level 0 only suppresses notifications. Both are needed.
-
-**One send path.** All user-authored messages go through
-`MessageDispatcher::send()`, which holds validation, rate limiting, mention
-resolution, thread bookkeeping, upload binding, counter maintenance and unread
-fan-out in a single transaction. Bypassing it will produce inconsistent counters.
-
----
+- **The bot**, by default — an ordinary message with no account behind it. Its name and picture are settings, so there is nothing to log into and nothing to impersonate.
+- **A member you nominate**, in which case announcements become ordinary messages from that account and no bot appears at all.
 
 ## Requirements
 
 - PHP 8.3+
 - Flarum ^2.0
 - `flarum/tags` — for category-scoped channels *(optional; forum-wide channels work without it)*
-- `flarum/realtime` — for live delivery, typing and presence *(optional; polling fallback otherwise)*
-- `flarum/mentions` — for `@user` / `@group` parity with discussions *(optional)*
+- `flarum/realtime` — for live delivery, typing and presence *(optional; polls otherwise)*
+- `flarum/mentions` — for `@user` parity with discussions *(optional)*
 - `flarum/emoji` — for `:shortcode:` rendering *(optional)*
 
-## Permissions
+`flarum/gdpr` and `flarum/audit` are supported when present, through conditional
+extenders, so neither is a dependency.
 
-| Permission | Default |
-|---|---|
-| `ramon-chat.use` | Moderators |
-| `ramon-chat.startDirect` | Moderators |
-| `ramon-chat.upload` | Moderators |
-| `ramon-chat.react` | Moderators |
-| `ramon-chat.mentionChannelWide` | Moderators |
-| `ramon-chat.createChannel` | Administrators |
-| `ramon-chat.moderate` | Moderators |
+## Development
 
-Discourse ships chat staff-only and has admins widen it via *chat allowed groups*.
-This mirrors that: grant `ramon-chat.use` to Members once you're ready.
+```sh
+cd js && npm install && npm run build
+```
+
+The PHP suite runs with `vendor/bin/phpunit --testsuite unit`; CI runs it across
+PHP 8.3, 8.4 and 8.5.
 
 ## License
 
-MIT
-
----
-
-## Installation notes for this site
-
-Installed into the Laragon Flarum at `d:/laragon/www/flarum` (whose `config.php`
-url is `https://alegatest.alega.com.br`) via the existing `workbench/*/` path
-repository:
-
-```bash
-composer require ramon/chat:*@dev     # junctions vendor/ramon/chat -> workbench/chat
-php flarum extension:enable ramon-chat # also runs the 13 migrations
-php flarum assets:publish
-php flarum cache:clear
-```
-
-Pre-change backups of the site's composer files were left at
-`composer.json.bak-pre-chat` and `composer.lock.bak-pre-chat`.
-
-`composer require` also refreshed the lock entries for `ramon/avocado`,
-`ramon/dfs` and `ramon/point-system`. Those are path repositories, so composer
-simply recorded the branch already checked out in each workbench directory — no
-files in them were modified.
-
-Permissions default to moderators only. Grant `ramon-chat.use` to Members in
-**Admin → Permissions** to open the chat up.
-
-After editing anything under `js/src`:
-
-```bash
-cd js && npm install && npm run build && cd .. && php ../../flarum assets:publish
-```
+[MIT](LICENSE). Found a bug or have an idea? [Open an issue](https://github.com/ram0ng1/chat/issues).

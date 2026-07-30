@@ -27,6 +27,7 @@ import ChatMessage from './components/ChatMessage';
 import ChatComposer from './components/ChatComposer';
 import BrowseChannelsPage from './components/BrowseChannelsPage';
 import ChannelFormModal from './components/ChannelFormModal';
+import ChannelInviteNotification from './components/ChannelInviteNotification';
 import ChannelInfoModal from './components/ChannelInfoModal';
 import ChatSelectionBar from './components/ChatSelectionBar';
 import ChatAutocomplete from './components/ChatAutocomplete';
@@ -55,6 +56,7 @@ export {
   ChatComposer,
   BrowseChannelsPage,
   ChannelFormModal,
+  ChannelInviteNotification,
   ChannelInfoModal,
   ChatSelectionBar,
   ChatAutocomplete,
@@ -101,10 +103,24 @@ app.initializers.add('ramon-chat', () => {
   app.routes['chat.thread'] = { path: '/chat/c/:id/t/:threadId', ...chatPage };
   app.routes['chat.threads'] = { path: '/chat/threads', ...chatPage };
   app.routes['chat.search'] = { path: '/chat/search', ...chatPage };
+  app.routes['chat.bookmarks'] = { path: '/chat/bookmarks', ...chatPage };
 
   // A genuinely separate page, so it keeps the default resolver.
   app.routes['chat.browse'] = { path: '/chat/browse', component: BrowseChannelsPage };
   app.routes['chat.browse.filter'] = { path: '/chat/browse/:filter', component: BrowseChannelsPage };
+
+  // ── Notifications ─────────────────────────────────────────────────────────
+  // The component that renders the alert, and the row in the user's notification
+  // preferences that lets them turn it off.
+  app.notificationComponents.chatChannelInvite = ChannelInviteNotification;
+
+  extend('flarum/forum/components/NotificationGrid', 'notificationTypes', function (items: ItemList<unknown>) {
+    items.add('chatChannelInvite', {
+      name: 'chatChannelInvite',
+      icon: 'fas fa-comments',
+      label: app.translator.trans('ramon-chat.forum.settings.notify_channel_invite'),
+    });
+  });
 
   // ── Header trigger ────────────────────────────────────────────────────────
   extend(HeaderSecondary.prototype, 'items', function (items) {

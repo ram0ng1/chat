@@ -12,6 +12,7 @@ import type Channel from '../../common/models/Channel';
 import chatState from '../state/chat';
 import ChannelFormModal from './ChannelFormModal';
 import { BrowseSkeleton } from './Skeletons';
+import { channelIcon } from '../utils/channelIcon';
 
 type BrowseFilter = 'all' | 'open' | 'closed' | 'archived' | 'mine';
 
@@ -109,7 +110,7 @@ export default class BrowseChannelsPage<CustomAttrs extends IPageAttrs = IPageAt
     return (
       <div className="ChatBrowseCard" key={channel.id()}>
         <div className="ChatBrowseCard-icon">
-          {channel.emoji() ? displayEmoji(channel.emoji()) : <i className="fas fa-hashtag" aria-hidden="true" />}
+          {channelIcon(channel)}
         </div>
 
         <div className="ChatBrowseCard-body">

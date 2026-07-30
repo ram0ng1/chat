@@ -23,16 +23,16 @@
     .Button--icon();
   }
 
-  &-dot {
+  // The unread count, positioned the way core positions the bell's. Core's
+  // `.Bubble` supplies the size, radius and digit handling; only the placement is
+  // ours, because our button is not inside a HeaderDropdown.
+  //
+  // The dot this replaced said "something happened" and left you to open the chat
+  // to find out how much — the one question the header exists to answer.
+  &-bubble {
     position: absolute;
-    // Sits on the icon's upper-right corner within the 36px button.
-    top: 7px;
-    right: 7px;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--primary-color);
-    box-shadow: 0 0 0 2px var(--header-bg, var(--body-bg));
+    top: 2px;
+    right: 2px;
   }
 
   // .Button--icon hides .Button-label, which is where the Bubble's sibling text
@@ -151,33 +151,61 @@
   background: var(--body-bg);
 
   &-top {
+    // Not `.chat-flex-row()` — these stack. There is no column mixin, and adding
+    // one for a single use would be a worse trade than two plain declarations.
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
     flex-shrink: 0;
-    padding: 12px 12px 8px;
+    padding: 10px 8px;
     border-bottom: 1px solid var(--avocado-border-soft);
   }
 
   // "My Threads" and "Search" links above the channel list.
+  // Navigation, not content. These sit above the channel list and compete with it
+  // for attention, so they are deliberately quieter: medium weight instead of bold,
+  // muted until hovered or current. Three bold rows read as the most important
+  // thing in the sidebar, which they are not — the channels are.
   &-quickLink {
-    .chat-flex-row(8px);
+    .chat-flex-row(10px);
     width: 100%;
-    padding: 7px 10px;
+    padding: 6px 10px;
     border-radius: @chat-radius-sm;
     font-size: @chat-font-label;
-    font-weight: 700;
-    color: var(--avocado-text-dark);
+    font-weight: 600;
+    color: var(--avocado-muted-label);
     background: none;
     border: 0;
     cursor: pointer;
-    transition: background var(--avocado-t-fast);
+    transition: background var(--avocado-t-fast), color var(--avocado-t-fast);
 
     &:hover {
       background: var(--chat-row-hover-bg);
+      color: var(--avocado-text-dark);
+    }
+
+    // Which view you are in. Without this the sidebar looked identical whether you
+    // were reading a channel, your threads or your bookmarks — the one thing a
+    // navigation list exists to tell you.
+    &--active {
+      color: var(--primary-color);
+      background: var(--chat-row-selected-bg);
+      font-weight: 800;
     }
 
     &-icon {
-      color: var(--avocado-muted-icon);
-      width: 16px;
+      // A fixed column so the labels line up regardless of glyph width — the
+      // magnifier and the bookmark are noticeably narrower than the bubbles.
+      flex-shrink: 0;
+      width: 18px;
+      font-size: 14px;
       text-align: center;
+      color: inherit;
+      opacity: 0.75;
+    }
+
+    &--active &-icon {
+      opacity: 1;
     }
 
     &-count {
@@ -426,6 +454,18 @@
     border-radius: @chat-radius-md;
     font-size: @chat-font-label;
     color: var(--avocado-muted-label);
+
+    // The join variant is an invitation, not a notice: solid border and a real
+    // button, so it does not read as the same dead-end as "this channel is closed".
+    &--join {
+      border-style: solid;
+      color: var(--avocado-text-dark);
+
+      .Button {
+        margin-left: auto;
+        flex-shrink: 0;
+      }
+    }
   }
 
   &-liveRegion {
@@ -877,10 +917,6 @@
   // button one line higher than the send button; both need it, and they need the
   // same value, to land on the last line of text together.
   &-tools,
-  &-send {
-    margin-bottom: 6px;
-  }
-
   &-tool {
     .chat-icon-circle(30px; transparent);
     border: 0;
@@ -910,12 +946,11 @@
     color: var(--button-primary-color, #fff);
     cursor: pointer;
 
-    // The paper plane's ink sits toward its lower-left — the glyph's box is
-    // centred but the shape reads as offset. A sub-pixel nudge puts the *shape*
-    // in the middle, which is what the eye measures.
-    .fas {
-      transform: translate(1px, -1px);
-    }
+    // No optical nudge. There was a `translate(1px, -1px)` here, added on the
+    // theory that the paper plane's ink sits low-left of its box — an assumption I
+    // never measured, and it pushed the glyph visibly high and right. Font Awesome
+    // already centres the glyph in its em box; the mixin above handles the rest.
+    margin-bottom: 6px;
 
     &:disabled {
       opacity: 0.35;
@@ -1522,6 +1557,105 @@
     }
   }
 
+  // Header of the members tab: the count, and the affordance to add someone.
+  &-memberHeader {
+    .chat-flex-row(8px);
+    margin-bottom: 10px;
+  }
+
+  &-memberCount {
+    flex: 1;
+    font-size: @chat-font-label;
+    font-weight: 800;
+    color: var(--avocado-text-dark);
+  }
+
+  &-addToggle {
+    flex-shrink: 0;
+
+    // Open, the button is the way back out, so it reads as active rather than as
+    // another way to add.
+    &--open {
+      color: var(--primary-color);
+    }
+  }
+
+  // The add-someone block, shown while the toggle is open.
+  &-add {
+    margin-bottom: 14px;
+    padding: 10px;
+    border-radius: @chat-radius-md;
+    background: var(--avocado-surface-1);
+
+    &-field {
+      width: 100%;
+    }
+
+    &-hint,
+    &-empty {
+      margin-top: 8px;
+      font-size: @chat-font-meta;
+      color: var(--avocado-muted-label);
+    }
+  }
+
+  // Results: a vertical list of rows, not a wrapping grid of cards. Each row is a
+  // person and reads left to right — avatar, name, the action — so they line up
+  // with the member list directly below and scan as the same kind of thing.
+  &-candidates {
+    .chat-scroll-y();
+    max-height: 210px;
+    margin-top: 8px;
+  }
+
+  &-candidate {
+    .chat-flex-row(8px);
+    width: 100%;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: @chat-radius-sm;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+    color: var(--avocado-text-dark);
+    transition: background var(--avocado-t-fast);
+
+    &:hover:not(:disabled) {
+      background: var(--chat-row-hover-bg);
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+
+    .Avatar {
+      width: @chat-avatar-size-compact;
+      height: @chat-avatar-size-compact;
+      flex-shrink: 0;
+    }
+
+    &-name {
+      .chat-truncate();
+      flex: 1;
+      font-size: @chat-font-label;
+    }
+
+    &-add {
+      flex-shrink: 0;
+      font-size: 12px;
+      color: var(--avocado-muted-icon);
+    }
+
+    &:hover:not(:disabled) &-add {
+      color: var(--primary-color);
+    }
+  }
+
+  &-filter {
+    margin-bottom: 8px;
+  }
+
   &-memberList {
     .chat-scroll-y();
     max-height: 320px;
@@ -1539,6 +1673,27 @@
     .Avatar {
       width: 26px;
       height: 26px;
+    }
+
+    // Always visible, not revealed on hover.
+    //
+    // Hiding it until hover was the obvious way to keep a destructive action quiet,
+    // and it was wrong: this is the only way to remove someone, so a hidden control
+    // reads as a missing feature. Its counterpart for adding people is a plainly
+    // visible "+", and the two belong at the same level of discoverability.
+    //
+    // Restraint comes from colour instead — muted at rest, red on hover, so the
+    // intent is unmistakable at the moment of clicking rather than at every glance.
+    &-remove {
+      flex-shrink: 0;
+      margin-left: auto;
+      color: var(--avocado-muted-icon);
+      transition: color var(--avocado-t-fast);
+    }
+
+    &-remove:hover:not(:disabled),
+    &-remove:focus-visible {
+      color: var(--alert-error-color, #c0392b);
     }
   }
 
@@ -1930,25 +2085,26 @@
 // Collapsed, the drawer is a 48px bar with no stream visible, so unread activity
 // has to surface on the header itself. Mentions get a count; ambient traffic a dot.
 .ChatDrawer {
+  // The collapsed header's unread count. Neutral by default — ordinary traffic is
+  // information, not an alarm — and red only when the messages are addressed to
+  // you. `ChatDrawer-dot` used to sit beside this for ambient unreads; it was
+  // replaced by the count and its rule removed rather than left behind.
   &-badge {
     flex-shrink: 0;
     min-width: 18px;
     padding: 1px 6px;
     border-radius: @chat-radius-pill;
-    background: var(--chat-unread-line);
-    color: #fff;
+    background: var(--avocado-surface-1);
+    color: var(--avocado-muted-label);
     font-size: 11px;
     font-weight: 800;
     line-height: 16px;
     text-align: center;
-  }
 
-  &-dot {
-    flex-shrink: 0;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--primary-color);
+    &--mention {
+      background: var(--chat-unread-line);
+      color: #fff;
+    }
   }
 }
 
@@ -1967,6 +2123,88 @@
   &:hover {
     background: none;
   }
+}
+
+// ── Announcement card ────────────────────────────────────────────────────────
+// A bot post that points somewhere: currently a new discussion in the channel's
+// bound category.
+//
+// Styled on the content block rather than as a separate component. An earlier
+// version was its own row type, and that was the wrong shape — it could not be
+// replied to, reacted to or grouped, because it was not really a message. This is:
+// the avatar, the name, the time and the actions are all the ordinary ones, and the
+// card treatment is confined to the body.
+.ChatMessage--announcement {
+  .ChatMessage-content {
+    padding-left: 12px;
+    border-left: 3px solid var(--primary-color);
+  }
+
+  // The title. It is the first paragraph of the message body — a bold link — and
+  // is addressed structurally rather than with a class, because the body comes out
+  // of the same Markdown formatter every other message uses and carries no markup
+  // of our own.
+  .ChatMessage-content > p:first-child {
+    margin: 0;
+    font-size: @chat-font-label;
+    font-weight: 800;
+    line-height: 1.3;
+
+    a {
+      color: var(--link-color, var(--primary-color));
+    }
+  }
+
+  // The excerpt below it.
+  .ChatMessage-content > p:not(:first-child) {
+    margin: 4px 0 0;
+    font-size: @chat-font-meta;
+    line-height: 1.45;
+    color: var(--avocado-text-dark);
+
+    // Two lines is enough to judge a topic by; past that the announcement starts
+    // competing with the conversation it was announced in.
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}
+
+// ── The chat bot ─────────────────────────────────────────────────────────────
+// A bot message is an ordinary message — same gutter, same body, same formatting —
+// so there is no layout here, only the two pieces of identity a user record would
+// otherwise supply.
+//
+// The earlier version of this was a bespoke announcement card. It was replaced
+// because a card is a second kind of thing the stream has to explain: the bot
+// posting a normal message needs no explanation at all.
+
+// Stands in for a photo when none is configured, mirroring how core draws a user
+// with no avatar — an initial on a coloured disc, not an empty frame.
+.Avatar--bot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  line-height: 1;
+  font-weight: 800;
+  color: #fff;
+  background: var(--primary-color);
+}
+
+// Small, uppercase and beside the name, the way a verified or staff tag reads —
+// part of the identity rather than a badge stuck onto the row.
+.ChatMessage-botTag {
+  flex-shrink: 0;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--body-bg);
+  background: var(--avocado-muted-label);
 }
 
 // Close and archive on the channel form: state changes, kept visually apart from
@@ -1990,17 +2228,150 @@
   color: var(--avocado-muted-icon);
 }
 
-// Inside the drawer the pinned panel has nowhere to sit beside the conversation,
-// so it covers it — the same treatment the thread panel gets on a phone.
+// Inside the drawer there is no width for a second column beside a 420px panel, so
+// an overlay panel covers the conversation instead — the treatment the thread
+// panel already gets on a phone.
+//
+// One rule, not two. PinnedPanel renders `ChatThreadPanel ChatPinnedPanel`, so
+// matching the shared class covers both and they cannot drift apart: a thread and
+// a pinned list in the drawer are the same thing in the same slot, and they should
+// look it.
 .ChatDrawer-body {
   position: relative;
 
-  .ChatPinnedPanel {
+  .ChatThreadPanel {
     position: absolute;
     inset: 0;
     width: auto;
     border-left: 0;
     z-index: var(--avocado-z-sidebar);
     background: var(--body-bg);
+  }
+}
+
+// A username in the chat is a link to the profile, like everywhere else in the
+// forum — but inside a message it must not shout, so it keeps the author's weight
+// and colour and only underlines on hover.
+.ChatUserLink {
+  color: inherit;
+
+  &:hover,
+  &:focus {
+    color: inherit;
+    text-decoration: underline;
+  }
+}
+
+// ── Channel picture ──────────────────────────────────────────────────────────
+// An uploaded image standing in for the channel's emoji. Sized to the emoji it
+// replaces so the sidebar, browse list and header keep their alignment — see
+// utils/channelIcon.tsx, which is the only thing that renders it.
+.ChatChannelIcon-image {
+  width: 1.25em;
+  height: 1.25em;
+  border-radius: 4px;
+  object-fit: cover;
+  vertical-align: middle;
+}
+
+// ── Channel picture, on the form ─────────────────────────────────────────────
+.ChatChannelForm-imageRow {
+  .chat-flex-row(10px);
+  margin-top: 6px;
+
+  label.Button {
+    margin: 0;
+    cursor: pointer;
+  }
+}
+
+.ChatChannelForm-imagePreview {
+  .chat-flex-center();
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: @chat-radius-sm;
+  overflow: hidden;
+  background: var(--avocado-surface-1);
+  color: var(--avocado-muted-icon);
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+// ── Bookmarks ────────────────────────────────────────────────────────────────
+// Saved messages, across every channel. Rows are summaries rather than message
+// rows: the useful action here is "take me to it", not reply or pin, so the row is
+// a link with the bookmark toggle beside it. See BookmarksList.tsx.
+.ChatBookmarks {
+  .chat-scroll-y();
+  flex: 1;
+  min-height: 0;
+  padding: 12px 16px;
+
+  &-row {
+    .chat-flex-row(10px);
+    align-items: flex-start;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--avocado-border-soft);
+
+    &:last-child {
+      border-bottom: 0;
+    }
+
+    .Avatar {
+      width: @chat-avatar-size-compact;
+      height: @chat-avatar-size-compact;
+      flex-shrink: 0;
+    }
+  }
+
+  &-body {
+    flex: 1;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+    color: inherit;
+  }
+
+  &-meta {
+    .chat-flex-row(6px);
+    flex-wrap: wrap;
+    font-size: @chat-font-meta;
+    color: var(--avocado-muted-label);
+  }
+
+  &-author {
+    font-weight: 800;
+    color: var(--avocado-text-dark);
+  }
+
+  // The channel is what tells you where a saved message came from, so it reads as
+  // a label rather than as more grey metadata.
+  &-channel {
+    padding: 1px 6px;
+    border-radius: @chat-radius-pill;
+    background: var(--avocado-surface-1);
+  }
+
+  &-excerpt {
+    margin-top: 3px;
+    font-size: @chat-font-label;
+    line-height: 1.45;
+    color: var(--avocado-text-dark);
+    word-break: break-word;
+  }
+
+  // Filled, because every row here is bookmarked by definition — an outline would
+  // read as "not saved" next to a list of saved things.
+  &-remove {
+    flex-shrink: 0;
+    color: var(--primary-color);
   }
 }

@@ -28,12 +28,15 @@ use Illuminate\Support\Str;
  * @property string|null $slug
  * @property string|null $description
  * @property string|null $emoji
+ * @property string|null $image_path
  * @property int|null $tag_id
  * @property string $status
  * @property bool $is_private
+ * @property string $post_permission
  * @property bool $threading_enabled
  * @property bool $auto_join
  * @property bool $auto_join_on_reply
+ * @property bool $post_discussions
  * @property bool $allow_channel_wide_mentions
  * @property int|null $creator_id
  * @property int $messages_count
@@ -93,6 +96,7 @@ class Channel extends AbstractModel
         'threading_enabled'           => 'boolean',
         'auto_join'                   => 'boolean',
         'auto_join_on_reply'          => 'boolean',
+        'post_discussions'            => 'boolean',
         'allow_channel_wide_mentions' => 'boolean',
         'last_message_at'             => 'datetime',
         'archived_at'                 => 'datetime',
@@ -156,6 +160,21 @@ class Channel extends AbstractModel
      * A direct channel is never marked private — it is private by construction, and
      * treating it as both would make the flag mean two different things.
      */
+    /** Only holders of `ramon-chat.moderate` may post. */
+    public const POST_ALL = 'all';
+    public const POST_MODERATORS = 'moderators';
+
+    /**
+     * Whether posting is narrowed to moderators — an announcement channel.
+     *
+     * Never true for a direct channel: a conversation only one side may write to is
+     * not a conversation, and the setting is not offered for them.
+     */
+    public function restrictsPostingToModerators(): bool
+    {
+        return $this->isCategory() && $this->post_permission === self::POST_MODERATORS;
+    }
+
     public function isPrivate(): bool
     {
         return $this->isCategory() && (bool) $this->is_private;
@@ -267,6 +286,23 @@ class Channel extends AbstractModel
             ->where('user_id', $user->id)
             ->whereNull('left_at')
             ->first();
+    }
+
+    /**
+     * The channel's picture, or null.
+     *
+     * Built from the assets base each time rather than stored as a URL, so moving
+     * the forum to another host does not leave every channel icon pointing at the
+     * old one. Mirrors how core resolves the logo path.
+     */
+    public function imageUrl(): ?string
+    {
+        if (! $this->image_path) {
+            return null;
+        }
+
+        return resolve(\Flarum\Foundation\Config::class)->url()->getPath()
+            .'/assets/'.$this->image_path;
     }
 
     /**

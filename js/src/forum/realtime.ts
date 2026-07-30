@@ -35,6 +35,8 @@ interface MessagePayload {
   userId: number | null;
   type: string;
   systemKey: string | null;
+  /** Placeholders the system string interpolates. See BroadcastListener. */
+  systemData?: Record<string, unknown> | null;
   contentHtml: string | null;
   createdAt: string | null;
   editedAt: string | null;
@@ -283,13 +285,70 @@ function onThread(data: { threadId: number; channelId: number; repliesCount: num
   }
 }
 
-function onChannel(data: { channelId: number; status: string }): void {
+interface ChannelPayload {
+  channelId: number;
+  status: string;
+  postPermission?: string;
+  isPrivate?: boolean;
+  threadingEnabled?: boolean;
+  name?: string | null;
+  emoji?: string | null;
+  description?: string | null;
+}
+
+/** Channels with a capability refetch already in flight. */
+const refetching = new Set<number>();
+
+function onChannel(data: ChannelPayload): void {
   const channel = chatState.channel(data.channelId);
 
   if (!channel) return;
 
-  channel.pushAttributes({ status: data.status });
+  const before = channel.postPermission();
+
+  channel.pushAttributes({
+    status: data.status,
+    ...(data.postPermission !== undefined ? { postPermission: data.postPermission } : {}),
+    ...(data.isPrivate !== undefined ? { isPrivate: data.isPrivate } : {}),
+    ...(data.threadingEnabled !== undefined ? { threadingEnabled: data.threadingEnabled } : {}),
+    ...(data.name !== undefined ? { name: data.name } : {}),
+    ...(data.emoji !== undefined ? { emoji: data.emoji } : {}),
+    ...(data.description !== undefined ? { description: data.description } : {}),
+  });
+
+  // `canPostMessage` is decided per user, so it cannot ride on a broadcast — a
+  // moderator and a member get different answers from the same change. Refetch
+  // this client's own record and let the server say. Only when the rule actually
+  // moved, so an ordinary rename does not cost every member a request.
+  if (data.postPermission !== undefined && data.postPermission !== before) {
+    refreshCapabilities(data.channelId);
+  }
+
   m.redraw();
+}
+
+/**
+ * Re-reads one channel to pick up the actor's own capability flags.
+ *
+ * Guarded against overlapping calls: a burst of edits would otherwise queue a
+ * request per event, and they would land out of order.
+ */
+function refreshCapabilities(channelId: number): void {
+  if (refetching.has(channelId)) return;
+
+  refetching.add(channelId);
+
+  app.store
+    .find('chat-channels', String(channelId))
+    .catch(() => {
+      // The channel may have become invisible to us — a private channel we were
+      // removed from. Leaving the stale record is better than throwing; the next
+      // channel list refresh drops it.
+    })
+    .then(() => {
+      refetching.delete(channelId);
+      m.redraw();
+    });
 }
 
 function onTyping(data: { channelId: number; userId: number; username: string; typing: boolean; expiresIn: number }): void {
@@ -339,6 +398,7 @@ function pushMessage(data: MessagePayload): Message | null {
           number: data.number,
           type: data.type,
           systemKey: data.systemKey,
+          systemData: data.systemData ?? null,
           contentHtml: data.contentHtml,
           createdAt: data.createdAt,
           editedAt: data.editedAt,
@@ -385,7 +445,15 @@ function pushMessage(data: MessagePayload): Message | null {
 function bumpChannel(data: MessagePayload): void {
   const channel = chatState.channel(data.channelId);
 
-  if (!channel) return;
+  // The channel is not in the loaded list — usually because the chat has never
+  // been opened this session. The per-channel badge has nothing to attach to, but
+  // the header count and the nav dot read the actor's own counters, and those
+  // still have to move or the user is never told anything arrived.
+  if (!channel) {
+    chatState.bumpUnreadCounters(1, 0, true);
+
+    return;
+  }
 
   const attrs: Record<string, unknown> = {
     lastMessageId: data.id,
@@ -398,7 +466,13 @@ function bumpChannel(data: MessagePayload): void {
     // Reading it now — tell the server, do not badge.
     chatState.markRead(data.channelId);
   } else if (!channel.isMuted()) {
-    attrs.unreadCount = (channel.unreadCount() ?? 0) + 1;
+    const before = channel.unreadCount() ?? 0;
+
+    attrs.unreadCount = before + 1;
+
+    // `newChannel` only when this channel went from nothing-unread to something:
+    // the channel counter counts channels, not messages.
+    chatState.bumpUnreadCounters(1, 0, before === 0);
   }
 
   channel.pushAttributes(attrs);

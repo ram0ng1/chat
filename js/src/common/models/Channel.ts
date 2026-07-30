@@ -18,6 +18,7 @@ export default class Channel extends Model {
   slug = Model.attribute<string | null>('slug');
   description = Model.attribute<string | null>('description');
   emoji = Model.attribute<string | null>('emoji');
+  imageUrl = Model.attribute<string | null>('imageUrl');
   status = Model.attribute<string>('status');
   tagId = Model.attribute<number | null>('tagId');
 
@@ -32,11 +33,16 @@ export default class Channel extends Model {
   /** Invitation-only: absent from Browse, and not joinable by a non-member. */
   isPrivate = Model.attribute<boolean>('isPrivate');
 
+  /** 'all' or 'moderators' — who may post here. */
+  postPermission = Model.attribute<string>('postPermission');
+
   threadingEnabled = Model.attribute<boolean>('threadingEnabled');
   autoJoin = Model.attribute<boolean>('autoJoin');
 
   /** Subscribe a user when they reply in the bound category. */
   autoJoinOnReply = Model.attribute<boolean>('autoJoinOnReply');
+  /** Announce the bound category's new discussions in the channel. */
+  postDiscussions = Model.attribute<boolean>('postDiscussions');
   allowChannelWideMentions = Model.attribute<boolean>('allowChannelWideMentions');
 
   // ── Counters ───────────────────────────────────────────────────────────────

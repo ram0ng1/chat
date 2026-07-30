@@ -10,6 +10,7 @@
 namespace Ramon\Chat\Notification;
 
 use Flarum\Database\AbstractModel;
+use Flarum\Notification\AlertableInterface;
 use Flarum\Notification\Blueprint\BlueprintInterface;
 use Flarum\User\User;
 use Ramon\Chat\Message;
@@ -21,7 +22,13 @@ use Ramon\Chat\Message;
  * so in a busy channel it can fire per message — routing it to email would be a
  * mail-bomb. Only ChatMentionBlueprint is mailable.
  */
-class ChatMessageBlueprint implements BlueprintInterface
+/*
+ * AlertableInterface is a marker with no methods, and it is easy to leave off —
+ * but Flarum's AlertNotificationDriver checks for it before queueing anything, so
+ * without it the notification is dropped in silence: no row, no error. That is why
+ * the bell never showed chat activity.
+ */
+class ChatMessageBlueprint implements AlertableInterface, BlueprintInterface
 {
     public function __construct(
         public Message $message

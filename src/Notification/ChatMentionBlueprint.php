@@ -11,6 +11,7 @@ namespace Ramon\Chat\Notification;
 
 use Flarum\Database\AbstractModel;
 use Flarum\Locale\TranslatorInterface;
+use Flarum\Notification\AlertableInterface;
 use Flarum\Notification\Blueprint\BlueprintInterface;
 use Flarum\Notification\MailableInterface;
 use Flarum\User\User;
@@ -22,7 +23,13 @@ use Ramon\Chat\Message;
  * Mentions are the one chat event that earns an email, because they are directed
  * at a specific person rather than being ambient channel traffic.
  */
-class ChatMentionBlueprint implements BlueprintInterface, MailableInterface
+/*
+ * AlertableInterface is a marker with no methods, and it is easy to leave off —
+ * but Flarum's AlertNotificationDriver checks for it before queueing anything, so
+ * without it the notification is dropped in silence: no row, no error. That is why
+ * the bell never showed chat activity.
+ */
+class ChatMentionBlueprint implements AlertableInterface, BlueprintInterface, MailableInterface
 {
     public function __construct(
         public Message $message

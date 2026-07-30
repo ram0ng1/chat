@@ -10,12 +10,15 @@ import classList from 'flarum/common/utils/classList';
 import type User from 'flarum/common/models/User';
 import type Mithril from 'mithril';
 
+import userLink from '../utils/userLink';
+
 import type Channel from '../../common/models/Channel';
 import { NotificationLevel } from '../../common/models/Channel';
 import chatState from '../state/chat';
 import { displayEmoji } from '../utils/emoji';
 import { isOnline } from '../utils/presence';
 import { MembersSkeleton } from './Skeletons';
+import { channelIcon } from '../utils/channelIcon';
 
 export interface ChannelInfoModalAttrs extends IInternalModalAttrs {
   channel: Channel;
@@ -38,6 +41,18 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
   private memberFilter = '';
   private working = false;
 
+  // Candidate search for the add-member field.
+  private candidateQuery = '';
+  private candidates: User[] = [];
+  private candidateTimer: number | null = null;
+  private candidateSequence = 0;
+  /** Whether the add-member field is open. */
+  private adding = false;
+
+  onremove(): void {
+    if (this.candidateTimer !== null) window.clearTimeout(this.candidateTimer);
+  }
+
   className(): string {
     return 'ChatModal ChatChannelInfoModal Modal--medium';
   }
@@ -47,7 +62,7 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
 
     return (
       <>
-        {channel.emoji() ? <span>{displayEmoji(channel.emoji())} </span> : null}
+        <span className="ChatChannelInfo-icon">{channelIcon(channel)}</span> 
         {channel.displayName()}
       </>
     );
@@ -208,8 +223,30 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
 
     return (
       <div className="ChatChannelInfo-section">
+        <div className="ChatChannelInfo-memberHeader">
+          <span className="ChatChannelInfo-memberCount">
+            {app.translator.trans('ramon-chat.forum.channel.members', { count: this.members.length })}
+          </span>
+
+          {/* The add field is behind a `+` rather than always open: the common
+              reason to visit this tab is to look at who is here, and a search box
+              at the top of a list of people invites filtering, not inviting. */}
+          {this.attrs.channel.canManageMembers() ? (
+            <Button
+              className={classList('Button Button--icon Button--flat ChatChannelInfo-addToggle', {
+                'ChatChannelInfo-addToggle--open': this.adding,
+              })}
+              icon={this.adding ? 'fas fa-xmark' : 'fas fa-plus'}
+              title={app.translator.trans('ramon-chat.forum.info.add_member', {}, true)}
+              onclick={() => this.toggleAdding()}
+            />
+          ) : null}
+        </div>
+
+        {this.addMembers()}
+
         <input
-          className="FormControl"
+          className="FormControl ChatChannelInfo-filter"
           type="search"
           placeholder={app.translator.trans('ramon-chat.forum.info.member_search', {}, true)}
           value={this.memberFilter}
@@ -227,7 +264,22 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
               })}
             >
               <Avatar user={user} className="Avatar" />
-              <span>{username(user)}</span>
+              <span>{userLink(user)}</span>
+
+              {/* Drawn only for people the actor may actually remove, so the button
+                  is never a promise the server refuses to keep. Removing yourself is
+                  what "Leave channel" is for, and the endpoint rejects it. */}
+              {this.attrs.channel.canManageMembers() && user.id() !== app.session.user?.id() ? (
+                <Button
+                  className="Button Button--icon Button--flat ChatChannelInfo-member-remove"
+                  icon="fas fa-user-minus"
+                  disabled={this.working}
+                  title={app.translator.trans('ramon-chat.forum.info.remove_member', {
+                    username: username(user),
+                  })}
+                  onclick={() => this.remove(user)}
+                />
+              ) : null}
             </div>
           ))}
 
@@ -237,6 +289,189 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
         </div>
       </div>
     );
+  }
+
+  /**
+   * Adding people to the channel.
+   *
+   * This is how anyone gets into a private channel: it is not discoverable and
+   * cannot be joined, so an existing member with `manageMembers` has to put you
+   * there. Drawn only when the server says the actor may — a moderator, or the
+   * creator of a group conversation.
+   */
+  protected addMembers(): Mithril.Children {
+    if (!this.attrs.channel.canManageMembers() || !this.adding) return null;
+
+    const searching = this.candidateQuery.trim().length >= 2;
+
+    return (
+      <div className="ChatChannelInfo-add">
+        <input
+          className="FormControl ChatChannelInfo-add-field"
+          type="search"
+          placeholder={app.translator.trans('ramon-chat.forum.info.add_member', {}, true)}
+          value={this.candidateQuery}
+          oninput={(e: Event) => this.searchCandidates((e.target as HTMLInputElement).value)}
+          oncreate={(vnode: Mithril.VnodeDOM) => (vnode.dom as HTMLInputElement).focus()}
+        />
+
+        {this.candidates.length > 0 ? (
+          <div className="ChatChannelInfo-candidates">
+            {this.candidates.map((user) => (
+              <button
+                type="button"
+                key={user.id()}
+                className="ChatChannelInfo-candidate"
+                disabled={this.working}
+                onclick={() => this.add(user)}
+              >
+                <Avatar user={user} className="Avatar" />
+                <span className="ChatChannelInfo-candidate-name">{username(user)}</span>
+                <i className="ChatChannelInfo-candidate-add fas fa-plus" aria-hidden="true" />
+              </button>
+            ))}
+          </div>
+        ) : searching ? (
+          <div className="ChatChannelInfo-add-empty">
+            {app.translator.trans('ramon-chat.forum.info.no_candidates')}
+          </div>
+        ) : (
+          <div className="ChatChannelInfo-add-hint">
+            {app.translator.trans('ramon-chat.forum.info.add_member_hint')}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  protected toggleAdding(): void {
+    this.adding = !this.adding;
+
+    // Leaving a stale query and its results behind would mean reopening the field
+    // shows matches for something typed minutes ago.
+    if (!this.adding) {
+      this.candidateQuery = '';
+      this.candidates = [];
+    }
+
+    m.redraw();
+  }
+
+  protected searchCandidates(value: string): void {
+    this.candidateQuery = value;
+
+    if (this.candidateTimer !== null) window.clearTimeout(this.candidateTimer);
+
+    if (value.trim().length < 2) {
+      this.candidates = [];
+
+      return;
+    }
+
+    const mine = ++this.candidateSequence;
+
+    this.candidateTimer = window.setTimeout(() => {
+      app.store
+        .find<User[]>('users', { filter: { q: value.trim() }, page: { limit: 6 } })
+        .then((results) => {
+          // A slower earlier search must not overwrite a later one.
+          if (mine !== this.candidateSequence) return;
+
+          const already = new Set(this.members.map((member) => member.id()));
+
+          // Someone already in the channel is not a candidate; offering them and
+          // then silently doing nothing is worse than not offering.
+          this.candidates = (Array.isArray(results) ? results : []).filter((user) => !already.has(user.id()));
+
+          m.redraw();
+        })
+        .catch(() => {
+          if (mine === this.candidateSequence) this.candidates = [];
+        });
+    }, 250);
+  }
+
+  protected async add(user: User): Promise<void> {
+    this.working = true;
+    m.redraw();
+
+    try {
+      const payload = await app.request<any>({
+        method: 'POST',
+        url: `${app.forum.attribute('apiUrl')}/chat-channels/${this.attrs.channel.id()}/members`,
+        body: { data: { attributes: { userIds: [Number(user.id())] } } },
+      });
+
+      if (payload?.data) app.store.pushPayload(payload);
+
+      this.members = [...this.members, user];
+      this.candidates = this.candidates.filter((candidate) => candidate.id() !== user.id());
+      this.candidateQuery = '';
+
+      this.attrs.channel.pushAttributes({ userCount: (this.attrs.channel.userCount() ?? 0) + 1 });
+
+      app.alerts.show(
+        { type: 'success' },
+        app.translator.trans('ramon-chat.forum.info.member_added', { username: username(user) })
+      );
+    } catch (e: any) {
+      app.alerts.show(
+        { type: 'error' },
+        e?.response?.errors?.[0]?.detail ?? app.translator.trans('ramon-chat.forum.info.save_failed')
+      );
+    } finally {
+      this.working = false;
+      m.redraw();
+    }
+  }
+
+  /**
+   * Removes someone else from the channel.
+   *
+   * Confirmed first: unlike adding, this one is not obviously undoable from the
+   * other side — a private channel cannot be rejoined, so the person would have to
+   * be added back by hand.
+   */
+  protected async remove(user: User): Promise<void> {
+    const confirmed = confirm(
+      app.translator.trans('ramon-chat.forum.info.remove_member_confirm', { username: username(user) }, true)
+    );
+
+    if (!confirmed) return;
+
+    this.working = true;
+    m.redraw();
+
+    try {
+      const payload = await app.request<any>({
+        method: 'POST',
+        url: `${app.forum.attribute('apiUrl')}/chat-channels/${this.attrs.channel.id()}/members/remove`,
+        body: { data: { attributes: { userId: Number(user.id()) } } },
+      });
+
+      if (payload?.data) app.store.pushPayload(payload);
+
+      this.members = this.members.filter((member) => member.id() !== user.id());
+
+      // Kept in step with the server's own decrement so the count does not sit
+      // one high until the next fetch.
+      this.attrs.channel.pushAttributes({
+        userCount: Math.max(0, (this.attrs.channel.userCount() ?? 1) - 1),
+      });
+
+      app.alerts.show(
+        { type: 'success' },
+        app.translator.trans('ramon-chat.forum.info.member_removed', { username: username(user) })
+      );
+    } catch (e: any) {
+      app.alerts.show(
+        { type: 'error' },
+        e?.response?.errors?.[0]?.detail ?? app.translator.trans('ramon-chat.forum.info.save_failed')
+      );
+    } finally {
+      this.working = false;
+      m.redraw();
+    }
   }
 
   protected async loadMembers(): Promise<void> {

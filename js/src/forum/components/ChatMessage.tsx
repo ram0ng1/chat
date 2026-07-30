@@ -8,10 +8,13 @@ import humanTime from 'flarum/common/helpers/humanTime';
 import classList from 'flarum/common/utils/classList';
 import type Mithril from 'mithril';
 
+import userLink from '../utils/userLink';
+
 import type Message from '../../common/models/Message';
 import type ChatState from '../state/ChatState';
 import { displayEmoji } from '../utils/emoji';
 import { isOnline } from '../utils/presence';
+import { botAvatar, botName } from '../utils/bot';
 import RevisionsModal from './RevisionsModal';
 
 export interface ChatMessageAttrs extends ComponentAttrs {
@@ -22,6 +25,12 @@ export interface ChatMessageAttrs extends ComponentAttrs {
   onReply?: (message: Message) => void;
   onEdit?: (message: Message) => void;
   onOpenThread?: (message: Message) => void;
+  /**
+   * Suppresses the "N replies" strip. Set inside the thread panel itself, where
+   * the root message would otherwise offer to open the thread you are already
+   * reading — and, with no handler wired, do nothing when clicked.
+   */
+  hideThreadIndicator?: boolean;
 }
 
 /**
@@ -62,6 +71,12 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
           'ChatMessage--pinned': !deleted && Boolean(message.isPinned()),
           'ChatMessage--mentioned': !deleted && message.mentionsActor(),
           'ChatMessage--selected': selected,
+          // A bot post that stands for something elsewhere — currently only a new
+          // discussion. The row stays an ordinary message: same avatar, same
+          // timestamp, same reactions. Only its content block is drawn as a quoted
+          // card, which is what distinguishes "here is a thing over there" from
+          // somebody talking.
+          'ChatMessage--announcement': !deleted && message.isBot() && Boolean(message.systemKey()),
           // Only meaningful on an ungrouped row, which is the one showing an
           // avatar for the halo to sit on.
           'ChatMessage--online': !grouped && isOnline(message.user() || null),
@@ -70,13 +85,25 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
         onclick={state.selecting ? () => state.toggleSelected(Number(message.id())) : undefined}
       >
         <div className="ChatMessage-gutter">
-          {grouped ? this.shortTime(message) : <Avatar user={message.user()} className="Avatar" />}
+          {grouped ? this.shortTime(message) : message.isBot() ? botAvatar() : <Avatar user={message.user()} className="Avatar" />}
         </div>
 
         <div className="ChatMessage-body">
           {grouped ? null : (
             <div className="ChatMessage-meta">
-              <span className="ChatMessage-author">{username(message.user())}</span>
+              <span className="ChatMessage-author">
+                {message.isBot() ? botName() : userLink(message.user())}
+              </span>
+
+              {/* Stated, not implied. A message with a name and an avatar reads as a
+                  person by default, and the one thing a reader needs to know here is
+                  that nobody typed it — so the badge is part of the identity rather
+                  than a decoration on top of it. */}
+              {message.isBot() ? (
+                <span className="ChatMessage-botTag">
+                  {app.translator.trans('ramon-chat.forum.bot.tag')}
+                </span>
+              ) : null}
               {message.createdAt() ? (
                 <span className="ChatMessage-time">{humanTime(message.createdAt()!)}</span>
               ) : null}
@@ -191,7 +218,7 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
     return (
       <div className="ChatMessage-replyTo">
         <i className="fas fa-reply" aria-hidden="true" />
-        <span>{username(target.user())}</span>
+        <span>{userLink(target.user())}</span>
         <span className="ChatMessage-replyTo-content">{target.content() ?? ''}</span>
       </div>
     );
@@ -282,6 +309,8 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
   }
 
   protected threadIndicator(message: Message): Mithril.Children {
+    if (this.attrs.hideThreadIndicator) return null;
+
     const thread = message.thread();
 
     // Only the thread's root carries the indicator; replies live inside the panel.

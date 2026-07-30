@@ -21,6 +21,10 @@ use Flarum\Group\Group;
  * Defaults to administrators, matching `createChannel`. Moderators retain edit
  * access through `moderate`, so this migration widens nothing on its own.
  */
-return Migration::addPermissions([
-    'ramon-chat.editChannel' => Group::ADMINISTRATOR_ID,
-]);
+/*
+ * Nothing is granted here. The permission exists and is checked; it simply has
+ * no default holder beyond administrators, who bypass permission checks anyway.
+ * Granting to the Administrator group explicitly would make the admin badge
+ * render twice in the permission grid — see 2026_07_30_000010.
+ */
+return Migration::addPermissions([]);
