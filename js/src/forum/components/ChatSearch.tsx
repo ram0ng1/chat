@@ -13,6 +13,7 @@ import userLink from '../utils/userLink';
 import type Message from '../../common/models/Message';
 import type ChatState from '../state/ChatState';
 import { SearchResultsSkeleton } from './Skeletons';
+import { messagePreview } from '../utils/preview';
 
 export interface ChatSearchAttrs extends ComponentAttrs {
   state: ChatState;
@@ -127,7 +128,7 @@ export default class ChatSearch extends Component<ChatSearchAttrs> {
 
           {/* Plain text, not contentHtml: a result row is a one-line excerpt, and
               rendered markup would drag block elements and images into it. */}
-          <div className="ChatSearch-result-excerpt">{message.content() ?? ''}</div>
+          <div className="ChatSearch-result-excerpt">{messagePreview(message)}</div>
         </div>
       </button>
     );

@@ -15,7 +15,10 @@ import type ChatState from '../state/ChatState';
 import { displayEmoji } from '../utils/emoji';
 import { isOnline } from '../utils/presence';
 import { botAvatar, botName } from '../utils/bot';
+import { verifiedBadge } from '../utils/integrations';
 import RevisionsModal from './RevisionsModal';
+import ImageLightbox from './ImageLightbox';
+import { messagePreview } from '../utils/preview';
 
 export interface ChatMessageAttrs extends ComponentAttrs {
   message: Message;
@@ -94,6 +97,11 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
               <span className="ChatMessage-author">
                 {message.isBot() ? botName() : userLink(message.user())}
               </span>
+
+              {/* ramon/verified, when installed. Placed where that extension puts
+                  it on a post — right after the name — so a verified member is
+                  marked the same way wherever they are talking. */}
+              {message.isBot() ? null : verifiedBadge(message.user())}
 
               {/* Stated, not implied. A message with a name and an avatar reads as a
                   person by default, and the one thing a reader needs to know here is
@@ -202,6 +210,33 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
     );
   }
 
+  /**
+   * Opens the image viewer over the page.
+   *
+   * Mounted on a node appended to the body rather than rendered inside the row:
+   * the message stream is `overflow: auto`, and a full-screen overlay inside it
+   * would be clipped to the scroller.
+   */
+  protected openLightbox(images: any[], index: number): void {
+    const mount = document.createElement('div');
+    document.body.appendChild(mount);
+
+    const close = () => {
+      m.mount(mount, null);
+      mount.remove();
+    };
+
+    m.mount(mount, {
+      view: () =>
+        m(ImageLightbox, {
+          uploads: images,
+          index: Math.max(0, index),
+          message: this.attrs.message,
+          onClose: close,
+        }),
+    });
+  }
+
   protected shortTime(message: Message): Mithril.Children {
     const at = message.createdAt();
 
@@ -219,7 +254,7 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
       <div className="ChatMessage-replyTo">
         <i className="fas fa-reply" aria-hidden="true" />
         <span>{userLink(target.user())}</span>
-        <span className="ChatMessage-replyTo-content">{target.content() ?? ''}</span>
+        <span className="ChatMessage-replyTo-content">{messagePreview(target, 120)}</span>
       </div>
     );
   }
@@ -274,11 +309,28 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
 
     if (uploads.length === 0) return null;
 
+    // The viewer steps between images, so it needs the images alone — a file
+    // attachment in the middle would otherwise be a gap in the sequence.
+    const images = uploads.filter((upload) => upload.isImage());
+
     return (
       <div className="ChatUploads">
-        {uploads.map((upload) =>
+        {uploads.map((upload, position) =>
           upload.isImage() ? (
-            <a key={upload.id()} href={upload.url()} target="_blank" rel="noopener noreferrer">
+            // A button, not a link: this opens a viewer over the conversation
+            // rather than navigating away. It used to be `target="_blank"`, which
+            // threw the reader out to look at a picture and left them to find
+            // their way back.
+            <button
+              type="button"
+              key={upload.id()}
+              className="ChatUploads-imageButton"
+              onclick={(e: Event) => {
+                e.stopPropagation();
+                this.openLightbox(images, images.indexOf(upload));
+              }}
+              aria-label={upload.fileName() ?? ''}
+            >
               <img
                 className="ChatUploads-image"
                 src={upload.url()}
@@ -289,7 +341,7 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
                 height={upload.height() ?? undefined}
                 loading="lazy"
               />
-            </a>
+            </button>
           ) : (
             <a
               key={upload.id()}
@@ -331,7 +383,7 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
         <span className="ChatThreadIndicator-count">
           {app.translator.trans('ramon-chat.forum.thread.replies', { count: thread.repliesCount() })}
         </span>
-        {last ? <span className="ChatThreadIndicator-preview">{last.content() ?? ''}</span> : null}
+        {last ? <span className="ChatThreadIndicator-preview">{messagePreview(last, 80)}</span> : null}
       </button>
     );
   }

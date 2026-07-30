@@ -51,7 +51,7 @@ version-resolver:
   default: patch
 change-template: '- $TITLE (PR #$NUMBER) por @$AUTHOR'
 template: |
-  ## O que mudou na extensão Backup & Migration 🌟
+  ## O que mudou na extensão Chat 🌟
   $CHANGES
 
   ## 📦 Como atualizar

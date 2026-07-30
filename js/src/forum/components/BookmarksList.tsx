@@ -10,6 +10,7 @@ import type Mithril from 'mithril';
 import type Message from '../../common/models/Message';
 import type ChatState from '../state/ChatState';
 import { MessageStreamSkeleton } from './Skeletons';
+import { messagePreview } from '../utils/preview';
 
 export interface BookmarksListAttrs extends ComponentAttrs {
   state: ChatState;
@@ -91,13 +92,15 @@ export default class BookmarksList extends Component<BookmarksListAttrs> {
   }
 
   protected excerpt(message: Message): string {
-    const text = (message.content() ?? '').replace(/\s+/g, ' ').trim();
+    // Shared with the pinned bar and the other one-line previews, so a bookmarked
+    // announcement reads as its title rather than as `**[title](/d/1)**`.
+    const text = messagePreview(message, 160);
 
     if (text === '') {
       return app.translator.trans('ramon-chat.forum.bookmarks.no_text', {}, true);
     }
 
-    return text.length > 160 ? `${text.slice(0, 160)}…` : text;
+    return text;
   }
 
   protected async load(): Promise<void> {

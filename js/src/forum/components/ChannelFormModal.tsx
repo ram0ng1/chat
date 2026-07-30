@@ -9,6 +9,7 @@ import type Mithril from 'mithril';
 
 import type Channel from '../../common/models/Channel';
 import chatState from '../state/chat';
+import afterModalClosed from '../utils/afterModalClosed';
 import EmojiPicker from './EmojiPicker';
 
 export interface ChannelFormModalAttrs extends IFormModalAttrs {
@@ -460,8 +461,11 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
 
       if (payload?.data) app.store.pushPayload(payload);
 
-      this.attrs.onSaved?.(this.attrs.channel!);
       this.hide();
+
+      // Same reason as the save path above: whatever the caller does next must not
+      // race the close animation.
+      afterModalClosed(() => this.attrs.onSaved?.(this.attrs.channel!));
     } catch (e: any) {
       app.alerts.show(
         { type: 'error' },
@@ -561,7 +565,15 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
           app.alerts.show({ type: 'success' }, app.translator.trans('ramon-chat.forum.edit_channel.saved'));
         }
 
-        this.attrs.onSaved?.(channel as Channel);
+        // Deferred until the modal has actually gone.
+        //
+        // Core's ModalManager.animateHide() only clears its `modalClosing` latch
+        // from a `transitionend` handler. A caller that changes the route in this
+        // same tick can interrupt that transition, the event never fires, and the
+        // latch stays set — after which every later animateHide() returns
+        // immediately and no modal can be closed again until the page is reloaded.
+        // That is why creating a channel left the next modal stuck with a dead X.
+        afterModalClosed(() => this.attrs.onSaved?.(channel as Channel));
       })
       .catch((error: any) => {
         this.loading = false;

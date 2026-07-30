@@ -276,6 +276,14 @@ function mountDrawer(): void {
   }
 }
 
+/**
+ * Whether to show the chat at all.
+ *
+ * An account is required. A guest read permission existed briefly and has been
+ * withdrawn; the `/chat/*` routes now answer 404 for anyone without access, so
+ * this and the server agree rather than one of them silently offering something
+ * the other refuses.
+ */
 function canUseChat(): boolean {
   if (!app.forum.attribute<boolean>('canUseChat')) return false;
   if (!app.session.user) return false;

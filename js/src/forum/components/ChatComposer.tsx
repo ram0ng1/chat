@@ -13,6 +13,15 @@ import type ChatState from '../state/ChatState';
 import ChatAutocomplete from './ChatAutocomplete';
 import type { Suggestion } from './ChatAutocomplete';
 import { searchEmoji } from '../utils/emoji';
+import { messagePreview } from '../utils/preview';
+import {
+  stickersAvailable,
+  stickerIcon,
+  stickerLabel,
+  openStickerPicker,
+  close as closeStickerPicker,
+  isStickerPickerOpen,
+} from '../utils/stickers';
 
 export interface ChatComposerAttrs extends ComponentAttrs {
   channel: Channel;
@@ -160,6 +169,25 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
                   onclick={() => this.pickFiles()}
                 />
               </>
+            ) : null}
+
+            {/* Only when ramon/stickers is actually installed. The component is
+                resolved from Flarum's export registry at runtime, so this is a
+                button that appears rather than a dependency that must be met. */}
+            {stickersAvailable() ? (
+              // A plain button, not `Button` with an `icon` attr: that attr takes a
+              // Font Awesome class name, and this icon is an inline SVG so it
+              // matches the one on the discussion composer exactly.
+              <button
+                type="button"
+                className="ChatComposer-tool"
+                title={stickerLabel()}
+                aria-label={stickerLabel()}
+                disabled={this.sending}
+                onclick={(e: Event) => this.toggleStickers(e)}
+              >
+                {stickerIcon()}
+              </button>
             ) : null}
           </div>
 
@@ -318,7 +346,7 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
                 username: username(target.user()),
               })}
         </span>
-        <span className="ChatComposer-context-preview">{target.content() ?? ''}</span>
+        <span className="ChatComposer-context-preview">{messagePreview(target, 80)}</span>
         <Button
           className="ChatComposer-tool"
           icon="fas fa-times"
@@ -616,6 +644,62 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
   }
 
   // ── Submit ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Opens the sticker picker, or closes it if this button opened it.
+   *
+   * The chosen shortcode goes in at the caret like any other typed text, so it is
+   * still editable and still part of the draft — the message is only rendered
+   * into a sticker by the formatter, on send.
+   */
+  protected toggleStickers(e: Event): void {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (isStickerPickerOpen()) {
+      closeStickerPicker();
+
+      return;
+    }
+
+    const trigger = (e.currentTarget as HTMLElement)?.closest('.ChatComposer-tool') ?? null;
+
+    openStickerPicker(trigger as HTMLElement | null, (text: string) => this.insertAtCursor(text));
+  }
+
+  /**
+   * Inserts text where the caret is, rather than appending.
+   *
+   * The composer keeps its value in the draft rather than in the DOM, so both
+   * have to be updated: the textarea for the caret position the user can see, and
+   * the draft for what is actually sent.
+   */
+  protected insertAtCursor(text: string): void {
+    const { channel, state, threadId } = this.attrs;
+    const channelId = Number(channel.id());
+    const current = state.draft(channelId, threadId ?? null);
+
+    if (!this.textarea) {
+      state.setDraft(channelId, current + text, threadId ?? null);
+      m.redraw();
+
+      return;
+    }
+
+    const start = this.textarea.selectionStart ?? current.length;
+    const end = this.textarea.selectionEnd ?? start;
+    const next = current.slice(0, start) + text + current.slice(end);
+
+    state.setDraft(channelId, next, threadId ?? null);
+
+    m.redraw.sync();
+
+    // Restored after the redraw, or the caret jumps to the end of the box.
+    this.textarea.focus();
+    this.textarea.setSelectionRange(start + text.length, start + text.length);
+
+    this.resize();
+  }
 
   protected async submit(): Promise<void> {
     const { channel, state, threadId, onSent } = this.attrs;

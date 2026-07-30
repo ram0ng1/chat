@@ -180,6 +180,13 @@ ramon-chat:
       remove: Remove bookmark
       remove_failed: The bookmark could not be removed.
 
+    # The full-screen image viewer, opened by clicking an image in the stream.
+    lightbox:
+      close: Close
+      previous: Previous image
+      next: Next image
+      open_original: Open the original
+
     thread:
       title: Thread
       untitled: Untitled thread
@@ -199,6 +206,9 @@ ramon-chat:
       placeholder_closed: This channel is closed
       send: Send
       attach: Attach a file
+      sticker: Insert a sticker
+      sticker_search: Search stickers
+      sticker_none: No stickers found.
       emoji: Emoji
       insert_date: Insert date
       cancel_edit: Cancel
