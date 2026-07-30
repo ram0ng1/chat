@@ -38,7 +38,7 @@ export default class RevisionsModal extends Modal<RevisionsModalAttrs> {
   }
 
   className(): string {
-    return 'Modal--medium ChatRevisions';
+    return 'ChatModal ChatRevisions Modal--medium';
   }
 
   title(): Mithril.Children {

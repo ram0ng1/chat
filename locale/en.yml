@@ -224,6 +224,7 @@ ramon-chat:
       search_placeholder: Search channels
       empty: No channels match.
       new_channel: New channel
+      messages: "{count} messages"
 
     info:
       tab_settings: Settings

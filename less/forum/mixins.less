@@ -48,6 +48,14 @@
   background: @bg;
   .chat-flex-center();
   flex-shrink: 0;
+
+  // Both are needed for the glyph to actually sit in the middle. `align-items:
+  // center` centres the *line box*, and a line box inheriting the body's 1.5
+  // line-height is taller than the icon, so the glyph rides high inside it. A
+  // <button> also carries the UA's default padding, which shrinks the content box
+  // the glyph is centred within.
+  padding: 0;
+  line-height: 1;
 }
 
 .chat-pill-btn(@height: 30px; @h-padding: 12px; @font-size: @chat-font-label) {
