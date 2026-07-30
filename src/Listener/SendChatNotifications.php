@@ -9,7 +9,9 @@
 
 namespace Ramon\Chat\Listener;
 
+use Flarum\Notification\AlertableInterface;
 use Flarum\Notification\Blueprint\BlueprintInterface;
+use Flarum\Notification\MailableInterface;
 use Flarum\Notification\NotificationSyncer;
 use Flarum\User\User;
 use Psr\Log\LoggerInterface;
@@ -95,11 +97,38 @@ class SendChatNotifications
 
         $watcherIds = array_values(array_diff(array_unique($watcherIds), $alreadyNotified));
 
+        // Resolving these is not free — it is a visibility query per recipient — so
+        // it is only worth doing if something will actually be delivered.
+        // ChatMessageBlueprint has no delivery channel any more: a new message
+        // belongs in the chat's own unread counters, not in Flarum's bell. That
+        // makes this branch a no-op, and skipping it removes most of the cost of a
+        // reply in a busy thread, where everyone who ever replied is a watcher.
+        if ($watcherIds === [] || ! $this->delivers(ChatMessageBlueprint::class)) {
+            return;
+        }
+
         $watchers = $this->recipientsFor($message, $watcherIds, isMention: false);
 
         if ($watchers !== []) {
             $this->dispatch(new ChatMessageBlueprint($message), $watchers);
         }
+    }
+
+    /**
+     * Whether a blueprint has any driver that would deliver it.
+     *
+     * Asked of the class rather than hard-coded, so removing or restoring a
+     * delivery channel is a change in one place — the blueprint — instead of two
+     * that can disagree.
+     */
+    protected function delivers(string $blueprint): bool
+    {
+        // `Flarum\Notification\AlertableInterface`, not `…\Blueprint\…`. Only
+        // the first exists; `is_a()` against a class that does not exist returns
+        // false without complaint, so naming the wrong one would quietly report
+        // "delivers nothing" for every alert-only blueprint.
+        return is_a($blueprint, AlertableInterface::class, true)
+            || is_a($blueprint, MailableInterface::class, true);
     }
 
     /**

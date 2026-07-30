@@ -236,8 +236,14 @@ return [
     // Only mentions are mailable: a message notification can fire per message in
     // a busy channel, and routing that to email would be a mail-bomb.
     (new Extend\Notification())
-        ->type(Notification\ChatMentionBlueprint::class, ['alert', 'email'])
-        ->type(Notification\ChatMessageBlueprint::class, ['alert'])
+        // Email only: the alert channel would put chat traffic in Flarum's bell,
+        // and the chat surfaces its own mentions. Listing 'alert' here would also
+        // offer a preference toggle for a channel that no longer delivers.
+        ->type(Notification\ChatMentionBlueprint::class, ['email'])
+
+        // No channels at all. Still registered so notification rows written by the
+        // earlier version stay resolvable instead of rendering as an unknown type.
+        ->type(Notification\ChatMessageBlueprint::class, [])
         ->type(Notification\ChannelInviteBlueprint::class, ['alert']),
 
     // ── Domain listeners ─────────────────────────────────────────────────────

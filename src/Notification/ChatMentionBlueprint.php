@@ -11,7 +11,6 @@ namespace Ramon\Chat\Notification;
 
 use Flarum\Database\AbstractModel;
 use Flarum\Locale\TranslatorInterface;
-use Flarum\Notification\AlertableInterface;
 use Flarum\Notification\Blueprint\BlueprintInterface;
 use Flarum\Notification\MailableInterface;
 use Flarum\User\User;
@@ -22,14 +21,17 @@ use Ramon\Chat\Message;
  *
  * Mentions are the one chat event that earns an email, because they are directed
  * at a specific person rather than being ambient channel traffic.
+ *
+ * Not alertable, though: like ChatMessageBlueprint, this belongs in the chat's own
+ * surfaces rather than in Flarum's bell. The chat already tracks mentions
+ * separately from ordinary unreads — `unread_mentions_count` on the membership —
+ * and draws them in their own colour on the header button and the sidebar, which
+ * is a better place for them than a bell shared with every other extension.
+ *
+ * Email stays because it reaches you when the forum is closed, which no in-app
+ * surface can.
  */
-/*
- * AlertableInterface is a marker with no methods, and it is easy to leave off —
- * but Flarum's AlertNotificationDriver checks for it before queueing anything, so
- * without it the notification is dropped in silence: no row, no error. That is why
- * the bell never showed chat activity.
- */
-class ChatMentionBlueprint implements AlertableInterface, BlueprintInterface, MailableInterface
+class ChatMentionBlueprint implements BlueprintInterface, MailableInterface
 {
     public function __construct(
         public Message $message
