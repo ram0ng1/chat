@@ -4,6 +4,8 @@ import type { ComponentAttrs } from 'flarum/common/Component';
 import LoadingIndicator from 'flarum/common/components/LoadingIndicator';
 import type Mithril from 'mithril';
 
+import { playOnHover } from '../utils/stickers';
+
 export interface StickerPickerAttrs extends ComponentAttrs {
   onInsert: (shortcode: string) => void;
   onClose: () => void;
@@ -51,6 +53,18 @@ export default class StickerPicker extends Component<StickerPickerAttrs> {
     });
 
     (vnode.dom.querySelector('.ChatStickerPicker-search') as HTMLInputElement | null)?.focus();
+
+    playOnHover(vnode.dom as HTMLElement);
+  }
+
+  /**
+   * Hydrate after every render, not only on create: the grid is rebuilt whenever
+   * the filter changes, and the new nodes arrive unhydrated.
+   */
+  onupdate(vnode: Mithril.VnodeDOM<StickerPickerAttrs>): void {
+    super.onupdate(vnode);
+
+    playOnHover(vnode.dom as HTMLElement);
   }
 
   onremove(): void {

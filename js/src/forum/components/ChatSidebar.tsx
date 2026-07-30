@@ -34,6 +34,18 @@ export default class ChatSidebar extends Component<ChatSidebarAttrs> {
           {this.quickLink('chat.threads', 'fas fa-comments', 'ramon-chat.forum.sidebar.my_threads')}
           {this.quickLink('chat.bookmarks', 'fas fa-bookmark', 'ramon-chat.forum.sidebar.bookmarks')}
           {this.quickLink('chat.search', 'fas fa-magnifying-glass', 'ramon-chat.forum.sidebar.search')}
+
+          {/* Moderators only, and the count comes from the server rather than
+              from the list — the link has to be able to say there is work waiting
+              before anyone opens the queue. */}
+          {app.forum.attribute<boolean>('canModerateChat')
+            ? this.quickLink(
+                'chat.flags',
+                'fas fa-flag',
+                'ramon-chat.forum.sidebar.flags',
+                Number(app.forum.attribute<number>('chatOpenFlagsCount') ?? 0)
+              )
+            : null}
         </div>
 
         <div className="ChatSidebar-scroll">
@@ -97,7 +109,7 @@ export default class ChatSidebar extends Component<ChatSidebarAttrs> {
    * so the sidebar looked identical whether you were reading a channel, your
    * threads or your bookmarks.
    */
-  protected quickLink(routeName: string, icon: string, key: string): Mithril.Children {
+  protected quickLink(routeName: string, icon: string, key: string, badge?: number): Mithril.Children {
     // `m.route.get()` rather than comparing to a stored value: the route can also
     // change from browser back/forward, which no click handler observes.
     const active = m.route.get().split('?')[0] === app.route(routeName);
@@ -111,6 +123,10 @@ export default class ChatSidebar extends Component<ChatSidebarAttrs> {
       >
         <i className={`ChatSidebar-quickLink-icon ${icon}`} aria-hidden="true" />
         <span>{app.translator.trans(key)}</span>
+
+        {/* Only when there is something to report. A badge reading zero is noise
+            that trains people to stop looking at it. */}
+        {badge ? <span className="ChatSidebar-quickLink-badge">{badge > 99 ? '99+' : badge}</span> : null}
       </button>
     );
   }

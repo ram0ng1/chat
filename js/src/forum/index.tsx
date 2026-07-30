@@ -11,6 +11,7 @@ import Channel from '../common/models/Channel';
 import Message from '../common/models/Message';
 import Thread from '../common/models/Thread';
 import Upload from '../common/models/Upload';
+import MessageFlag from '../common/models/MessageFlag';
 
 import chatState from './state/chat';
 import ChatState from './state/ChatState';
@@ -28,19 +29,24 @@ import ChatComposer from './components/ChatComposer';
 import BrowseChannelsPage from './components/BrowseChannelsPage';
 import ChannelFormModal from './components/ChannelFormModal';
 import ChannelInviteNotification from './components/ChannelInviteNotification';
+import MessageFlaggedNotification from './components/MessageFlaggedNotification';
 import ChannelInfoModal from './components/ChannelInfoModal';
 import ChatSelectionBar from './components/ChatSelectionBar';
 import ChatAutocomplete from './components/ChatAutocomplete';
 import RevisionsModal from './components/RevisionsModal';
+import FlagMessageModal from './components/FlagMessageModal';
+import FlaggedMessagesList from './components/FlaggedMessagesList';
 import { bindRealtime, setPollingFallback, realtimeBound } from './realtime';
 import { bindShortcuts } from './utils/shortcuts';
 import ChatPageResolver from './resolvers/ChatPageResolver';
+import bindFlagsIntegration from './utils/flagsIntegration';
 
 export {
   Channel,
   Message,
   Thread,
   Upload,
+  MessageFlag,
   ChatState,
   chatState,
   ChatNavButton,
@@ -57,10 +63,13 @@ export {
   BrowseChannelsPage,
   ChannelFormModal,
   ChannelInviteNotification,
+  MessageFlaggedNotification,
   ChannelInfoModal,
   ChatSelectionBar,
   ChatAutocomplete,
   RevisionsModal,
+  FlagMessageModal,
+  FlaggedMessagesList,
   // Exported for diagnosis: in the console,
   //   flarum.reg.get('ramon-chat', 'forum/index').realtimeBound()
   // tells you whether the chat is on the websocket or on the polling fallback.
@@ -87,6 +96,7 @@ app.initializers.add('ramon-chat', () => {
   app.store.models['chat-messages'] = Message;
   app.store.models['chat-threads'] = Thread;
   app.store.models['chat-uploads'] = Upload;
+  app.store.models['chat-message-flags'] = MessageFlag;
 
   // ── Routes ────────────────────────────────────────────────────────────────
   // Names match the server-side declarations in extend.php. Without these the
@@ -104,6 +114,7 @@ app.initializers.add('ramon-chat', () => {
   app.routes['chat.threads'] = { path: '/chat/threads', ...chatPage };
   app.routes['chat.search'] = { path: '/chat/search', ...chatPage };
   app.routes['chat.bookmarks'] = { path: '/chat/bookmarks', ...chatPage };
+  app.routes['chat.flags'] = { path: '/chat/flags', ...chatPage };
 
   // A genuinely separate page, so it keeps the default resolver.
   app.routes['chat.browse'] = { path: '/chat/browse', component: BrowseChannelsPage };
@@ -113,6 +124,7 @@ app.initializers.add('ramon-chat', () => {
   // The component that renders the alert, and the row in the user's notification
   // preferences that lets them turn it off.
   app.notificationComponents.chatChannelInvite = ChannelInviteNotification;
+  app.notificationComponents.chatMessageFlagged = MessageFlaggedNotification;
 
   extend('flarum/forum/components/NotificationGrid', 'notificationTypes', function (items: ItemList<unknown>) {
     items.add('chatChannelInvite', {
@@ -120,6 +132,17 @@ app.initializers.add('ramon-chat', () => {
       icon: 'fas fa-comments',
       label: app.translator.trans('ramon-chat.forum.settings.notify_channel_invite'),
     });
+
+    // Administrators only, matching who the server actually notifies. Offering
+    // the row to anyone else advertises a notification they can never receive,
+    // and a preference that does nothing is worse than an absent one.
+    if (app.session.user?.isAdmin()) {
+      items.add('chatMessageFlagged', {
+        name: 'chatMessageFlagged',
+        icon: 'fas fa-flag',
+        label: app.translator.trans('ramon-chat.forum.settings.notify_message_flagged'),
+      });
+    }
   });
 
   // ── Header trigger ────────────────────────────────────────────────────────
@@ -196,6 +219,9 @@ app.initializers.add('ramon-chat', () => {
       mountDrawer();
 
       bindShortcuts();
+
+      // Chat reports in flarum/flags' own list, when that extension is present.
+      bindFlagsIntegration();
 
       // Reopen it if the last visit left it open. Dismissal is deliberate: only
       // the close button (and switching to the full-screen page) clears this.

@@ -92,7 +92,7 @@ export default class ThreadPanel extends Component<ThreadPanelAttrs> {
           <Button
             className="Button Button--icon Button--flat"
             icon="fas fa-xmark"
-            title={app.translator.trans('ramon-chat.forum.thread.close')}
+            title={app.translator.trans('ramon-chat.forum.thread.close', {}, true)}
             onclick={onClose}
           />
         </div>

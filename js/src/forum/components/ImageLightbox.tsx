@@ -97,14 +97,14 @@ export default class ImageLightbox extends Component<ImageLightboxAttrs> {
             <Button
               className="Button Button--icon Button--flat"
               icon="fas fa-arrow-up-right-from-square"
-              title={app.translator.trans('ramon-chat.forum.lightbox.open_original')}
+              title={app.translator.trans('ramon-chat.forum.lightbox.open_original', {}, true)}
               onclick={() => window.open(upload.url() ?? '', '_blank', 'noopener,noreferrer')}
             />
 
             <Button
               className="Button Button--icon Button--flat"
               icon="fas fa-xmark"
-              title={app.translator.trans('ramon-chat.forum.lightbox.close')}
+              title={app.translator.trans('ramon-chat.forum.lightbox.close', {}, true)}
               onclick={onClose}
             />
           </div>
@@ -114,7 +114,7 @@ export default class ImageLightbox extends Component<ImageLightboxAttrs> {
           <Button
             className="Button Button--icon Button--flat ChatLightbox-nav ChatLightbox-nav--prev"
             icon="fas fa-chevron-left"
-            title={app.translator.trans('ramon-chat.forum.lightbox.previous')}
+            title={app.translator.trans('ramon-chat.forum.lightbox.previous', {}, true)}
             onclick={(e: Event) => {
               e.stopPropagation();
               this.step(-1);
@@ -133,7 +133,7 @@ export default class ImageLightbox extends Component<ImageLightboxAttrs> {
           <Button
             className="Button Button--icon Button--flat ChatLightbox-nav ChatLightbox-nav--next"
             icon="fas fa-chevron-right"
-            title={app.translator.trans('ramon-chat.forum.lightbox.next')}
+            title={app.translator.trans('ramon-chat.forum.lightbox.next', {}, true)}
             onclick={(e: Event) => {
               e.stopPropagation();
               this.step(1);

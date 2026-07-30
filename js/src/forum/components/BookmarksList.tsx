@@ -2,15 +2,14 @@ import app from 'flarum/forum/app';
 import Component from 'flarum/common/Component';
 import type { ComponentAttrs } from 'flarum/common/Component';
 import Button from 'flarum/common/components/Button';
-import Avatar from 'flarum/common/components/Avatar';
 import humanTime from 'flarum/common/helpers/humanTime';
-import username from 'flarum/common/helpers/username';
 import type Mithril from 'mithril';
 
 import type Message from '../../common/models/Message';
 import type ChatState from '../state/ChatState';
 import { MessageStreamSkeleton } from './Skeletons';
 import { messagePreview } from '../utils/preview';
+import { authorAvatar, authorName } from '../utils/bot';
 
 export interface BookmarksListAttrs extends ComponentAttrs {
   state: ChatState;
@@ -65,11 +64,11 @@ export default class BookmarksList extends Component<BookmarksListAttrs> {
 
     return (
       <div className="ChatBookmarks-row" key={message.id()}>
-        <Avatar user={message.user()} className="Avatar" />
+        {authorAvatar(message)}
 
         <button type="button" className="ChatBookmarks-body" onclick={() => this.open(message)}>
           <div className="ChatBookmarks-meta">
-            <span className="ChatBookmarks-author">{username(message.user())}</span>
+            <span className="ChatBookmarks-author">{authorName(message)}</span>
             {channel ? <span className="ChatBookmarks-channel">{channel.displayName()}</span> : null}
             {at ? <span>{humanTime(at)}</span> : null}
           </div>
@@ -84,7 +83,7 @@ export default class BookmarksList extends Component<BookmarksListAttrs> {
           className="Button Button--icon Button--flat ChatBookmarks-remove"
           icon="fas fa-bookmark"
           loading={this.working === id}
-          title={app.translator.trans('ramon-chat.forum.bookmarks.remove')}
+          title={app.translator.trans('ramon-chat.forum.bookmarks.remove', {}, true)}
           onclick={() => this.remove(message)}
         />
       </div>

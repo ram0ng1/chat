@@ -27,7 +27,16 @@ import StickerPicker from '../components/StickerPicker';
  *
  * The model, by contrast, is registered in their initializer, which runs at boot.
  */
+/** The namespace ramon/stickers registers its modules under. */
+const EXTENSION = 'ramon-stickers';
+
 export function stickersAvailable(): boolean {
+  // Two conditions, and both matter: the extension has to be installed, and this
+  // actor has to be allowed to send stickers. Drawing the button for someone the
+  // server would refuse is the same mistake the paperclip made before it was
+  // gated on `ramon-chat.upload`.
+  if (! app.forum.attribute<boolean>('canSendChatStickers')) return false;
+
   return Boolean((app.store as any)?.models?.stickers);
 }
 
@@ -80,6 +89,47 @@ export function close(): void {
   m.mount(openMount, null);
   openMount.remove();
   openMount = null;
+}
+
+/**
+ * Hydrates the animated stickers inside a node, paused until hovered.
+ *
+ * The extension's own MutationObserver would do this eventually, but with the
+ * options its admin setting dictates — and with `hover_play` off that means every
+ * sticker in the grid animating at once: a wall of motion, and a lot of work for
+ * one panel.
+ *
+ * A grid is not a message. In the stream the setting governs and this is not
+ * called; here it is forced, because a picker exists to be scanned.
+ *
+ * Their renderers skip nodes already marked as initialised, so running first
+ * means the observer leaves these alone rather than re-hydrating them without the
+ * option. Unlike their picker component, these two modules are registered at
+ * boot, so they are actually resolvable.
+ */
+export function playOnHover(node: HTMLElement): void {
+  const registry = (window as any)?.flarum?.reg;
+
+  if (!registry) return;
+
+  const renderers: Array<[string, string]> = [
+    ['common/utils/renderLottie', 'initLottieInRoot'],
+    ['common/utils/renderTgs', 'initTgsInRoot'],
+  ];
+
+  for (const [path, fn] of renderers) {
+    try {
+      const module =
+        typeof registry.checkModule === 'function'
+          ? registry.checkModule(EXTENSION, path)
+          : registry.get?.(EXTENSION, path);
+
+      module?.[fn]?.(node, { hoverPlay: true });
+    } catch {
+      // An absent or changed renderer is not worth breaking the panel over; the
+      // stickers just show their first frame.
+    }
+  }
 }
 
 export function isStickerPickerOpen(): boolean {

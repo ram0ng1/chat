@@ -201,6 +201,23 @@ class BroadcastListener
             // sender's, where the API response had supplied them.
             'uploads'     => $deleted ? [] : $this->uploadsPayload($message),
 
+            // Who the message is addressed to. Carried for the same reason the
+            // uploads are: the recipient builds the row from this payload alone.
+            //
+            // Without it a message arriving live could not be recognised as a
+            // mention — the highlight never appeared, and the notification sound
+            // had no way to honour a channel set to "mentions only", so it chimed
+            // on every message in every channel the user belonged to.
+            'mentionedUsers'      => $deleted ? [] : $message->mentions
+                ->where('type', 'user')
+                ->pluck('user_id')
+                ->filter()
+                ->values()
+                ->all(),
+
+            'mentionsChannelWide' => ! $deleted
+                && $message->mentions->contains(fn ($mention) => $mention->isChannelWide()),
+
             // The author, inlined for the same reason the uploads are.
             //
             // `userId` alone is only a *reference*: the client resolves it against

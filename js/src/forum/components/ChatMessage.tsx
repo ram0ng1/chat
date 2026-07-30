@@ -14,9 +14,10 @@ import type Message from '../../common/models/Message';
 import type ChatState from '../state/ChatState';
 import { displayEmoji } from '../utils/emoji';
 import { isOnline } from '../utils/presence';
-import { botAvatar, botName } from '../utils/bot';
+import { authorAvatar, authorLink, botName } from '../utils/bot';
 import { verifiedBadge } from '../utils/integrations';
 import RevisionsModal from './RevisionsModal';
+import FlagMessageModal from './FlagMessageModal';
 import ImageLightbox from './ImageLightbox';
 import { messagePreview } from '../utils/preview';
 
@@ -88,14 +89,14 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
         onclick={state.selecting ? () => state.toggleSelected(Number(message.id())) : undefined}
       >
         <div className="ChatMessage-gutter">
-          {grouped ? this.shortTime(message) : message.isBot() ? botAvatar() : <Avatar user={message.user()} className="Avatar" />}
+          {grouped ? this.shortTime(message) : authorAvatar(message)}
         </div>
 
         <div className="ChatMessage-body">
           {grouped ? null : (
             <div className="ChatMessage-meta">
               <span className="ChatMessage-author">
-                {message.isBot() ? botName() : userLink(message.user())}
+                {authorLink(message)}
               </span>
 
               {/* ramon/verified, when installed. Placed where that extension puts
@@ -144,27 +145,34 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
    * reflow the conversation and make replies to them incoherent.
    */
   protected tombstone(message: Message): Mithril.Children {
-    // `hasOne` yields false when the relationship was not included.
-    const moderator = message.deletedBy() || null;
-
-    // Naming the moderator is the point: "removed by a moderator" leaves the
-    // author with no idea who to ask. Only shown for a moderator removal — a
-    // message you deleted yourself does not need to tell you who deleted it.
-    if (message.isRedacted() && moderator) {
+    // Decided by who removed it, never by whether the text was withheld. Those
+    // are different questions: a message its author deleted is withheld from
+    // everyone else as well, so keying off redaction announced every ordinary
+    // self-deletion to the channel as a moderator removal.
+    if (!message.isModeratorDeleted()) {
       return (
         <div className="ChatMessage-tombstone">
-          {app.translator.trans('ramon-chat.forum.message.deleted_by_named', {
-            username: username(moderator),
-          })}
+          {app.translator.trans('ramon-chat.forum.message.deleted')}
         </div>
       );
     }
 
-    const key = message.isRedacted()
-      ? 'ramon-chat.forum.message.deleted_by_moderator'
-      : 'ramon-chat.forum.message.deleted';
+    // `hasOne` yields false when the relationship was not included — a realtime
+    // push carries no relations, so the unnamed wording is the fallback rather
+    // than a separate case.
+    const moderator = message.deletedBy() || null;
 
-    return <div className="ChatMessage-tombstone">{app.translator.trans(key)}</div>;
+    // Naming them is the point: "removed by a moderator" leaves the author with
+    // no idea who to ask.
+    return (
+      <div className="ChatMessage-tombstone">
+        {moderator
+          ? app.translator.trans('ramon-chat.forum.message.deleted_by_named', {
+              username: username(moderator),
+            })
+          : app.translator.trans('ramon-chat.forum.message.deleted_by_moderator')}
+      </div>
+    );
   }
 
   protected content(message: Message): Mithril.Children {
@@ -400,8 +408,7 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
           // Filled while liked, outlined otherwise — the same read as flarum/likes.
           icon={liked ? 'fas fa-thumbs-up' : 'far fa-thumbs-up'}
           title={app.translator.trans(
-            liked ? 'ramon-chat.forum.message.unlike' : 'ramon-chat.forum.message.like'
-          )}
+            liked ? 'ramon-chat.forum.message.unlike' : 'ramon-chat.forum.message.like', {}, true)}
           onclick={() => this.react(message, LIKE_REACTION)}
         />
       );
@@ -412,7 +419,7 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
         <Button
           className="ChatMessage-action"
           icon="fas fa-comments"
-          title={app.translator.trans('ramon-chat.forum.message.reply_in_thread')}
+          title={app.translator.trans('ramon-chat.forum.message.reply_in_thread', {}, true)}
           onclick={() => this.attrs.onOpenThread?.(message)}
         />
       );
@@ -423,7 +430,7 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
         <Button
           className="ChatMessage-action"
           icon="fas fa-reply"
-          title={app.translator.trans('ramon-chat.forum.message.reply')}
+          title={app.translator.trans('ramon-chat.forum.message.reply', {}, true)}
           onclick={() => this.attrs.onReply?.(message)}
         />
       );
@@ -434,7 +441,7 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
         <Button
           className="ChatMessage-action"
           icon="fas fa-pencil"
-          title={app.translator.trans('ramon-chat.forum.message.edit')}
+          title={app.translator.trans('ramon-chat.forum.message.edit', {}, true)}
           onclick={() => this.attrs.onEdit?.(message)}
         />
       );
@@ -448,8 +455,7 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
           title={app.translator.trans(
             message.isBookmarked()
               ? 'ramon-chat.forum.message.remove_bookmark'
-              : 'ramon-chat.forum.message.bookmark'
-          )}
+              : 'ramon-chat.forum.message.bookmark', {}, true)}
           onclick={() => this.bookmark(message)}
         />
       );
@@ -462,7 +468,7 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
       <Button
         className="ChatMessage-action"
         icon="fas fa-list-check"
-        title={app.translator.trans('ramon-chat.forum.message.select')}
+        title={app.translator.trans('ramon-chat.forum.message.select', {}, true)}
         onclick={() => {
           const state = this.attrs.state;
 
@@ -481,9 +487,28 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
           className={classList('ChatMessage-action', { 'ChatMessage-action--active': pinned })}
           icon="fas fa-thumbtack"
           title={app.translator.trans(
-            pinned ? 'ramon-chat.forum.message.unpin' : 'ramon-chat.forum.message.pin'
-          )}
+            pinned ? 'ramon-chat.forum.message.unpin' : 'ramon-chat.forum.message.pin', {}, true)}
           onclick={() => this.pin(message)}
+        />
+      );
+    }
+
+    // Reporting. Last in the row and never the default action, because it is the
+    // one here that involves another person's time: it opens a queue item a
+    // moderator has to read and decide on.
+    if (message.canFlag()) {
+      const reported = Boolean(message.isFlagged());
+
+      items.push(
+        <Button
+          className={classList('ChatMessage-action', { 'ChatMessage-action--active': reported })}
+          icon="fas fa-flag"
+          title={app.translator.trans(
+            reported ? 'ramon-chat.forum.message.flagged' : 'ramon-chat.forum.message.flag',
+            {},
+            true
+          )}
+          onclick={() => app.modal.show(FlagMessageModal, { message })}
         />
       );
     }
@@ -493,7 +518,7 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
         <Button
           className="ChatMessage-action"
           icon="fas fa-trash"
-          title={app.translator.trans('ramon-chat.forum.message.delete')}
+          title={app.translator.trans('ramon-chat.forum.message.delete', {}, true)}
           onclick={() => this.delete(message)}
         />
       );
@@ -599,7 +624,16 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
         url: `${app.forum.attribute('apiUrl')}/chat-messages/${message.id()}/delete`,
       });
 
-      message.pushAttributes({ isDeleted: true, content: null, contentHtml: null });
+      message.pushAttributes({
+        isDeleted: true,
+        content: null,
+        contentHtml: null,
+        // Stated rather than left to the next fetch. Deleting is optimistic, so
+        // until then this row renders from whatever the client last set — and a
+        // tombstone that guesses is how "removed by a moderator" ended up on
+        // messages people had deleted themselves.
+        isModeratorDeleted: Number((message.user() || null)?.id() ?? 0) !== Number(app.session.user?.id() ?? 0),
+      });
     } catch (e) {
       app.alerts.show({ type: 'error' }, app.translator.trans('ramon-chat.forum.message.delete_failed'));
     } finally {

@@ -17,12 +17,12 @@
  *
  * 55 KB of JSON has no business in the main bundle for a feature most page views
  * never touch. The dynamic import puts it in its own chunk, and a small inline
- * table covers the default reaction set so the first paint is never blank.
+ * table covers the common reaction set so the first paint is never blank.
  */
 
 /**
- * Covers the shipped `ramon-chat.default_reactions` plus a few obvious ones, so
- * the common case renders synchronously and the chunk load is invisible.
+ * The reactions the hover bar and the picker open with, plus a few obvious ones,
+ * so the common case renders synchronously and the chunk load is invisible.
  */
 const COMMON: Record<string, string> = {
   heart: '❤️',

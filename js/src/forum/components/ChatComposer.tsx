@@ -164,7 +164,7 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
                 <Button
                   className="ChatComposer-tool"
                   icon="fas fa-paperclip"
-                  title={app.translator.trans('ramon-chat.forum.composer.attach')}
+                  title={app.translator.trans('ramon-chat.forum.composer.attach', {}, true)}
                   disabled={this.uploading || this.sending}
                   onclick={() => this.pickFiles()}
                 />
@@ -350,7 +350,7 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
         <Button
           className="ChatComposer-tool"
           icon="fas fa-times"
-          title={app.translator.trans('ramon-chat.forum.composer.cancel_edit')}
+          title={app.translator.trans('ramon-chat.forum.composer.cancel_edit', {}, true)}
           onclick={() => this.cancelContext()}
         />
       </div>

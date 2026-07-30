@@ -68,7 +68,7 @@ export default class EmojiPicker extends Component<EmojiPickerAttrs> {
             <Button
               className="Button Button--icon Button--link EmojiPicker-clear"
               icon="fas fa-times"
-              title={app.translator.trans('ramon-chat.forum.emoji_picker.clear')}
+              title={app.translator.trans('ramon-chat.forum.emoji_picker.clear', {}, true)}
               disabled={disabled}
               onclick={() => this.choose(null)}
             />

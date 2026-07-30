@@ -77,7 +77,7 @@ class MessageResource extends AbstractDatabaseResource
                 // collection to anyone, which is a slower way of saying no.
                 ->authenticated()
                 ->defaultInclude(['user', 'replyTo', 'replyTo.user', 'uploads', 'thread', 'thread.lastMessage', 'deletedBy'])
-                ->eagerLoad(['reactions', 'uploads', 'mentions']),
+                ->eagerLoad(['reactions', 'uploads', 'mentions', 'flags']),
 
             Endpoint\Index::make()
                 ->authenticated()
@@ -94,7 +94,7 @@ class MessageResource extends AbstractDatabaseResource
                 //
                 // `thread.lastMessage` comes along for the indicator's preview text.
                 ->defaultInclude(['user', 'replyTo', 'replyTo.user', 'uploads', 'thread', 'thread.lastMessage', 'deletedBy'])
-                ->eagerLoad(['reactions', 'uploads', 'mentions', 'thread'])
+                ->eagerLoad(['reactions', 'uploads', 'mentions', 'thread', 'flags'])
                 ->paginate(50),
 
             // Creation goes through MessageDispatcher rather than Create's own
@@ -426,6 +426,20 @@ class MessageResource extends AbstractDatabaseResource
             Schema\Boolean::make('isEdited')
                 ->get(fn (Message $m) => $m->isEdited()),
 
+            // Whether someone other than the author removed it.
+            //
+            // The client used to infer this from whether the text had been
+            // withheld, which is a different question: a message the author
+            // deleted is withheld from everyone else too, so their own deletion
+            // was announced to the channel as a moderator removal.
+            //
+            // Read from the column, so it does not depend on `deletedBy` having
+            // been included — a realtime push carries no relations.
+            Schema\Boolean::make('isModeratorDeleted')
+                ->get(fn (Message $m) => $m->isDeleted()
+                    && $m->deleted_by_id !== null
+                    && (int) $m->deleted_by_id !== (int) $m->user_id),
+
             Schema\DateTime::make('pinnedAt')->nullable(),
 
             Schema\Boolean::make('isPinned')
@@ -479,6 +493,36 @@ class MessageResource extends AbstractDatabaseResource
 
             Schema\Boolean::make('canPin')
                 ->get(fn (Message $m, Context $context) => $context->getActor()->can('pin', $m)),
+
+            Schema\Boolean::make('canFlag')
+                ->get(fn (Message $m, Context $context) => $context->getActor()->can('flag', $m)),
+
+            // Whether *this* actor has already reported it, so the button reads
+            // "reported" instead of inviting a second filing that would only
+            // overwrite the first.
+            Schema\Boolean::make('isFlagged')
+                ->get(function (Message $m, Context $context) {
+                    $actor = $context->getActor();
+
+                    if (! $actor->exists) {
+                        return false;
+                    }
+
+                    return $m->flags->contains(
+                        fn ($flag) => $flag->user_id === $actor->id && $flag->resolved_at === null
+                    );
+                }),
+
+            // How many people have reported it and nobody has yet dealt with it.
+            // Moderators only: a visible count would tell everyone which messages
+            // are being reported, which is both an invitation to pile on and a way
+            // to find out you have been reported.
+            //
+            // Read from the eager-loaded relation rather than counted per row —
+            // a query inside a field getter is one query per message in the stream.
+            Schema\Integer::make('flagsCount')
+                ->visible(fn (Message $m, Context $context) => $context->getActor()->hasPermission('ramon-chat.moderate'))
+                ->get(fn (Message $m) => $m->flags->whereNull('resolved_at')->count()),
 
             Schema\Relationship\ToOne::make('user')->type('users')->includable(),
             Schema\Relationship\ToOne::make('editedBy')->type('users')->includable(),
