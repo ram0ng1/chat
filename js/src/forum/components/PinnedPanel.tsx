@@ -1,15 +1,15 @@
-import app from 'flarum/forum/app';
-import Component from 'flarum/common/Component';
-import type { ComponentAttrs } from 'flarum/common/Component';
-import Button from 'flarum/common/components/Button';
-import LoadingIndicator from 'flarum/common/components/LoadingIndicator';
-import type Mithril from 'mithril';
+import app from "flarum/forum/app";
+import Component from "flarum/common/Component";
+import type { ComponentAttrs } from "flarum/common/Component";
+import Button from "flarum/common/components/Button";
+import LoadingIndicator from "flarum/common/components/LoadingIndicator";
+import type Mithril from "mithril";
 
-import type Channel from '../../common/models/Channel';
-import type Message from '../../common/models/Message';
-import type ChatState from '../state/ChatState';
-import ChatMessage from './ChatMessage';
-import { MessageStreamSkeleton } from './Skeletons';
+import type Channel from "../../common/models/Channel";
+import type Message from "../../common/models/Message";
+import type ChatState from "../state/ChatState";
+import ChatMessage from "./ChatMessage";
+import { MessageStreamSkeleton } from "./Skeletons";
 
 export interface PinnedPanelAttrs extends ComponentAttrs {
   channel: Channel;
@@ -61,13 +61,17 @@ export default class PinnedPanel extends Component<PinnedPanelAttrs> {
           <i className="fas fa-thumbtack" aria-hidden="true" />
 
           <span className="ChatThreadPanel-title">
-            {app.translator.trans('ramon-chat.forum.channel.pinned_messages')}
+            {app.translator.trans("ramon-chat.forum.channel.pinned_messages")}
           </span>
 
           <Button
             className="Button Button--icon Button--flat"
             icon="fas fa-xmark"
-            title={app.translator.trans('ramon-chat.forum.channel.close_pinned', {}, true)}
+            title={app.translator.trans(
+              "ramon-chat.forum.channel.close_pinned",
+              {},
+              true,
+            )}
             onclick={onClose}
           />
         </div>
@@ -77,7 +81,9 @@ export default class PinnedPanel extends Component<PinnedPanelAttrs> {
 
           {!this.loading && this.messages.length === 0 ? (
             <div className="ChatBrowse-empty">
-              {app.translator.trans('ramon-chat.forum.channel.no_pinned_messages')}
+              {app.translator.trans(
+                "ramon-chat.forum.channel.no_pinned_messages",
+              )}
             </div>
           ) : null}
 
@@ -116,21 +122,24 @@ export default class PinnedPanel extends Component<PinnedPanelAttrs> {
    */
   protected reply(message: Message): void {
     this.stage(message, (channelId, threadId) =>
-      this.attrs.state.setReplyingTo(channelId, message, threadId)
+      this.attrs.state.setReplyingTo(channelId, message, threadId),
     );
   }
 
   protected edit(message: Message): void {
     this.stage(message, (channelId, threadId) => {
       this.attrs.state.setEditing(channelId, message, threadId);
-      this.attrs.state.setDraft(channelId, message.content() ?? '', threadId);
+      this.attrs.state.setDraft(channelId, message.content() ?? "", threadId);
     });
   }
 
   /**
    * Closes the panel, opens the right composer, and applies the action to it.
    */
-  protected stage(message: Message, apply: (channelId: number, threadId: number | null) => void): void {
+  protected stage(
+    message: Message,
+    apply: (channelId: number, threadId: number | null) => void,
+  ): void {
     const state = this.attrs.state;
     const channelId = Number(this.attrs.channel.id());
     const threadId = message.threadId() ?? null;
@@ -151,7 +160,7 @@ export default class PinnedPanel extends Component<PinnedPanelAttrs> {
       // re-reads it on every update: setting the field alone would be undone on
       // the next redraw. In the drawer there is no route to set.
       if (!this.attrs.embedded) {
-        m.route.set(app.route('chat.thread', { id: channelId, threadId }));
+        m.route.set(app.route("chat.thread", { id: channelId, threadId }));
 
         return;
       }
@@ -162,7 +171,7 @@ export default class PinnedPanel extends Component<PinnedPanelAttrs> {
 
   protected async load(): Promise<void> {
     try {
-      const results = (await app.store.find('chat-messages', {
+      const results = (await app.store.find("chat-messages", {
         filter: {
           channel: Number(this.attrs.channel.id()),
           pinned: true,
@@ -170,7 +179,7 @@ export default class PinnedPanel extends Component<PinnedPanelAttrs> {
           // message inside a thread would silently be missing from the list.
           includeThreadReplies: true,
         },
-        sort: '-pinnedAt',
+        sort: "-pinnedAt",
         page: { limit: 50 },
       })) as unknown as Message[];
 

@@ -1,7 +1,7 @@
-import Model from 'flarum/common/Model';
-import type User from 'flarum/common/models/User';
+import Model from "flarum/common/Model";
+import type User from "flarum/common/models/User";
 
-import type Message from './Message';
+import type Message from "./Message";
 
 /**
  * A report filed against a chat message.
@@ -12,23 +12,23 @@ import type Message from './Message';
  */
 export default class MessageFlag extends Model {
   /** One of the keys MessageFlag::REASONS lists on the server. */
-  reason = Model.attribute<string>('reason');
+  reason = Model.attribute<string>("reason");
 
   /** The reporter's own words. Always rendered as text, never as HTML. */
-  detail = Model.attribute<string | null>('detail');
+  detail = Model.attribute<string | null>("detail");
 
-  messageId = Model.attribute<number>('messageId');
+  messageId = Model.attribute<number>("messageId");
 
-  createdAt = Model.attribute('createdAt', Model.transformDate);
-  resolvedAt = Model.attribute('resolvedAt', Model.transformDate);
-  isResolved = Model.attribute<boolean>('isResolved');
+  createdAt = Model.attribute("createdAt", Model.transformDate);
+  resolvedAt = Model.attribute("resolvedAt", Model.transformDate);
+  isResolved = Model.attribute<boolean>("isResolved");
 
   /** Null once the reporter deletes their account — the report outlives them. */
-  user = Model.hasOne<User | null>('user');
-  message = Model.hasOne<Message | null>('message');
-  resolvedBy = Model.hasOne<User | null>('resolvedBy');
+  user = Model.hasOne<User | null>("user");
+  message = Model.hasOne<Message | null>("message");
+  resolvedBy = Model.hasOne<User | null>("resolvedBy");
 
   apiEndpoint(): string {
-    return '/chat-message-flags' + (this.exists ? '/' + this.id() : '');
+    return "/chat-message-flags" + (this.exists ? "/" + this.id() : "");
   }
 }

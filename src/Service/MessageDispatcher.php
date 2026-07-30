@@ -43,6 +43,7 @@ class MessageDispatcher
         protected Translator $translator,
         protected MentionResolver $mentions,
         protected RateLimiter $rateLimiter,
+        protected SlowMode $slowMode,
         protected UnreadTracker $unread
     ) {
     }
@@ -66,6 +67,12 @@ class MessageDispatcher
         $this->assertValidContent($content, $uploadIds);
         $this->assertMaySendStickers($actor, $content);
         $this->rateLimiter->assertWithinLimit($actor);
+
+        // After the content checks, before anything is written. A message that
+        // fails validation must not cost the sender their turn — being told
+        // "too short" and then "wait 30 seconds" for the same keystroke is the
+        // kind of thing that makes people give up on a channel.
+        $this->slowMode->assertMayPost($channel, $actor);
 
         // A reply that starts a thread must anchor to a message in this channel;
         // otherwise the thread would span channels and break the (channel,
@@ -148,6 +155,10 @@ class MessageDispatcher
         if ($threadWasCreated && $thread !== null) {
             $this->events->dispatch(new ThreadWasCreated($thread, $actor));
         }
+
+        // Started only once the message is actually in. Marking the cooldown
+        // before the transaction would penalise a send that then failed.
+        $this->slowMode->noteSent($channel, $actor);
 
         $this->events->dispatch(new MessageWasSent($message, $actor));
 

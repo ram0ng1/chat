@@ -1,4 +1,4 @@
-import * as source from 'simple-emoji-map';
+import * as source from "simple-emoji-map";
 
 /**
  * The emoji map, in a module of our own.

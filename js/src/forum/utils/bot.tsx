@@ -1,10 +1,10 @@
-import app from 'flarum/forum/app';
-import Avatar from 'flarum/common/components/Avatar';
-import username from 'flarum/common/helpers/username';
-import type Mithril from 'mithril';
+import app from "flarum/forum/app";
+import Avatar from "flarum/common/components/Avatar";
+import username from "flarum/common/helpers/username";
+import type Mithril from "mithril";
 
-import type Message from '../../common/models/Message';
-import userLink from './userLink';
+import type Message from "../../common/models/Message";
+import userLink from "./userLink";
 
 /**
  * The chat bot's identity.
@@ -18,13 +18,13 @@ import userLink from './userLink';
 
 /** Falls back to the forum's own name, so an unconfigured bot still reads sensibly. */
 export function botName(): string {
-  const configured = app.forum.attribute<string | null>('ramon-chat.botName');
+  const configured = app.forum.attribute<string | null>("ramon-chat.botName");
 
-  if (typeof configured === 'string' && configured.trim() !== '') {
+  if (typeof configured === "string" && configured.trim() !== "") {
     return configured.trim();
   }
 
-  return app.translator.trans('ramon-chat.forum.bot.default_name', {}, true);
+  return app.translator.trans("ramon-chat.forum.bot.default_name", {}, true);
 }
 
 /**
@@ -35,15 +35,17 @@ export function botName(): string {
  * because it is the more deliberate act — you type a URL once and forget it.
  */
 export function botAvatarUrl(): string | null {
-  const uploaded = app.forum.attribute<string | null>('ramon-chat.botAvatarPath');
+  const uploaded = app.forum.attribute<string | null>(
+    "ramon-chat.botAvatarPath",
+  );
 
-  if (typeof uploaded === 'string' && uploaded.trim() !== '') {
-    return `${app.forum.attribute('assetsBaseUrl')}/${uploaded.trim()}`;
+  if (typeof uploaded === "string" && uploaded.trim() !== "") {
+    return `${app.forum.attribute("assetsBaseUrl")}/${uploaded.trim()}`;
   }
 
-  const url = app.forum.attribute<string | null>('ramon-chat.botAvatarUrl');
+  const url = app.forum.attribute<string | null>("ramon-chat.botAvatarUrl");
 
-  return typeof url === 'string' && url.trim() !== '' ? url.trim() : null;
+  return typeof url === "string" && url.trim() !== "" ? url.trim() : null;
 }
 
 /**
@@ -53,7 +55,7 @@ export function botAvatarUrl(): string | null {
  * what core does for a user without an avatar — the row should not be identifiable
  * as a bot post by the shape of a hole where the picture goes.
  */
-export function botAvatar(className = 'Avatar'): Mithril.Children {
+export function botAvatar(className = "Avatar"): Mithril.Children {
   const url = botAvatarUrl();
   const name = botName();
 
@@ -79,8 +81,15 @@ export function botAvatar(className = 'Avatar'): Mithril.Children {
  * Written once here because four places need the same distinction, and the fourth
  * one to be written got it wrong.
  */
-export function authorAvatar(message: Message, className = 'Avatar'): Mithril.Children {
-  return message.isBot() ? botAvatar(className) : <Avatar user={message.user()} className={className} />;
+export function authorAvatar(
+  message: Message,
+  className = "Avatar",
+): Mithril.Children {
+  return message.isBot() ? (
+    botAvatar(className)
+  ) : (
+    <Avatar user={message.user()} className={className} />
+  );
 }
 
 /** The author's name as plain text — for summaries and one-line rows. */

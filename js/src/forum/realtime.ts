@@ -1,19 +1,19 @@
-import app from 'flarum/forum/app';
+import app from "flarum/forum/app";
 
-import chatState from './state/chat';
-import { playNotificationSound } from './utils/sound';
-import type Message from '../common/models/Message';
-import { NotificationLevel } from '../common/models/Channel';
+import chatState from "./state/chat";
+import { playNotificationSound } from "./utils/sound";
+import type Message from "../common/models/Message";
+import { NotificationLevel } from "../common/models/Channel";
 
 /**
  * Wire event names. Must match Ramon\Chat\Realtime\BroadcastListener.
  */
-const EVENT_MESSAGE = 'ramonChat.message';
-const EVENT_MESSAGE_CHANGED = 'ramonChat.messageChanged';
-const EVENT_REACTION = 'ramonChat.reaction';
-const EVENT_THREAD = 'ramonChat.thread';
-const EVENT_CHANNEL = 'ramonChat.channel';
-const EVENT_TYPING = 'ramonChat.typing';
+const EVENT_MESSAGE = "ramonChat.message";
+const EVENT_MESSAGE_CHANGED = "ramonChat.messageChanged";
+const EVENT_REACTION = "ramonChat.reaction";
+const EVENT_THREAD = "ramonChat.thread";
+const EVENT_CHANNEL = "ramonChat.channel";
+const EVENT_TYPING = "ramonChat.typing";
 
 interface UploadPayload {
   id: number;
@@ -39,7 +39,13 @@ interface MessagePayload {
   /** Placeholders the system string interpolates. See BroadcastListener. */
   systemData?: Record<string, unknown> | null;
   /** The author, inlined so a recipient who has never seen them can still draw the row. */
-  user?: { id: number; username: string; displayName: string; avatarUrl: string | null; slug: string } | null;
+  user?: {
+    id: number;
+    username: string;
+    displayName: string;
+    avatarUrl: string | null;
+    slug: string;
+  } | null;
   contentHtml: string | null;
   createdAt: string | null;
   editedAt: string | null;
@@ -71,7 +77,9 @@ function bindTo(channel: any): void {
   if (bound || !channel?.bind) return;
 
   channel.bind(EVENT_MESSAGE, (data: MessagePayload) => onMessage(data));
-  channel.bind(EVENT_MESSAGE_CHANGED, (data: MessagePayload) => onMessageChanged(data));
+  channel.bind(EVENT_MESSAGE_CHANGED, (data: MessagePayload) =>
+    onMessageChanged(data),
+  );
   channel.bind(EVENT_REACTION, (data: any) => onReaction(data));
   channel.bind(EVENT_THREAD, (data: any) => onThread(data));
   channel.bind(EVENT_CHANNEL, (data: any) => onChannel(data));
@@ -103,7 +111,7 @@ function userChannel(): any | null {
 
   if (!ws?.subscribe || !id) return null;
 
-  const channel = ws.subscribe('private-user=' + id);
+  const channel = ws.subscribe("private-user=" + id);
 
   if (channels) channels.user = channel;
 
@@ -122,7 +130,7 @@ function userChannel(): any | null {
  * permanently downgrade the client to polling.
  */
 export function bindRealtime(): boolean {
-  if (!('flarum-realtime' in (flarum.extensions ?? {}))) return false;
+  if (!("flarum-realtime" in (flarum.extensions ?? {}))) return false;
 
   bindTo(userChannel());
 
@@ -145,7 +153,9 @@ export function bindRealtime(): boolean {
       window.clearInterval(timer);
 
       if (!bound) {
-        console.warn('[ramon-chat] websocket unavailable; falling back to polling');
+        console.warn(
+          "[ramon-chat] websocket unavailable; falling back to polling",
+        );
         startPollingFallback();
       }
     }
@@ -215,7 +225,7 @@ function announce(data: MessagePayload, message: Message): void {
   const watching =
     chatState.activeChannelId === data.channelId &&
     !chatState.drawerCollapsed &&
-    document.visibilityState === 'visible' &&
+    document.visibilityState === "visible" &&
     document.hasFocus();
 
   if (watching) return;
@@ -247,21 +257,22 @@ function announce(data: MessagePayload, message: Message): void {
 function bumpThread(data: MessagePayload): void {
   if (!data.threadId) return;
 
-  const thread = app.store.getById('chat-threads', String(data.threadId));
+  const thread = app.store.getById("chat-threads", String(data.threadId));
 
   if (!thread) return;
 
   // Not counted for the root itself, which is the thread, not a reply to it.
-  if (thread.attribute<number | null>('originalMessageId') === data.id) return;
+  if (thread.attribute<number | null>("originalMessageId") === data.id) return;
 
   thread.pushAttributes({
-    repliesCount: Number(thread.attribute<number>('repliesCount') ?? 0) + 1,
+    repliesCount: Number(thread.attribute<number>("repliesCount") ?? 0) + 1,
     lastMessageId: data.id,
   });
 }
 
 function onMessageChanged(data: MessagePayload): void {
-  const existing = app.store.getById('chat-messages', String(data.id)) as Message | undefined;
+  const existing = app.store.getById("chat-messages", String(data.id)) as
+    Message | undefined;
 
   // Only reconcile messages already on this client. A change to something never
   // loaded is not worth materialising.
@@ -282,8 +293,14 @@ function onMessageChanged(data: MessagePayload): void {
   m.redraw();
 }
 
-function onReaction(data: { messageId: number; emoji: string; userId: number; added: boolean }): void {
-  const message = app.store.getById('chat-messages', String(data.messageId)) as Message | undefined;
+function onReaction(data: {
+  messageId: number;
+  emoji: string;
+  userId: number;
+  added: boolean;
+}): void {
+  const message = app.store.getById("chat-messages", String(data.messageId)) as
+    Message | undefined;
 
   if (!message) return;
 
@@ -304,11 +321,19 @@ function onReaction(data: { messageId: number; emoji: string; userId: number; ad
   m.redraw();
 }
 
-function onThread(data: { threadId: number; channelId: number; repliesCount: number; title: string | null }): void {
-  const thread = app.store.getById('chat-threads', String(data.threadId));
+function onThread(data: {
+  threadId: number;
+  channelId: number;
+  repliesCount: number;
+  title: string | null;
+}): void {
+  const thread = app.store.getById("chat-threads", String(data.threadId));
 
   if (thread) {
-    thread.pushAttributes({ repliesCount: data.repliesCount, title: data.title });
+    thread.pushAttributes({
+      repliesCount: data.repliesCount,
+      title: data.title,
+    });
     m.redraw();
   }
 }
@@ -336,12 +361,18 @@ function onChannel(data: ChannelPayload): void {
 
   channel.pushAttributes({
     status: data.status,
-    ...(data.postPermission !== undefined ? { postPermission: data.postPermission } : {}),
+    ...(data.postPermission !== undefined
+      ? { postPermission: data.postPermission }
+      : {}),
     ...(data.isPrivate !== undefined ? { isPrivate: data.isPrivate } : {}),
-    ...(data.threadingEnabled !== undefined ? { threadingEnabled: data.threadingEnabled } : {}),
+    ...(data.threadingEnabled !== undefined
+      ? { threadingEnabled: data.threadingEnabled }
+      : {}),
     ...(data.name !== undefined ? { name: data.name } : {}),
     ...(data.emoji !== undefined ? { emoji: data.emoji } : {}),
-    ...(data.description !== undefined ? { description: data.description } : {}),
+    ...(data.description !== undefined
+      ? { description: data.description }
+      : {}),
   });
 
   // `canPostMessage` is decided per user, so it cannot ride on a broadcast — a
@@ -367,7 +398,7 @@ function refreshCapabilities(channelId: number): void {
   refetching.add(channelId);
 
   app.store
-    .find('chat-channels', String(channelId))
+    .find("chat-channels", String(channelId))
     .catch(() => {
       // The channel may have become invisible to us — a private channel we were
       // removed from. Leaving the stale record is better than throwing; the next
@@ -379,8 +410,20 @@ function refreshCapabilities(channelId: number): void {
     });
 }
 
-function onTyping(data: { channelId: number; userId: number; username: string; typing: boolean; expiresIn: number }): void {
-  chatState.noteTyping(data.channelId, data.userId, data.username, data.typing, data.expiresIn);
+function onTyping(data: {
+  channelId: number;
+  userId: number;
+  username: string;
+  typing: boolean;
+  expiresIn: number;
+}): void {
+  chatState.noteTyping(
+    data.channelId,
+    data.userId,
+    data.username,
+    data.typing,
+    data.expiresIn,
+  );
   m.redraw();
 }
 
@@ -402,7 +445,7 @@ function pushMessage(data: MessagePayload): Message | null {
   const author = data.user
     ? [
         {
-          type: 'users',
+          type: "users",
           id: String(data.user.id),
           attributes: {
             username: data.user.username,
@@ -419,27 +462,29 @@ function pushMessage(data: MessagePayload): Message | null {
       included: [
         ...author,
         ...uploads.map((upload) => ({
-        type: 'chat-uploads',
-        id: String(upload.id),
-        attributes: {
-          fileName: upload.fileName,
-          mimeType: upload.mimeType,
-          size: upload.size,
-          width: upload.width,
-          height: upload.height,
-          url: upload.url,
-          isImage: upload.isImage,
-          createdAt: upload.createdAt,
-          // Not null: `isPending()` treats a null messageId as an attachment
-          // still sitting in someone's composer, which would render it as a
-          // draft chip instead of a sent image.
-          messageId: data.id,
-        },
-        relationships: data.userId ? { user: { data: { type: 'users', id: String(data.userId) } } } : {},
+          type: "chat-uploads",
+          id: String(upload.id),
+          attributes: {
+            fileName: upload.fileName,
+            mimeType: upload.mimeType,
+            size: upload.size,
+            width: upload.width,
+            height: upload.height,
+            url: upload.url,
+            isImage: upload.isImage,
+            createdAt: upload.createdAt,
+            // Not null: `isPending()` treats a null messageId as an attachment
+            // still sitting in someone's composer, which would render it as a
+            // draft chip instead of a sent image.
+            messageId: data.id,
+          },
+          relationships: data.userId
+            ? { user: { data: { type: "users", id: String(data.userId) } } }
+            : {},
         })),
       ],
       data: {
-        type: 'chat-messages',
+        type: "chat-messages",
         id: String(data.id),
         attributes: {
           channelId: data.channelId,
@@ -461,7 +506,9 @@ function pushMessage(data: MessagePayload): Message | null {
           // message arriving live was never recognised as a mention: it drew
           // without the highlight, and the sound had no way to tell an @you from
           // ordinary chatter.
-          mentionedUsers: Array.isArray(data.mentionedUsers) ? data.mentionedUsers : [],
+          mentionedUsers: Array.isArray(data.mentionedUsers)
+            ? data.mentionedUsers
+            : [],
           mentionsChannelWide: Boolean(data.mentionsChannelWide),
           isBookmarked: false,
           // Capability flags default closed: the push payload cannot know them,
@@ -476,11 +523,18 @@ function pushMessage(data: MessagePayload): Message | null {
           canPin: false,
         },
         relationships: {
-          ...(data.userId ? { user: { data: { type: 'users', id: String(data.userId) } } } : {}),
+          ...(data.userId
+            ? { user: { data: { type: "users", id: String(data.userId) } } }
+            : {}),
           // Always sent, even empty: `hasMany` returns false for an absent
           // relationship, and the message row cannot distinguish "no
           // attachments" from "not loaded yet" without it.
-          uploads: { data: uploads.map((upload) => ({ type: 'chat-uploads', id: String(upload.id) })) },
+          uploads: {
+            data: uploads.map((upload) => ({
+              type: "chat-uploads",
+              id: String(upload.id),
+            })),
+          },
         },
       },
     } as any);
@@ -514,7 +568,8 @@ function bumpChannel(data: MessagePayload): void {
     lastMessageAt: data.createdAt,
   };
 
-  const isActive = chatState.activeChannelId === data.channelId && !chatState.drawerCollapsed;
+  const isActive =
+    chatState.activeChannelId === data.channelId && !chatState.drawerCollapsed;
 
   if (isActive) {
     // Reading it now — tell the server, do not badge.

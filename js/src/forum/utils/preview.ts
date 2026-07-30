@@ -1,4 +1,4 @@
-import type Message from '../../common/models/Message';
+import type Message from "../../common/models/Message";
 
 /**
  * A one-line, plain-text summary of a message.
@@ -16,12 +16,15 @@ import type Message from '../../common/models/Message';
  * strips, and dropping block elements into them would break the layout. It also
  * keeps them safe by construction — nothing here is ever passed to `m.trust`.
  */
-export function messagePreview(message: Message | null | undefined, limit = 200): string {
-  if (!message) return '';
+export function messagePreview(
+  message: Message | null | undefined,
+  limit = 200,
+): string {
+  if (!message) return "";
 
   const html = message.contentHtml();
 
-  const text = html ? stripHtml(html) : stripMarkdown(message.content() ?? '');
+  const text = html ? stripHtml(html) : stripMarkdown(message.content() ?? "");
 
   return text.length > limit ? `${text.slice(0, limit)}…` : text;
 }
@@ -34,15 +37,17 @@ export function messagePreview(message: Message | null | undefined, limit = 200)
  * inserted into the document — `textContent` never executes anything.
  */
 function stripHtml(html: string): string {
-  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const doc = new DOMParser().parseFromString(html, "text/html");
 
   // Block boundaries become spaces, or "**Title**\n\nBody" would read as
   // "TitleBody" with the two run together.
-  doc.body.querySelectorAll('br, p, div, li, blockquote, h1, h2, h3, h4, h5, h6').forEach((el) => {
-    el.append(' ');
-  });
+  doc.body
+    .querySelectorAll("br, p, div, li, blockquote, h1, h2, h3, h4, h5, h6")
+    .forEach((el) => {
+      el.append(" ");
+    });
 
-  return collapse(doc.body.textContent ?? '');
+  return collapse(doc.body.textContent ?? "");
 }
 
 /**
@@ -55,16 +60,16 @@ function stripHtml(html: string): string {
 function stripMarkdown(source: string): string {
   let text = source;
 
-  text = text.replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1');
-  text = text.replace(/^[ \t]*>[ \t]?/gm, '');
-  text = text.replace(/^#{1,6}[ \t]*/gm, '');
-  text = text.replace(/[*_~`]+/g, '');
+  text = text.replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1");
+  text = text.replace(/^[ \t]*>[ \t]?/gm, "");
+  text = text.replace(/^#{1,6}[ \t]*/gm, "");
+  text = text.replace(/[*_~`]+/g, "");
 
   return collapse(text);
 }
 
 function collapse(text: string): string {
-  return text.replace(/\s+/g, ' ').trim();
+  return text.replace(/\s+/g, " ").trim();
 }
 
 export default messagePreview;

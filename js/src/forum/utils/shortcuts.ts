@@ -1,7 +1,7 @@
-import app from 'flarum/forum/app';
+import app from "flarum/forum/app";
 
-import chatState from '../state/chat';
-import ChatDrawer from '../components/ChatDrawer';
+import chatState from "../state/chat";
+import ChatDrawer from "../components/ChatDrawer";
 
 /**
  * Global chat shortcuts.
@@ -20,7 +20,7 @@ import ChatDrawer from '../components/ChatDrawer';
  * their own navigation.
  */
 export function bindShortcuts(): void {
-  document.addEventListener('keydown', onKeyDown);
+  document.addEventListener("keydown", onKeyDown);
 }
 
 function onKeyDown(e: KeyboardEvent): void {
@@ -29,12 +29,12 @@ function onKeyDown(e: KeyboardEvent): void {
   const target = e.target as HTMLElement | null;
   const typing =
     !!target &&
-    (target.tagName === 'INPUT' ||
-      target.tagName === 'TEXTAREA' ||
-      target.tagName === 'SELECT' ||
+    (target.tagName === "INPUT" ||
+      target.tagName === "TEXTAREA" ||
+      target.tagName === "SELECT" ||
       target.isContentEditable);
 
-  if (e.key === 'Escape') {
+  if (e.key === "Escape") {
     // Escape is allowed while typing only for chat modes the composer does not
     // already handle; ChatComposer stops propagation for its own use of it.
     if (handleEscape()) {
@@ -48,14 +48,14 @@ function onKeyDown(e: KeyboardEvent): void {
 
   const key = e.key.toLowerCase();
 
-  if (key === 'c') {
+  if (key === "c") {
     e.preventDefault();
 
     if (e.shiftKey) {
       m.route.set(
         chatState.activeChannelId
-          ? app.route('chat.channel', { id: chatState.activeChannelId })
-          : app.route('chat.index')
+          ? app.route("chat.channel", { id: chatState.activeChannelId })
+          : app.route("chat.index"),
       );
 
       return;
@@ -72,13 +72,13 @@ function onKeyDown(e: KeyboardEvent): void {
     return;
   }
 
-  if (key === 'k') {
+  if (key === "k") {
     e.preventDefault();
 
     m.route.set(
       chatState.activeChannelId
-        ? app.route('chat.search', { channel: chatState.activeChannelId })
-        : app.route('chat.search')
+        ? app.route("chat.search", { channel: chatState.activeChannelId })
+        : app.route("chat.search"),
     );
   }
 }

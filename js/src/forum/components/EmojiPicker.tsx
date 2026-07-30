@@ -1,12 +1,18 @@
-import app from 'flarum/forum/app';
-import Component from 'flarum/common/Component';
-import type { ComponentAttrs } from 'flarum/common/Component';
-import Button from 'flarum/common/components/Button';
-import LoadingIndicator from 'flarum/common/components/LoadingIndicator';
-import classList from 'flarum/common/utils/classList';
-import type Mithril from 'mithril';
+import app from "flarum/forum/app";
+import Component from "flarum/common/Component";
+import type { ComponentAttrs } from "flarum/common/Component";
+import Button from "flarum/common/components/Button";
+import LoadingIndicator from "flarum/common/components/LoadingIndicator";
+import classList from "flarum/common/utils/classList";
+import type Mithril from "mithril";
 
-import { searchEmoji, resolveEmoji, loadEmojiMap, emojiMapReady, type EmojiSuggestion } from '../utils/emoji';
+import {
+  searchEmoji,
+  resolveEmoji,
+  loadEmojiMap,
+  emojiMapReady,
+  type EmojiSuggestion,
+} from "../utils/emoji";
 
 export interface EmojiPickerAttrs extends ComponentAttrs {
   /** Current value: a shortcode or a Unicode emoji. */
@@ -29,7 +35,7 @@ export interface EmojiPickerAttrs extends ComponentAttrs {
  */
 export default class EmojiPicker extends Component<EmojiPickerAttrs> {
   private open = false;
-  private query = '';
+  private query = "";
   private highlighted = 0;
 
   oninit(vnode: Mithril.Vnode<EmojiPickerAttrs>): void {
@@ -45,7 +51,9 @@ export default class EmojiPicker extends Component<EmojiPickerAttrs> {
     const results = this.open ? searchEmoji(this.query) : [];
 
     return (
-      <div className={classList('EmojiPicker', { 'EmojiPicker--open': this.open })}>
+      <div
+        className={classList("EmojiPicker", { "EmojiPicker--open": this.open })}
+      >
         <div className="EmojiPicker-control">
           <span className="EmojiPicker-preview" aria-hidden="true">
             {selected ?? <i className="far fa-face-smile" />}
@@ -54,13 +62,17 @@ export default class EmojiPicker extends Component<EmojiPickerAttrs> {
           <input
             className="FormControl EmojiPicker-input"
             type="text"
-            value={this.open ? this.query : (selected ?? '')}
-            placeholder={app.translator.trans('ramon-chat.forum.emoji_picker.placeholder', {}, true)}
+            value={this.open ? this.query : (selected ?? "")}
+            placeholder={app.translator.trans(
+              "ramon-chat.forum.emoji_picker.placeholder",
+              {},
+              true,
+            )}
             disabled={disabled}
             onfocus={() => this.openPicker()}
             oninput={(e: Event) => this.onInput(e)}
             onkeydown={(e: KeyboardEvent) => this.onKeyDown(e)}
-            aria-expanded={this.open ? 'true' : 'false'}
+            aria-expanded={this.open ? "true" : "false"}
             aria-autocomplete="list"
           />
 
@@ -68,7 +80,11 @@ export default class EmojiPicker extends Component<EmojiPickerAttrs> {
             <Button
               className="Button Button--icon Button--link EmojiPicker-clear"
               icon="fas fa-times"
-              title={app.translator.trans('ramon-chat.forum.emoji_picker.clear', {}, true)}
+              title={app.translator.trans(
+                "ramon-chat.forum.emoji_picker.clear",
+                {},
+                true,
+              )}
               disabled={disabled}
               onclick={() => this.choose(null)}
             />
@@ -81,7 +97,7 @@ export default class EmojiPicker extends Component<EmojiPickerAttrs> {
               <LoadingIndicator display="inline" size="small" />
             ) : results.length === 0 ? (
               <div className="EmojiPicker-empty">
-                {app.translator.trans('ramon-chat.forum.emoji_picker.empty')}
+                {app.translator.trans("ramon-chat.forum.emoji_picker.empty")}
               </div>
             ) : (
               <div className="EmojiPicker-grid">
@@ -89,8 +105,8 @@ export default class EmojiPicker extends Component<EmojiPickerAttrs> {
                   <button
                     key={item.name}
                     type="button"
-                    className={classList('EmojiPicker-option', {
-                      'EmojiPicker-option--active': index === this.highlighted,
+                    className={classList("EmojiPicker-option", {
+                      "EmojiPicker-option--active": index === this.highlighted,
                     })}
                     title={`:${item.name}:`}
                     // mousedown, not click: the input's blur would close the
@@ -124,14 +140,14 @@ export default class EmojiPicker extends Component<EmojiPickerAttrs> {
       m.redraw();
     };
 
-    document.addEventListener('mousedown', this.outsideHandler);
+    document.addEventListener("mousedown", this.outsideHandler);
   }
 
   onremove(vnode: Mithril.VnodeDOM<EmojiPickerAttrs>): void {
     super.onremove(vnode);
 
     if (this.outsideHandler) {
-      document.removeEventListener('mousedown', this.outsideHandler);
+      document.removeEventListener("mousedown", this.outsideHandler);
     }
   }
 
@@ -139,7 +155,7 @@ export default class EmojiPicker extends Component<EmojiPickerAttrs> {
 
   protected openPicker(): void {
     this.open = true;
-    this.query = '';
+    this.query = "";
     this.highlighted = 0;
     m.redraw();
   }
@@ -155,17 +171,17 @@ export default class EmojiPicker extends Component<EmojiPickerAttrs> {
     const results = searchEmoji(this.query);
 
     switch (e.key) {
-      case 'ArrowDown':
+      case "ArrowDown":
         e.preventDefault();
         this.highlighted = Math.min(this.highlighted + 1, results.length - 1);
         break;
 
-      case 'ArrowUp':
+      case "ArrowUp":
         e.preventDefault();
         this.highlighted = Math.max(this.highlighted - 1, 0);
         break;
 
-      case 'Enter': {
+      case "Enter": {
         e.preventDefault();
 
         // Enter with an exact shortcode typed and nothing highlighted should still
@@ -175,7 +191,7 @@ export default class EmojiPicker extends Component<EmojiPickerAttrs> {
         break;
       }
 
-      case 'Escape':
+      case "Escape":
         e.preventDefault();
         this.open = false;
         break;
@@ -189,7 +205,7 @@ export default class EmojiPicker extends Component<EmojiPickerAttrs> {
 
   protected choose(value: string | null): void {
     this.open = false;
-    this.query = '';
+    this.query = "";
     this.attrs.onchange(value);
     m.redraw();
   }

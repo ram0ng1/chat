@@ -1,10 +1,10 @@
-import app from 'flarum/forum/app';
-import Component from 'flarum/common/Component';
-import type { ComponentAttrs } from 'flarum/common/Component';
-import LoadingIndicator from 'flarum/common/components/LoadingIndicator';
-import type Mithril from 'mithril';
+import app from "flarum/forum/app";
+import Component from "flarum/common/Component";
+import type { ComponentAttrs } from "flarum/common/Component";
+import LoadingIndicator from "flarum/common/components/LoadingIndicator";
+import type Mithril from "mithril";
 
-import { playOnHover } from '../utils/stickers';
+import { playOnHover } from "../utils/stickers";
 
 export interface StickerPickerAttrs extends ComponentAttrs {
   onInsert: (shortcode: string) => void;
@@ -30,7 +30,7 @@ export interface StickerPickerAttrs extends ComponentAttrs {
 export default class StickerPicker extends Component<StickerPickerAttrs> {
   private stickers: any[] = [];
   private loading = true;
-  private filter = '';
+  private filter = "";
   private outsideListener?: (e: MouseEvent) => void;
 
   oninit(vnode: Mithril.Vnode<StickerPickerAttrs>): void {
@@ -49,10 +49,14 @@ export default class StickerPicker extends Component<StickerPickerAttrs> {
         if (!vnode.dom.contains(e.target as Node)) this.attrs.onClose();
       };
 
-      document.addEventListener('click', this.outsideListener);
+      document.addEventListener("click", this.outsideListener);
     });
 
-    (vnode.dom.querySelector('.ChatStickerPicker-search') as HTMLInputElement | null)?.focus();
+    (
+      vnode.dom.querySelector(
+        ".ChatStickerPicker-search",
+      ) as HTMLInputElement | null
+    )?.focus();
 
     playOnHover(vnode.dom as HTMLElement);
   }
@@ -68,7 +72,8 @@ export default class StickerPicker extends Component<StickerPickerAttrs> {
   }
 
   onremove(): void {
-    if (this.outsideListener) document.removeEventListener('click', this.outsideListener);
+    if (this.outsideListener)
+      document.removeEventListener("click", this.outsideListener);
   }
 
   view(): Mithril.Children {
@@ -76,18 +81,25 @@ export default class StickerPicker extends Component<StickerPickerAttrs> {
 
     const shown = term
       ? this.stickers.filter((sticker) =>
-          `${sticker.title() ?? ''} ${sticker.textToReplace() ?? ''} ${sticker.categoryName() ?? ''}`
+          `${sticker.title() ?? ""} ${sticker.textToReplace() ?? ""} ${sticker.categoryName() ?? ""}`
             .toLowerCase()
-            .includes(term)
+            .includes(term),
         )
       : this.stickers;
 
     return (
-      <div className="ChatStickerPicker" onkeydown={(e: KeyboardEvent) => this.onKey(e)}>
+      <div
+        className="ChatStickerPicker"
+        onkeydown={(e: KeyboardEvent) => this.onKey(e)}
+      >
         <input
           className="FormControl ChatStickerPicker-search"
           type="search"
-          placeholder={app.translator.trans('ramon-chat.forum.composer.sticker_search', {}, true)}
+          placeholder={app.translator.trans(
+            "ramon-chat.forum.composer.sticker_search",
+            {},
+            true,
+          )}
           value={this.filter}
           oninput={(e: Event) => {
             this.filter = (e.target as HTMLInputElement).value;
@@ -100,7 +112,7 @@ export default class StickerPicker extends Component<StickerPickerAttrs> {
           </div>
         ) : shown.length === 0 ? (
           <div className="ChatStickerPicker-empty">
-            {app.translator.trans('ramon-chat.forum.composer.sticker_none')}
+            {app.translator.trans("ramon-chat.forum.composer.sticker_none")}
           </div>
         ) : (
           <div className="ChatStickerPicker-grid">
@@ -110,7 +122,9 @@ export default class StickerPicker extends Component<StickerPickerAttrs> {
                 key={sticker.id()}
                 className="ChatStickerPicker-item"
                 title={sticker.title() ?? sticker.textToReplace()}
-                onclick={() => this.attrs.onInsert(sticker.textToReplace() ?? '')}
+                onclick={() =>
+                  this.attrs.onInsert(sticker.textToReplace() ?? "")
+                }
               >
                 {this.thumbnail(sticker)}
               </button>
@@ -137,16 +151,24 @@ export default class StickerPicker extends Component<StickerPickerAttrs> {
    * root, which is what their PHP does before writing the attribute.
    */
   protected thumbnail(sticker: any): Mithril.Children {
-    const path = this.absolute(String(sticker.path() ?? ''));
-    const title = sticker.title() ?? '';
+    const path = this.absolute(String(sticker.path() ?? ""));
+    const title = sticker.title() ?? "";
     const lower = path.toLowerCase();
 
-    if (lower.endsWith('.tgs')) {
-      return <span className="Sticker Sticker--tgs" data-tgs={path} title={title} />;
+    if (lower.endsWith(".tgs")) {
+      return (
+        <span className="Sticker Sticker--tgs" data-tgs={path} title={title} />
+      );
     }
 
-    if (lower.endsWith('.json')) {
-      return <span className="Sticker Sticker--lottie" data-lottie={path} title={title} />;
+    if (lower.endsWith(".json")) {
+      return (
+        <span
+          className="Sticker Sticker--lottie"
+          data-lottie={path}
+          title={title}
+        />
+      );
     }
 
     return (
@@ -159,13 +181,16 @@ export default class StickerPicker extends Component<StickerPickerAttrs> {
   protected absolute(path: string): string {
     if (/^https?:\/\//i.test(path)) return path;
 
-    const base = String(app.forum.attribute('baseUrl') ?? '').replace(/\/$/, '');
+    const base = String(app.forum.attribute("baseUrl") ?? "").replace(
+      /\/$/,
+      "",
+    );
 
-    return base + (path.startsWith('/') ? path : `/${path}`);
+    return base + (path.startsWith("/") ? path : `/${path}`);
   }
 
   protected onKey(e: KeyboardEvent): void {
-    if (e.key === 'Escape') {
+    if (e.key === "Escape") {
       e.stopPropagation();
       this.attrs.onClose();
     }
@@ -173,7 +198,9 @@ export default class StickerPicker extends Component<StickerPickerAttrs> {
 
   protected async load(): Promise<void> {
     try {
-      const results = await app.store.find<any[]>('stickers', { page: { limit: 200 } });
+      const results = await app.store.find<any[]>("stickers", {
+        page: { limit: 200 },
+      });
 
       this.stickers = Array.isArray(results) ? results : [];
     } catch {

@@ -1,14 +1,14 @@
-import app from 'flarum/forum/app';
-import FormModal from 'flarum/common/components/FormModal';
-import type { IFormModalAttrs } from 'flarum/common/components/FormModal';
-import Button from 'flarum/common/components/Button';
-import Stream from 'flarum/common/utils/Stream';
-import classList from 'flarum/common/utils/classList';
-import type Mithril from 'mithril';
+import app from "flarum/forum/app";
+import FormModal from "flarum/common/components/FormModal";
+import type { IFormModalAttrs } from "flarum/common/components/FormModal";
+import Button from "flarum/common/components/Button";
+import Stream from "flarum/common/utils/Stream";
+import classList from "flarum/common/utils/classList";
+import type Mithril from "mithril";
 
-import type Message from '../../common/models/Message';
-import { messagePreview } from '../utils/preview';
-import { authorName } from '../utils/bot';
+import type Message from "../../common/models/Message";
+import { messagePreview } from "../utils/preview";
+import { authorName } from "../utils/bot";
 
 export interface FlagMessageModalAttrs extends IFormModalAttrs {
   message: Message;
@@ -24,7 +24,13 @@ export interface FlagMessageModalAttrs extends IFormModalAttrs {
  * `other` is last and is the one that requires an explanation, because the reason
  * alone says nothing to whoever picks the report up.
  */
-const REASONS = ['spam', 'inappropriate', 'harassment', 'off_topic', 'other'] as const;
+const REASONS = [
+  "spam",
+  "inappropriate",
+  "harassment",
+  "off_topic",
+  "other",
+] as const;
 
 type Reason = (typeof REASONS)[number];
 
@@ -45,16 +51,16 @@ export default class FlagMessageModal extends FormModal<FlagMessageModalAttrs> {
   oninit(vnode: Mithril.Vnode<FlagMessageModalAttrs>): void {
     super.oninit(vnode);
 
-    this.reason = Stream<Reason>('spam');
-    this.detail = Stream('');
+    this.reason = Stream<Reason>("spam");
+    this.detail = Stream("");
   }
 
   className(): string {
-    return 'ChatModal ChatFlagModal Modal--small';
+    return "ChatModal ChatFlagModal Modal--small";
   }
 
   title(): Mithril.Children {
-    return app.translator.trans('ramon-chat.forum.flag.title');
+    return app.translator.trans("ramon-chat.forum.flag.title");
   }
 
   content(): Mithril.Children {
@@ -67,25 +73,33 @@ export default class FlagMessageModal extends FormModal<FlagMessageModalAttrs> {
               would put the reported content — which may be exactly what is wrong
               with it — into the reporter's own dialog. */}
           <div className="ChatFlagModal-target">
-            <div className="ChatFlagModal-target-author">{authorName(message)}</div>
-            <div className="ChatFlagModal-target-excerpt">{messagePreview(message, 200)}</div>
+            <div className="ChatFlagModal-target-author">
+              {authorName(message)}
+            </div>
+            <div className="ChatFlagModal-target-excerpt">
+              {messagePreview(message, 200)}
+            </div>
           </div>
 
           <div className="Form-group">
-            <label>{app.translator.trans('ramon-chat.forum.flag.reason')}</label>
+            <label>
+              {app.translator.trans("ramon-chat.forum.flag.reason")}
+            </label>
 
             <div className="ChatFlagModal-reasons">
               {REASONS.map((reason) => (
                 <button
                   key={reason}
                   type="button"
-                  className={classList('ChatFlagModal-reason', {
-                    'ChatFlagModal-reason--active': this.reason() === reason,
+                  className={classList("ChatFlagModal-reason", {
+                    "ChatFlagModal-reason--active": this.reason() === reason,
                   })}
                   disabled={this.loading}
                   onclick={() => this.reason(reason)}
                 >
-                  {app.translator.trans(`ramon-chat.forum.flag.reasons.${reason}`)}
+                  {app.translator.trans(
+                    `ramon-chat.forum.flag.reasons.${reason}`,
+                  )}
                 </button>
               ))}
             </div>
@@ -94,9 +108,9 @@ export default class FlagMessageModal extends FormModal<FlagMessageModalAttrs> {
           <div className="Form-group">
             <label>
               {app.translator.trans(
-                this.reason() === 'other'
-                  ? 'ramon-chat.forum.flag.detail_required'
-                  : 'ramon-chat.forum.flag.detail'
+                this.reason() === "other"
+                  ? "ramon-chat.forum.flag.detail_required"
+                  : "ramon-chat.forum.flag.detail",
               )}
             </label>
 
@@ -106,7 +120,11 @@ export default class FlagMessageModal extends FormModal<FlagMessageModalAttrs> {
               maxlength={1000}
               bidi={this.detail}
               disabled={this.loading}
-              placeholder={app.translator.trans('ramon-chat.forum.flag.detail_placeholder', {}, true)}
+              placeholder={app.translator.trans(
+                "ramon-chat.forum.flag.detail_placeholder",
+                {},
+                true,
+              )}
             />
           </div>
 
@@ -115,9 +133,11 @@ export default class FlagMessageModal extends FormModal<FlagMessageModalAttrs> {
               className="Button Button--primary Button--block"
               type="submit"
               loading={this.loading}
-              disabled={this.reason() === 'other' && this.detail().trim() === ''}
+              disabled={
+                this.reason() === "other" && this.detail().trim() === ""
+              }
             >
-              {app.translator.trans('ramon-chat.forum.flag.submit')}
+              {app.translator.trans("ramon-chat.forum.flag.submit")}
             </Button>
           </div>
         </div>
@@ -138,14 +158,14 @@ export default class FlagMessageModal extends FormModal<FlagMessageModalAttrs> {
 
     // Checked here as well as on the button and on the server. The button being
     // disabled is a courtesy; a form submits on Enter regardless.
-    if (this.reason() === 'other' && detail === '') return;
+    if (this.reason() === "other" && detail === "") return;
 
     this.loading = true;
 
     app
       .request({
-        method: 'POST',
-        url: `${app.forum.attribute('apiUrl')}/chat-message-flags`,
+        method: "POST",
+        url: `${app.forum.attribute("apiUrl")}/chat-message-flags`,
         body: {
           data: {
             attributes: {
@@ -163,14 +183,18 @@ export default class FlagMessageModal extends FormModal<FlagMessageModalAttrs> {
 
         this.hide();
 
-        app.alerts.show({ type: 'success' }, app.translator.trans('ramon-chat.forum.flag.sent'));
+        app.alerts.show(
+          { type: "success" },
+          app.translator.trans("ramon-chat.forum.flag.sent"),
+        );
       })
       .catch((e: any) => {
         this.loading = false;
 
         app.alerts.show(
-          { type: 'error' },
-          e?.response?.errors?.[0]?.detail ?? app.translator.trans('ramon-chat.forum.flag.failed')
+          { type: "error" },
+          e?.response?.errors?.[0]?.detail ??
+            app.translator.trans("ramon-chat.forum.flag.failed"),
         );
 
         m.redraw();

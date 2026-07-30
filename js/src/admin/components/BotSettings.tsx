@@ -1,11 +1,11 @@
-import app from 'flarum/admin/app';
-import Component from 'flarum/common/Component';
-import type { ComponentAttrs } from 'flarum/common/Component';
-import Button from 'flarum/common/components/Button';
-import LoadingIndicator from 'flarum/common/components/LoadingIndicator';
-import Avatar from 'flarum/common/components/Avatar';
-import type User from 'flarum/common/models/User';
-import type Mithril from 'mithril';
+import app from "flarum/admin/app";
+import Component from "flarum/common/Component";
+import type { ComponentAttrs } from "flarum/common/Component";
+import Button from "flarum/common/components/Button";
+import LoadingIndicator from "flarum/common/components/LoadingIndicator";
+import Avatar from "flarum/common/components/Avatar";
+import type User from "flarum/common/models/User";
+import type Mithril from "mithril";
 
 /**
  * Who the chat posts as.
@@ -19,7 +19,7 @@ import type Mithril from 'mithril';
 export default class BotSettings extends Component<ComponentAttrs> {
   private uploading = false;
   private searching = false;
-  private query = '';
+  private query = "";
   private candidates: User[] = [];
   private searchTimeout?: number;
   private searchSequence = 0;
@@ -30,7 +30,7 @@ export default class BotSettings extends Component<ComponentAttrs> {
     return (
       <div className="ChatBotSettings">
         <div className="ChatBotSettings-intro helpText">
-          {app.translator.trans('ramon-chat.admin.bot.intro')}
+          {app.translator.trans("ramon-chat.admin.bot.intro")}
         </div>
 
         {announcer ? this.selectedUser(announcer) : this.botForm()}
@@ -44,9 +44,11 @@ export default class BotSettings extends Component<ComponentAttrs> {
    * The bot's own identity. Only drawn when no account is announcing.
    */
   protected botForm(): Mithril.Children {
-    const path = this.setting('ramon-chat.bot_avatar_path');
-    const url = this.setting('ramon-chat.bot_avatar_url');
-    const preview = path ? `${app.forum.attribute('assetsBaseUrl')}/${path}` : url;
+    const path = this.setting("ramon-chat.bot_avatar_path");
+    const url = this.setting("ramon-chat.bot_avatar_url");
+    const preview = path
+      ? `${app.forum.attribute("assetsBaseUrl")}/${path}`
+      : url;
 
     return (
       <div className="ChatBotSettings-bot">
@@ -56,7 +58,9 @@ export default class BotSettings extends Component<ComponentAttrs> {
               <img src={preview} alt="" />
             ) : (
               <span className="ChatBotSettings-previewEmpty">
-                {(this.setting('ramon-chat.bot_name') || 'B').charAt(0).toUpperCase()}
+                {(this.setting("ramon-chat.bot_name") || "B")
+                  .charAt(0)
+                  .toUpperCase()}
               </span>
             )}
           </div>
@@ -67,20 +71,23 @@ export default class BotSettings extends Component<ComponentAttrs> {
             ) : (
               <>
                 <label className="Button Button--primary">
-                  {app.translator.trans('ramon-chat.admin.bot.upload')}
+                  {app.translator.trans("ramon-chat.admin.bot.upload")}
                   {/* Hidden rather than styled: a file input cannot be restyled
                       reliably across browsers, so the label is the button. */}
                   <input
                     type="file"
                     accept="image/*"
-                    style={{ display: 'none' }}
+                    style={{ display: "none" }}
                     onchange={(e: Event) => this.upload(e)}
                   />
                 </label>
 
                 {path ? (
-                  <Button className="Button" onclick={() => this.removeUpload()}>
-                    {app.translator.trans('ramon-chat.admin.bot.remove_upload')}
+                  <Button
+                    className="Button"
+                    onclick={() => this.removeUpload()}
+                  >
+                    {app.translator.trans("ramon-chat.admin.bot.remove_upload")}
                   </Button>
                 ) : null}
               </>
@@ -89,13 +96,20 @@ export default class BotSettings extends Component<ComponentAttrs> {
         </div>
 
         <div className="Form-group">
-          <label>{app.translator.trans('ramon-chat.admin.settings.bot_name_label')}</label>
+          <label>
+            {app.translator.trans("ramon-chat.admin.settings.bot_name_label")}
+          </label>
           <input
             className="FormControl"
             type="text"
             placeholder="Bot"
-            value={this.setting('ramon-chat.bot_name')}
-            oninput={(e: Event) => this.set('ramon-chat.bot_name', (e.target as HTMLInputElement).value)}
+            value={this.setting("ramon-chat.bot_name")}
+            oninput={(e: Event) =>
+              this.set(
+                "ramon-chat.bot_name",
+                (e.target as HTMLInputElement).value,
+              )
+            }
           />
         </div>
 
@@ -104,13 +118,22 @@ export default class BotSettings extends Component<ComponentAttrs> {
             the source. */}
         {path ? null : (
           <div className="Form-group">
-            <label>{app.translator.trans('ramon-chat.admin.settings.bot_avatar_label')}</label>
+            <label>
+              {app.translator.trans(
+                "ramon-chat.admin.settings.bot_avatar_label",
+              )}
+            </label>
             <input
               className="FormControl"
               type="url"
               placeholder="https://…/bot.png"
               value={url}
-              oninput={(e: Event) => this.set('ramon-chat.bot_avatar_url', (e.target as HTMLInputElement).value)}
+              oninput={(e: Event) =>
+                this.set(
+                  "ramon-chat.bot_avatar_url",
+                  (e.target as HTMLInputElement).value,
+                )
+              }
             />
           </div>
         )}
@@ -128,11 +151,13 @@ export default class BotSettings extends Component<ComponentAttrs> {
 
         <div className="ChatBotSettings-selectedName">
           <strong>{user.displayName()}</strong>
-          <div className="helpText">{app.translator.trans('ramon-chat.admin.bot.user_active')}</div>
+          <div className="helpText">
+            {app.translator.trans("ramon-chat.admin.bot.user_active")}
+          </div>
         </div>
 
         <Button className="Button" onclick={() => this.clearUser()}>
-          {app.translator.trans('ramon-chat.admin.bot.use_bot')}
+          {app.translator.trans("ramon-chat.admin.bot.use_bot")}
         </Button>
       </div>
     );
@@ -141,18 +166,28 @@ export default class BotSettings extends Component<ComponentAttrs> {
   protected userPicker(): Mithril.Children {
     return (
       <div className="ChatBotSettings-picker">
-        <label>{app.translator.trans('ramon-chat.admin.bot.user_label')}</label>
-        <div className="helpText">{app.translator.trans('ramon-chat.admin.bot.user_help')}</div>
+        <label>{app.translator.trans("ramon-chat.admin.bot.user_label")}</label>
+        <div className="helpText">
+          {app.translator.trans("ramon-chat.admin.bot.user_help")}
+        </div>
 
         <input
           className="FormControl"
           type="search"
-          placeholder={app.translator.trans('ramon-chat.admin.bot.user_search', {}, true)}
+          placeholder={app.translator.trans(
+            "ramon-chat.admin.bot.user_search",
+            {},
+            true,
+          )}
           value={this.query}
-          oninput={(e: Event) => this.search((e.target as HTMLInputElement).value)}
+          oninput={(e: Event) =>
+            this.search((e.target as HTMLInputElement).value)
+          }
         />
 
-        {this.searching ? <LoadingIndicator display="inline" size="small" /> : null}
+        {this.searching ? (
+          <LoadingIndicator display="inline" size="small" />
+        ) : null}
 
         {this.candidates.length > 0 ? (
           <div className="ChatBotSettings-candidates">
@@ -176,27 +211,27 @@ export default class BotSettings extends Component<ComponentAttrs> {
   // ───────────────────────────────────────────────────────────────────────────
 
   protected announcer(): User | null {
-    const id = this.setting('ramon-chat.bot_user_id');
+    const id = this.setting("ramon-chat.bot_user_id");
 
     if (!id) return null;
 
-    return app.store.getById<User>('users', String(id)) ?? null;
+    return app.store.getById<User>("users", String(id)) ?? null;
   }
 
   protected setting(key: string): string {
-    return String(app.data.settings[key] ?? '');
+    return String(app.data.settings[key] ?? "");
   }
 
   protected set(key: string, value: string | null): void {
-    app.data.settings[key] = value ?? '';
+    app.data.settings[key] = value ?? "";
 
     // Saved immediately rather than through the page's save button: the upload and
     // the user choice already write straight to the server, and a form where half
     // the controls persist on click and half on save is a trap.
     app
       .request({
-        method: 'POST',
-        url: `${app.forum.attribute('apiUrl')}/settings`,
+        method: "POST",
+        url: `${app.forum.attribute("apiUrl")}/settings`,
         body: { [key]: value },
       })
       .catch(() => {});
@@ -212,12 +247,12 @@ export default class BotSettings extends Component<ComponentAttrs> {
     m.redraw();
 
     const body = new FormData();
-    body.append('ramon-chat-bot', file);
+    body.append("ramon-chat-bot", file);
 
     try {
       const response = await app.request<any>({
-        method: 'POST',
-        url: `${app.forum.attribute('apiUrl')}/chat/bot-avatar`,
+        method: "POST",
+        url: `${app.forum.attribute("apiUrl")}/chat/bot-avatar`,
         serialize: (raw: any) => raw,
         body,
       });
@@ -227,13 +262,14 @@ export default class BotSettings extends Component<ComponentAttrs> {
       this.applyForumPayload(response);
     } catch (err: any) {
       app.alerts.show(
-        { type: 'error' },
-        err?.response?.errors?.[0]?.detail ?? app.translator.trans('ramon-chat.admin.bot.upload_failed')
+        { type: "error" },
+        err?.response?.errors?.[0]?.detail ??
+          app.translator.trans("ramon-chat.admin.bot.upload_failed"),
       );
     } finally {
       this.uploading = false;
       // Cleared so choosing the same file again still fires a change event.
-      input.value = '';
+      input.value = "";
       m.redraw();
     }
   }
@@ -244,13 +280,16 @@ export default class BotSettings extends Component<ComponentAttrs> {
 
     try {
       await app.request({
-        method: 'DELETE',
-        url: `${app.forum.attribute('apiUrl')}/chat/bot-avatar`,
+        method: "DELETE",
+        url: `${app.forum.attribute("apiUrl")}/chat/bot-avatar`,
       });
 
-      app.data.settings['ramon-chat.bot_avatar_path'] = '';
+      app.data.settings["ramon-chat.bot_avatar_path"] = "";
     } catch {
-      app.alerts.show({ type: 'error' }, app.translator.trans('ramon-chat.admin.bot.upload_failed'));
+      app.alerts.show(
+        { type: "error" },
+        app.translator.trans("ramon-chat.admin.bot.upload_failed"),
+      );
     } finally {
       this.uploading = false;
       m.redraw();
@@ -275,7 +314,10 @@ export default class BotSettings extends Component<ComponentAttrs> {
 
     this.searchTimeout = window.setTimeout(() => {
       app.store
-        .find<User[]>('users', { filter: { q: value.trim() }, page: { limit: 5 } })
+        .find<User[]>("users", {
+          filter: { q: value.trim() },
+          page: { limit: 5 },
+        })
         .then((results) => {
           // A slower earlier request must not overwrite a newer answer.
           if (mine !== this.searchSequence) return;
@@ -295,14 +337,14 @@ export default class BotSettings extends Component<ComponentAttrs> {
   }
 
   protected chooseUser(user: User): void {
-    this.set('ramon-chat.bot_user_id', String(user.id()));
-    this.query = '';
+    this.set("ramon-chat.bot_user_id", String(user.id()));
+    this.query = "";
     this.candidates = [];
     m.redraw();
   }
 
   protected clearUser(): void {
-    this.set('ramon-chat.bot_user_id', '');
+    this.set("ramon-chat.bot_user_id", "");
     m.redraw();
   }
 
@@ -314,10 +356,10 @@ export default class BotSettings extends Component<ComponentAttrs> {
    * straight off it instead of reloading the admin page.
    */
   protected applyForumPayload(payload: any): void {
-    const path = payload?.data?.attributes?.['ramon-chat.botAvatarPath'];
+    const path = payload?.data?.attributes?.["ramon-chat.botAvatarPath"];
 
-    if (typeof path === 'string') {
-      app.data.settings['ramon-chat.bot_avatar_path'] = path;
+    if (typeof path === "string") {
+      app.data.settings["ramon-chat.bot_avatar_path"] = path;
     }
   }
 }
