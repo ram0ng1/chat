@@ -11,6 +11,7 @@ import type Channel from "../../common/models/Channel";
 import chatState from "../state/chat";
 import afterModalClosed from "../utils/afterModalClosed";
 import EmojiPicker from "./EmojiPicker";
+import { humanDuration } from "../utils/duration";
 
 export interface ChannelFormModalAttrs extends IFormModalAttrs {
   /** Omit to create a channel; pass one to edit it. */
@@ -36,6 +37,7 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
   private uploadingImage = false;
   private tagId!: Stream<string>;
   private threading!: Stream<boolean>;
+  private slowMode!: Stream<string>;
   private autoJoin!: Stream<boolean>;
   private allowChannelWide!: Stream<boolean>;
   private autoJoinOnReply!: Stream<boolean>;
@@ -52,6 +54,10 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
     this.description = Stream(channel?.description() ?? "");
     this.emoji = Stream(channel?.emoji() ?? "");
     this.tagId = Stream(channel?.tagId() ? String(channel.tagId()) : "");
+
+    // A string, because it backs a <select> whose values are strings. Coerced
+    // on submit rather than here, so an unchanged form round-trips exactly.
+    this.slowMode = Stream(String(channel?.slowModeSeconds() ?? 0));
 
     this.threading = Stream(
       channel
@@ -141,6 +147,7 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
 
           {this.visibility()}
           {this.posting()}
+          {this.slowModeOptions()}
           {this.tagOptions()}
 
           <div className="Form-group">
@@ -624,6 +631,51 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
    * Nothing awaits this method, so a rejection here would surface as an unhandled
    * promise rejection rather than as feedback. Every failure path is handled inline.
    */
+  /**
+   * Slow mode: how long each person waits between messages here.
+   *
+   * A fixed list rather than a free number field. The useful values are few and
+   * far apart — five seconds calms a room, five minutes changes what the room is
+   * for — and a text box invites 7s, which is nobody's intention.
+   *
+   * Moderators are exempt, and the help text says so: someone enabling this needs
+   * to know it will not throttle them out of their own moderation.
+   */
+  protected slowModeOptions(): Mithril.Children {
+    const steps = [0, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600, 21600];
+
+    return (
+      <div className="Form-group">
+        <label>
+          {app.translator.trans("ramon-chat.forum.new_channel.slow_mode")}
+        </label>
+
+        <select
+          className="FormControl"
+          value={this.slowMode()}
+          onchange={withAttr("value", this.slowMode)}
+          disabled={this.loading}
+        >
+          {steps.map((seconds) => (
+            <option key={seconds} value={String(seconds)}>
+              {seconds === 0
+                ? app.translator.trans(
+                    "ramon-chat.forum.new_channel.slow_mode_off",
+                    {},
+                    true,
+                  )
+                : humanDuration(seconds)}
+            </option>
+          ))}
+        </select>
+
+        <p className="helpText">
+          {app.translator.trans("ramon-chat.forum.new_channel.slow_mode_help")}
+        </p>
+      </div>
+    );
+  }
+
   onsubmit(e: SubmitEvent): void {
     e.preventDefault();
 
@@ -638,6 +690,7 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
       description: this.description().trim() || null,
       emoji: this.emoji().trim() || null,
       threadingEnabled: this.threading(),
+      slowModeSeconds: Number(this.slowMode()) || 0,
       allowChannelWideMentions: this.allowChannelWide(),
       autoJoin: this.autoJoin(),
       autoJoinOnReply: this.autoJoinOnReply(),

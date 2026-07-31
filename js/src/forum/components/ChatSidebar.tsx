@@ -1,13 +1,10 @@
 import app from "flarum/forum/app";
 import Component from "flarum/common/Component";
 import type { ComponentAttrs } from "flarum/common/Component";
-import LoadingIndicator from "flarum/common/components/LoadingIndicator";
 import Avatar from "flarum/common/components/Avatar";
 import Button from "flarum/common/components/Button";
 import classList from "flarum/common/utils/classList";
 import type Mithril from "mithril";
-
-import { displayEmoji } from "../utils/emoji";
 
 import type Channel from "../../common/models/Channel";
 import type ChatState from "../state/ChatState";

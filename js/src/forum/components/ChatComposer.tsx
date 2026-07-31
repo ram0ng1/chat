@@ -14,6 +14,7 @@ import ChatAutocomplete from "./ChatAutocomplete";
 import type { Suggestion } from "./ChatAutocomplete";
 import { searchEmoji } from "../utils/emoji";
 import { messagePreview } from "../utils/preview";
+import { humanDuration } from "../utils/duration";
 import {
   stickersAvailable,
   stickerIcon,
@@ -48,6 +49,10 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
   private textarea: HTMLTextAreaElement | null = null;
   private joining = false;
   private sending = false;
+
+  /** Seconds left before this channel will accept another message from us. */
+  private cooldown = 0;
+  private cooldownTimer: number | null = null;
   private uploading = false;
 
   /** Id of the reply/edit target the cursor was last moved for. */
@@ -69,6 +74,14 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
 
   onremove(): void {
     if (this.mentionTimer !== null) window.clearTimeout(this.mentionTimer);
+
+    this.stopCooldown();
+  }
+
+  oninit(vnode: Mithril.Vnode<ChatComposerAttrs>): void {
+    super.oninit(vnode);
+
+    this.startCooldown(Number(this.attrs.channel.slowModeRemaining() ?? 0));
   }
 
   oncreate(vnode: Mithril.VnodeDOM<ChatComposerAttrs>): void {
@@ -120,6 +133,15 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
 
     if (!channel.canPostMessage()) {
       return this.frozen(channel);
+    }
+
+    // Slow mode is a "not now", so it reads like the other "not now" states
+    // rather than as a disabled button with a number in it. A greyed-out send
+    // still invites clicking, and a textarea that accepts typing it will not
+    // deliver is worse than no textarea: the draft survives in state either way,
+    // so nothing is lost by standing the box down until the wait is over.
+    if (this.cooldown > 0) {
+      return this.slowed();
     }
 
     const value = state.draft(Number(channel.id()), threadId ?? null);
@@ -249,6 +271,27 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
    * the wrong thing entirely, and left them with no idea that reading was all that
    * was ever on offer.
    */
+  /**
+   * What stands in for the composer during a slow-mode wait.
+   *
+   * Shaped like `frozen()` because it means the same thing to the reader — the
+   * channel is not taking a message from you right now — and an hourglass rather
+   * than a padlock because nothing is locked and nothing went wrong: the wait
+   * ends on its own, and the count says when.
+   */
+  protected slowed(): Mithril.Children {
+    return (
+      <div className="ChatChannel-frozen ChatChannel-frozen--slow">
+        <i className="fas fa-hourglass-half" aria-hidden="true" />
+        <span>
+          {app.translator.trans("ramon-chat.forum.composer.slow_mode_wait", {
+            duration: humanDuration(this.cooldown),
+          })}
+        </span>
+      </div>
+    );
+  }
+
   protected frozen(channel: Channel): Mithril.Children {
     // Not a member. Checked before the read-only reasons because it is the only one
     // the reader can do something about, and telling them the channel is closed when
@@ -782,6 +825,42 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
     this.resize();
   }
 
+  /**
+   * Starts (or refreshes) the slow-mode countdown.
+   *
+   * Driven by a one-second interval rather than computed on each redraw: nothing
+   * else would cause a redraw while the user waits, so the number would sit
+   * frozen at whatever it read when they last typed.
+   *
+   * The server is the authority. This only mirrors what it already told us, so a
+   * reload — or a second tab — still shows the wait rather than offering a send
+   * that is refused.
+   */
+  protected startCooldown(seconds: number): void {
+    this.stopCooldown();
+
+    if (seconds <= 0) return;
+
+    this.cooldown = seconds;
+
+    this.cooldownTimer = window.setInterval(() => {
+      this.cooldown -= 1;
+
+      if (this.cooldown <= 0) this.stopCooldown();
+
+      m.redraw();
+    }, 1000);
+  }
+
+  protected stopCooldown(): void {
+    if (this.cooldownTimer !== null) {
+      window.clearInterval(this.cooldownTimer);
+      this.cooldownTimer = null;
+    }
+
+    this.cooldown = 0;
+  }
+
   protected async submit(): Promise<void> {
     const { channel, state, threadId, onSent } = this.attrs;
 
@@ -824,6 +903,13 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
             !threadId &&
             Boolean(replyingTo?.canCreateThread()),
         });
+      }
+
+      // The channel's own cooldown, restarted from what the send just consumed.
+      // Editing an existing message does not: slow mode is about how often you
+      // speak, not how often you correct yourself.
+      if (!editing) {
+        this.startCooldown(Number(channel.slowModeSeconds() ?? 0));
       }
 
       onSent?.();

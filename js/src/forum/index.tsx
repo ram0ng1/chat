@@ -170,31 +170,36 @@ app.initializers.add("ramon-chat", () => {
   // Same entry point flarum/messages uses for "Send message", so the two sit
   // together rather than in unrelated places.
   //
-  // ts-ignore for the same reason flarum/messages needs it: extend() infers the
+  // Named rather than inline. `@ts-ignore` suppresses the *next line* only, and
+  // the formatter wraps a long call across several — which moved the offending
+  // argument out from under the suppression and turned a known typing gap into a
+  // build error. A short statement cannot be re-wrapped.
+  //
+  // The gap itself is the one flarum/messages works around: extend() infers the
   // callback signature from the target method, and UserControls' published typing
-  // loses the `user` parameter, so the second argument does not typecheck even
-  // though it is passed at runtime.
+  // loses the `user` parameter, even though it is passed at runtime.
+  const addChatToUserControls = (
+    items: ItemList<Mithril.Children>,
+    user: User,
+  ) => {
+    if (!canUseChat()) return;
+    if (!app.forum.attribute<boolean>("canStartChatDirect")) return;
+
+    // No point offering a chat with yourself.
+    if (app.session.user?.id() === user.id()) return;
+
+    items.add(
+      "chatDirect",
+      <Button icon="fas fa-envelope" onclick={() => startDirectMessage(user)}>
+        {app.translator.trans("ramon-chat.forum.user_controls.start_chat")}
+      </Button>,
+      // Just below flarum/messages' own button, which sits at the default 0.
+      -5,
+    );
+  };
+
   // @ts-ignore
-  extend(
-    UserControls,
-    "userControls",
-    (items: ItemList<Mithril.Children>, user: User) => {
-      if (!canUseChat()) return;
-      if (!app.forum.attribute<boolean>("canStartChatDirect")) return;
-
-      // No point offering a chat with yourself.
-      if (app.session.user?.id() === user.id()) return;
-
-      items.add(
-        "chatDirect",
-        <Button icon="fas fa-envelope" onclick={() => startDirectMessage(user)}>
-          {app.translator.trans("ramon-chat.forum.user_controls.start_chat")}
-        </Button>,
-        // Just below flarum/messages' own button, which sits at the default 0.
-        -5,
-      );
-    },
-  );
+  extend(UserControls, "userControls", addChatToUserControls);
 
   // Anything that reads `app.forum`/`app.session`, or mounts its own Mithril
   // root, has to run after ForumApplication.mount():

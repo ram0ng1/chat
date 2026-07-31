@@ -6,6 +6,7 @@ ramon-chat:
     message_too_long: "As mensagens não podem passar de {max} caracteres."
     rate_limited: Você está enviando mensagens rápido demais. Aguarde um instante.
     invalid_reaction: Essa não é uma reação de emoji válida.
+    slow_mode_wait: "O modo lento está ativo neste canal. Você poderá publicar de novo em {seconds}s."
     flag_reason_invalid: Esse não é um motivo válido para denunciar uma mensagem.
     flag_detail_required: Diga o que há de errado com esta mensagem.
     invalid_reply_target: Você não pode responder a uma mensagem de outro canal.
@@ -158,6 +159,11 @@ ramon-chat:
 
     # Mensagens salvas pelo usuário. O botão sempre existiu; aqui elas são lidas
     # de volta.
+    duration:
+      seconds: "{count}s"
+      minutes: "{count}min"
+      hours: "{count}h"
+
     flag:
       title: Denunciar mensagem
       reason: Por que você está denunciando?
@@ -185,7 +191,7 @@ ramon-chat:
       delete_message: Excluir mensagem
       message_gone: A mensagem denunciada não existe mais.
       message_deleted: Esta mensagem foi excluída.
-      resolved_by: "Resolvido por {user}"
+      resolved_by: "Resolvido por {moderator}"
       flarum_item: "{username} foi denunciado em {em}{channel}{/em} por {reason}"
       load_failed: Não foi possível carregar as denúncias.
       action_failed: Não foi possível concluir a ação.
@@ -234,6 +240,7 @@ ramon-chat:
       uploading: Enviando…
       upload_failed: Falha no envio do arquivo.
       too_large: Esse arquivo é muito grande.
+      slow_mode_wait: "O modo lento está ativo. Você poderá escrever de novo em {duration}."
       send_failed: Não foi possível enviar sua mensagem.
 
     typing:
@@ -247,6 +254,9 @@ ramon-chat:
       jump_to_latest: Ir para a mais recente
 
     new_channel:
+      slow_mode: Modo lento
+      slow_mode_off: "Desligado"
+      slow_mode_help: Quanto tempo cada pessoa espera entre mensagens neste canal. Moderadores são isentos.
       name: Nome do canal
       name_placeholder: "ex.: geral"
       description: Descrição

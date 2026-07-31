@@ -9,6 +9,7 @@ ramon-chat:
     message_too_long: "Messages cannot be longer than {max} characters."
     rate_limited: You are sending messages too quickly. Please slow down.
     invalid_reaction: That is not a valid emoji reaction.
+    slow_mode_wait: "Slow mode is on in this channel. You can post again in {seconds}s."
     flag_reason_invalid: That is not a reason a message can be reported for.
     flag_detail_required: Please say what is wrong with this message.
     invalid_reply_target: You cannot reply to a message from another channel.
@@ -179,6 +180,11 @@ ramon-chat:
 
     # Messages the actor saved. The bookmark button has always existed; this is
     # where they are read back.
+    duration:
+      seconds: "{count}s"
+      minutes: "{count}m"
+      hours: "{count}h"
+
     flag:
       title: Report message
       reason: Why are you reporting this?
@@ -206,7 +212,7 @@ ramon-chat:
       delete_message: Delete message
       message_gone: The reported message no longer exists.
       message_deleted: This message has been deleted.
-      resolved_by: "Resolved by {user}"
+      resolved_by: "Resolved by {moderator}"
       flarum_item: "{username} was reported in {em}{channel}{/em} for {reason}"
       load_failed: Could not load the reports.
       action_failed: Could not complete that action.
@@ -255,6 +261,7 @@ ramon-chat:
       uploading: Uploading…
       upload_failed: Upload failed.
       too_large: That file is too large.
+      slow_mode_wait: "Slow mode is on. You can write again in {duration}."
       send_failed: Your message could not be sent.
 
     typing:
@@ -268,6 +275,9 @@ ramon-chat:
       jump_to_latest: Jump to latest
 
     new_channel:
+      slow_mode: Slow mode
+      slow_mode_off: "Off"
+      slow_mode_help: How long each person waits between messages in this channel. Moderators are exempt.
       name: Channel name
       name_placeholder: e.g. general
       description: Description

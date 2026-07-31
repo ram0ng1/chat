@@ -11,20 +11,22 @@
  * empty string — a broken image is a better outcome than an executable one.
  */
 export function safeFileUrl(raw: string | null | undefined): string {
-  const value = (raw ?? '').trim();
+  const value = (raw ?? "").trim();
 
-  if (value === '') return '';
+  if (value === "") return "";
 
   // Root-relative, which is what the local disk produces. Excludes `//host`,
   // protocol-relative and therefore able to point anywhere.
-  if (value.startsWith('/') && !value.startsWith('//')) return value;
+  if (value.startsWith("/") && !value.startsWith("//")) return value;
 
   try {
     const parsed = new URL(value, window.location.origin);
 
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.href : '';
+    return parsed.protocol === "http:" || parsed.protocol === "https:"
+      ? parsed.href
+      : "";
   } catch {
     // Unparseable is not a URL, whatever else it might be.
-    return '';
+    return "";
   }
 }

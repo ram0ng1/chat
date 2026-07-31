@@ -14,7 +14,9 @@
     // is how the emoji map stays out of the main bundle.
     "module": "esnext",
     "moduleResolution": "bundler",
-    "baseUrl": ".",
+    // No `baseUrl`: TypeScript 7 removed it, and every mapping below is already
+    // written relative to this file — which is exactly what `baseUrl: "."`
+    // meant. Leaving it in is a hard error, not a warning.
     "paths": {
       "flarum/*": [
         "../vendor/flarum/core/js/dist-typings/*",

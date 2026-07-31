@@ -2,11 +2,8 @@ import app from "flarum/forum/app";
 import Component from "flarum/common/Component";
 import type { ComponentAttrs } from "flarum/common/Component";
 import Button from "flarum/common/components/Button";
-import LoadingIndicator from "flarum/common/components/LoadingIndicator";
 import classList from "flarum/common/utils/classList";
 import type Mithril from "mithril";
-
-import { displayEmoji } from "../utils/emoji";
 
 import type Channel from "../../common/models/Channel";
 import type Message from "../../common/models/Message";

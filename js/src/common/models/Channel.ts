@@ -37,6 +37,18 @@ export default class Channel extends Model {
   postPermission = Model.attribute<string>("postPermission");
 
   threadingEnabled = Model.attribute<boolean>("threadingEnabled");
+
+  /** Minimum gap between one person's messages, in seconds. 0 is off. */
+  slowModeSeconds = Model.attribute<number>("slowModeSeconds");
+
+  /**
+   * Seconds this reader must still wait, as the server sees it.
+   *
+   * Sent per actor rather than derived on the client: a reload has no memory of
+   * when you last posted, and a composer that offers a send the server refuses
+   * is worse than one that shows the wait.
+   */
+  slowModeRemaining = Model.attribute<number>("slowModeRemaining");
   autoJoin = Model.attribute<boolean>("autoJoin");
 
   /** Subscribe a user when they reply in the bound category. */

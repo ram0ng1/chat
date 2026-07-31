@@ -166,7 +166,10 @@ export default class FlaggedMessagesList extends Component<FlaggedMessagesListAt
           {resolved ? (
             <span className="ChatFlags-resolvedBy">
               {app.translator.trans("ramon-chat.forum.flags.resolved_by", {
-                user: username(flag.resolvedBy()),
+                // Not `user`: the translator reserves that key, extracts it and
+                // runs username() on it itself — which crashed on the vnode this
+                // already is.
+                moderator: username(flag.resolvedBy()),
               })}
             </span>
           ) : (
