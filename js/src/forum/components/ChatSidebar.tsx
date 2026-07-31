@@ -1,19 +1,16 @@
-import app from 'flarum/forum/app';
-import Component from 'flarum/common/Component';
-import type { ComponentAttrs } from 'flarum/common/Component';
-import LoadingIndicator from 'flarum/common/components/LoadingIndicator';
-import Avatar from 'flarum/common/components/Avatar';
-import Button from 'flarum/common/components/Button';
-import classList from 'flarum/common/utils/classList';
-import type Mithril from 'mithril';
+import app from "flarum/forum/app";
+import Component from "flarum/common/Component";
+import type { ComponentAttrs } from "flarum/common/Component";
+import Avatar from "flarum/common/components/Avatar";
+import Button from "flarum/common/components/Button";
+import classList from "flarum/common/utils/classList";
+import type Mithril from "mithril";
 
-import { displayEmoji } from '../utils/emoji';
-
-import type Channel from '../../common/models/Channel';
-import type ChatState from '../state/ChatState';
-import { SidebarSkeleton } from './Skeletons';
-import ChannelFormModal from './ChannelFormModal';
-import { channelIcon } from '../utils/channelIcon';
+import type Channel from "../../common/models/Channel";
+import type ChatState from "../state/ChatState";
+import { SidebarSkeleton } from "./Skeletons";
+import ChannelFormModal from "./ChannelFormModal";
+import { channelIcon } from "../utils/channelIcon";
 
 export interface ChatSidebarAttrs extends ComponentAttrs {
   state: ChatState;
@@ -31,9 +28,33 @@ export default class ChatSidebar extends Component<ChatSidebarAttrs> {
     return (
       <div className="ChatSidebar">
         <div className="ChatSidebar-top">
-          {this.quickLink('chat.threads', 'fas fa-comments', 'ramon-chat.forum.sidebar.my_threads')}
-          {this.quickLink('chat.bookmarks', 'fas fa-bookmark', 'ramon-chat.forum.sidebar.bookmarks')}
-          {this.quickLink('chat.search', 'fas fa-magnifying-glass', 'ramon-chat.forum.sidebar.search')}
+          {this.quickLink(
+            "chat.threads",
+            "fas fa-comments",
+            "ramon-chat.forum.sidebar.my_threads",
+          )}
+          {this.quickLink(
+            "chat.bookmarks",
+            "fas fa-bookmark",
+            "ramon-chat.forum.sidebar.bookmarks",
+          )}
+          {this.quickLink(
+            "chat.search",
+            "fas fa-magnifying-glass",
+            "ramon-chat.forum.sidebar.search",
+          )}
+
+          {/* Moderators only, and the count comes from the server rather than
+              from the list — the link has to be able to say there is work waiting
+              before anyone opens the queue. */}
+          {app.forum.attribute<boolean>("canModerateChat")
+            ? this.quickLink(
+                "chat.flags",
+                "fas fa-flag",
+                "ramon-chat.forum.sidebar.flags",
+                Number(app.forum.attribute<number>("chatOpenFlagsCount") ?? 0),
+              )
+            : null}
         </div>
 
         <div className="ChatSidebar-scroll">
@@ -42,42 +63,56 @@ export default class ChatSidebar extends Component<ChatSidebarAttrs> {
           ) : (
             <>
               {this.section(
-                'ramon-chat.forum.sidebar.channels',
+                "ramon-chat.forum.sidebar.channels",
                 state.categoryChannels(),
                 {
                   // A magnifying glass, not a pencil: the action is "browse
                   // channels", and a pencil promises editing.
-                  icon: 'fas fa-magnifying-glass',
-                  title: app.translator.trans('ramon-chat.forum.sidebar.browse_channels', {}, true),
-                  action: () => m.route.set(app.route('chat.browse')),
-                }
+                  icon: "fas fa-magnifying-glass",
+                  title: app.translator.trans(
+                    "ramon-chat.forum.sidebar.browse_channels",
+                    {},
+                    true,
+                  ),
+                  action: () => m.route.set(app.route("chat.browse")),
+                },
               )}
 
               {this.section(
-                'ramon-chat.forum.sidebar.direct_messages',
+                "ramon-chat.forum.sidebar.direct_messages",
                 state.directChannels(),
-                app.forum.attribute<boolean>('canStartChatDirect')
-                  ? {
-                      icon: 'fas fa-plus',
-                      title: app.translator.trans('ramon-chat.forum.sidebar.new_direct_message', {}, true),
-                      action: () => this.startDirect(),
-                    }
-                  : null
+                null,
               )}
 
               {/* An empty sidebar has to offer a way out, or a fresh install is a
                   dead end: no channels to open and no visible way to make one. */}
               {state.channelsLoaded && state.channels.length === 0 ? (
                 <div className="ChatSidebar-empty">
-                  <p>{app.translator.trans('ramon-chat.forum.sidebar.no_channels')}</p>
+                  <p>
+                    {app.translator.trans(
+                      "ramon-chat.forum.sidebar.no_channels",
+                    )}
+                  </p>
 
-                  <Button className="Button Button--primary Button--block" icon="fas fa-compass" onclick={() => m.route.set(app.route('chat.browse'))}>
-                    {app.translator.trans('ramon-chat.forum.sidebar.browse_channels')}
+                  <Button
+                    className="Button Button--primary Button--block"
+                    icon="fas fa-compass"
+                    onclick={() => m.route.set(app.route("chat.browse"))}
+                  >
+                    {app.translator.trans(
+                      "ramon-chat.forum.sidebar.browse_channels",
+                    )}
                   </Button>
 
-                  {app.forum.attribute<boolean>('canCreateChatChannel') ? (
-                    <Button className="Button Button--block" icon="fas fa-plus" onclick={() => this.createChannel()}>
-                      {app.translator.trans('ramon-chat.forum.sidebar.new_channel')}
+                  {app.forum.attribute<boolean>("canCreateChatChannel") ? (
+                    <Button
+                      className="Button Button--block"
+                      icon="fas fa-plus"
+                      onclick={() => this.createChannel()}
+                    >
+                      {app.translator.trans(
+                        "ramon-chat.forum.sidebar.new_channel",
+                      )}
                     </Button>
                   ) : null}
                 </div>
@@ -97,20 +132,38 @@ export default class ChatSidebar extends Component<ChatSidebarAttrs> {
    * so the sidebar looked identical whether you were reading a channel, your
    * threads or your bookmarks.
    */
-  protected quickLink(routeName: string, icon: string, key: string): Mithril.Children {
+  protected quickLink(
+    routeName: string,
+    icon: string,
+    key: string,
+    badge?: number,
+  ): Mithril.Children {
     // `m.route.get()` rather than comparing to a stored value: the route can also
     // change from browser back/forward, which no click handler observes.
-    const active = m.route.get().split('?')[0] === app.route(routeName);
+    const active = m.route.get().split("?")[0] === app.route(routeName);
 
     return (
       <button
         type="button"
-        className={classList('ChatSidebar-quickLink', { 'ChatSidebar-quickLink--active': active })}
-        aria-current={active ? 'page' : undefined}
+        className={classList("ChatSidebar-quickLink", {
+          "ChatSidebar-quickLink--active": active,
+        })}
+        aria-current={active ? "page" : undefined}
         onclick={() => m.route.set(app.route(routeName))}
       >
-        <i className={`ChatSidebar-quickLink-icon ${icon}`} aria-hidden="true" />
+        <i
+          className={`ChatSidebar-quickLink-icon ${icon}`}
+          aria-hidden="true"
+        />
         <span>{app.translator.trans(key)}</span>
+
+        {/* Only when there is something to report. A badge reading zero is noise
+            that trains people to stop looking at it. */}
+        {badge ? (
+          <span className="ChatSidebar-quickLink-badge">
+            {badge > 99 ? "99+" : badge}
+          </span>
+        ) : null}
       </button>
     );
   }
@@ -118,7 +171,7 @@ export default class ChatSidebar extends Component<ChatSidebarAttrs> {
   protected section(
     labelKey: string,
     channels: Channel[],
-    action: { icon: string; title: string; action: () => void } | null
+    action: { icon: string; title: string; action: () => void } | null,
   ): Mithril.Children {
     // An empty section with no affordance is pure noise; hide it.
     if (channels.length === 0 && !action) return null;
@@ -156,16 +209,16 @@ export default class ChatSidebar extends Component<ChatSidebarAttrs> {
       <button
         type="button"
         key={channel.id()}
-        className={classList('ChatChannelRow', {
-          'ChatChannelRow--active': active,
-          'ChatChannelRow--muted': channel.isMuted(),
+        className={classList("ChatChannelRow", {
+          "ChatChannelRow--active": active,
+          "ChatChannelRow--muted": channel.isMuted(),
         })}
         onclick={() => onSelect?.(channel)}
       >
-        {channel.isDirect() ? this.avatars(channel) : (
-          <span className="ChatChannelRow-icon">
-            {channelIcon(channel)}
-          </span>
+        {channel.isDirect() ? (
+          this.avatars(channel)
+        ) : (
+          <span className="ChatChannelRow-icon">{channelIcon(channel)}</span>
         )}
 
         <span className="ChatChannelRow-name">{channel.displayName()}</span>
@@ -176,14 +229,20 @@ export default class ChatSidebar extends Component<ChatSidebarAttrs> {
         {channel.isPrivate() ? (
           <i
             className="ChatChannelRow-lock fas fa-lock"
-            title={app.translator.trans('ramon-chat.forum.new_channel.private', {}, true)}
+            title={app.translator.trans(
+              "ramon-chat.forum.new_channel.private",
+              {},
+              true,
+            )}
             aria-hidden="true"
           />
         ) : null}
 
         {/* A count only for mentions; ambient unreads get a plain dot-less badge. */}
         {mentions > 0 ? (
-          <span className="ChatChannelRow-badge ChatChannelRow-badge--mention">{mentions > 99 ? '99+' : mentions}</span>
+          <span className="ChatChannelRow-badge ChatChannelRow-badge--mention">
+            {mentions > 99 ? "99+" : mentions}
+          </span>
         ) : unread ? (
           <span className="ChatChannelRow-badge">{channel.unreadCount()}</span>
         ) : null}
@@ -199,7 +258,10 @@ export default class ChatSidebar extends Component<ChatSidebarAttrs> {
     const participants = channel.participants() || [];
 
     const others = participants
-      .filter((user): user is NonNullable<typeof user> => Boolean(user) && user!.id() !== actorId)
+      .filter(
+        (user): user is NonNullable<typeof user> =>
+          Boolean(user) && user!.id() !== actorId,
+      )
       .slice(0, 2);
 
     if (others.length === 0) {
@@ -210,21 +272,21 @@ export default class ChatSidebar extends Component<ChatSidebarAttrs> {
       );
     }
 
-    return <span className="ChatChannelRow-avatars">{others.map((user) => <Avatar user={user} className="Avatar" />)}</span>;
+    return (
+      <span className="ChatChannelRow-avatars">
+        {others.map((user) => (
+          <Avatar user={user} className="Avatar" />
+        ))}
+      </span>
+    );
   }
 
   protected createChannel(): void {
     app.modal.show(ChannelFormModal, {
       onSaved: (channel: Channel) => {
         this.attrs.state.setActiveChannel(Number(channel.id()));
-        m.route.set(app.route('chat.channel', { id: channel.id() }));
+        m.route.set(app.route("chat.channel", { id: channel.id() }));
       },
     });
-  }
-
-  protected startDirect(): void {
-    // NewDirectMessageModal is phase 3. The affordance is hidden until then
-    // rather than shown as a no-op — see ChatSidebar-sectionHeader-action above,
-    // which is gated on canStartChatDirect.
   }
 }

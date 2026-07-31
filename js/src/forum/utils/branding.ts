@@ -1,4 +1,4 @@
-import app from 'flarum/forum/app';
+import app from "flarum/forum/app";
 
 /**
  * Admin-configurable label and icon for the chat.
@@ -10,11 +10,11 @@ import app from 'flarum/forum/app';
 
 /** The chat's display name. Falls back to the translated default when unset. */
 export function chatTitle(): string {
-  const custom = (app.forum.attribute<string>('ramon-chat.title') ?? '').trim();
+  const custom = (app.forum.attribute<string>("ramon-chat.title") ?? "").trim();
 
-  if (custom !== '') return custom;
+  if (custom !== "") return custom;
 
-  return app.translator.trans('ramon-chat.forum.nav.chat', {}, true);
+  return app.translator.trans("ramon-chat.forum.nav.chat", {}, true);
 }
 
 /**
@@ -26,9 +26,10 @@ export function chatTitle(): string {
  * no class that collapses to a stray gap.
  */
 export function chatIcon(): string | null {
-  if (app.forum.attribute<boolean>('ramon-chat.showIcon') === false) return null;
+  if (app.forum.attribute<boolean>("ramon-chat.showIcon") === false)
+    return null;
 
-  const icon = (app.forum.attribute<string>('ramon-chat.icon') ?? '').trim();
+  const icon = (app.forum.attribute<string>("ramon-chat.icon") ?? "").trim();
 
-  return icon === '' ? 'fas fa-comments' : icon;
+  return icon === "" ? "fas fa-comments" : icon;
 }

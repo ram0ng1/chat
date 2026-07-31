@@ -6,6 +6,9 @@ ramon-chat:
     message_too_long: "As mensagens não podem passar de {max} caracteres."
     rate_limited: Você está enviando mensagens rápido demais. Aguarde um instante.
     invalid_reaction: Essa não é uma reação de emoji válida.
+    slow_mode_wait: "O modo lento está ativo neste canal. Você poderá publicar de novo em {seconds}s."
+    flag_reason_invalid: Esse não é um motivo válido para denunciar uma mensagem.
+    flag_detail_required: Diga o que há de errado com esta mensagem.
     invalid_reply_target: Você não pode responder a uma mensagem de outro canal.
     invalid_thread_target: Esse tópico não pertence a este canal.
     invalid_channel_status: Um canal só pode ser definido como aberto ou fechado.
@@ -24,6 +27,7 @@ ramon-chat:
     direct_needs_participant: Escolha ao menos uma pessoa para conversar.
     direct_too_many: "Uma conversa em grupo aceita no máximo {max} participantes."
     direct_unknown_user: Um desses usuários não existe.
+    stickers_not_allowed: Você não tem permissão para enviar stickers.
     members_empty: Escolha ao menos uma pessoa para adicionar.
     members_too_many: "Você pode adicionar no máximo {max} pessoas por vez."
     cannot_remove_self: Use "Sair do canal" para se remover.
@@ -85,11 +89,11 @@ ramon-chat:
       my_threads: Meus tópicos
       bookmarks: Salvos
       search: Buscar
+      flags: Denúncias
       channels: Canais
       direct_messages: Mensagens diretas
       browse_channels: Navegar por canais
       new_channel: Novo canal
-      new_direct_message: Nova mensagem
       no_channels: Você ainda não entrou em nenhum canal.
 
     channel:
@@ -136,7 +140,8 @@ ramon-chat:
       edit: Editar
       delete: Excluir
       restore: Restaurar
-      flag: Denunciar
+      flag: Denunciar mensagem
+      flagged: Você denunciou esta mensagem
       move: Mover para canal
       quote_in_discussion: Citar em discussão
       select: Selecionar
@@ -153,11 +158,55 @@ ramon-chat:
 
     # Mensagens salvas pelo usuário. O botão sempre existiu; aqui elas são lidas
     # de volta.
+    duration:
+      seconds: "{count}s"
+      minutes: "{count}min"
+      hours: "{count}h"
+
+    flag:
+      title: Denunciar mensagem
+      reason: Por que você está denunciando?
+      reasons:
+        spam: Spam
+        inappropriate: Conteúdo impróprio
+        harassment: Assédio
+        off_topic: Fora do assunto
+        other: Outro motivo
+      detail: Algo mais que a moderação deva saber (opcional)
+      detail_required: Diga à moderação o que está errado
+      detail_placeholder: Somente a moderação verá isto.
+      submit: Enviar denúncia
+      sent: Denúncia enviada. A moderação vai analisar.
+      failed: Não foi possível enviar a denúncia.
+
+    flags:
+      title: Mensagens denunciadas
+      show_resolved: Incluir resolvidas
+      empty: Nenhuma denúncia pendente.
+      empty_all: Nenhuma denúncia até agora.
+      forbidden: Você não tem permissão para ver as mensagens denunciadas.
+      go_to: Ir para a mensagem
+      dismiss: Descartar
+      delete_message: Excluir mensagem
+      message_gone: A mensagem denunciada não existe mais.
+      message_deleted: Esta mensagem foi excluída.
+      resolved_by: "Resolvido por {moderator}"
+      flarum_item: "{username} foi denunciado em {em}{channel}{/em} por {reason}"
+      load_failed: Não foi possível carregar as denúncias.
+      action_failed: Não foi possível concluir a ação.
+
     bookmarks:
       empty: Você ainda não salvou nenhuma mensagem.
       no_text: (somente anexo)
       remove: Remover dos salvos
       remove_failed: Não foi possível remover dos salvos.
+
+    # Visualizador de imagem em tela cheia, aberto ao clicar numa imagem.
+    lightbox:
+      close: Fechar
+      previous: Imagem anterior
+      next: Próxima imagem
+      open_original: Abrir o original
 
     thread:
       title: Tópico
@@ -178,6 +227,9 @@ ramon-chat:
       placeholder_closed: Este canal está fechado
       send: Enviar
       attach: Anexar um arquivo
+      sticker: Inserir um sticker
+      sticker_search: Buscar stickers
+      sticker_none: Nenhum sticker encontrado.
       emoji: Emoji
       insert_date: Inserir data
       cancel_edit: Cancelar
@@ -187,6 +239,7 @@ ramon-chat:
       uploading: Enviando…
       upload_failed: Falha no envio do arquivo.
       too_large: Esse arquivo é muito grande.
+      slow_mode_wait: "O modo lento está ativo. Você poderá escrever de novo em {duration}."
       send_failed: Não foi possível enviar sua mensagem.
 
     typing:
@@ -200,6 +253,9 @@ ramon-chat:
       jump_to_latest: Ir para a mais recente
 
     new_channel:
+      slow_mode: Modo lento
+      slow_mode_off: "Desligado"
+      slow_mode_help: Quanto tempo cada pessoa espera entre mensagens neste canal. Moderadores são isentos.
       name: Nome do canal
       name_placeholder: "ex.: geral"
       description: Descrição
@@ -313,6 +369,7 @@ ramon-chat:
       failed: Não foi possível carregar o histórico.
 
     notifications:
+      message_flagged: "{username} denunciou uma mensagem em {channel}"
       channel_invite: "{username} adicionou você a {channel}"
       someone: Alguém
 
@@ -329,6 +386,7 @@ ramon-chat:
       open_in_drawer: Abrir o chat em painel flutuante em vez de tela cheia
       sound: Som de notificação
       sound_none: Nenhum
+      notify_message_flagged: Alguém denunciar uma mensagem do chat
       notify_channel_invite: Alguém me adiciona a um canal de chat
 
   admin:
@@ -354,8 +412,6 @@ ramon-chat:
       max_upload_size: Tamanho máximo de envio (bytes)
 
       behaviour_title: Comportamento
-      default_reactions: Reações de emoji padrão
-      default_reactions_help: Códigos de emoji separados por vírgula, sem dois-pontos.
       title_label: Nome do chat
       title_help: Exibido no botão do cabeçalho e no painel. Deixe vazio para usar "Chat".
       icon_label: Ícone do chat
@@ -395,9 +451,12 @@ ramon-chat:
       create_channel: Criar canais
       edit_channel: Editar canais
       moderate: Moderar o chat
+      send_stickers: Enviar stickers no chat
       upload: Enviar arquivos no chat
       react: Reagir a mensagens
       create_thread: Criar tópicos a partir de uma resposta
+      bypass_slow_mode: Ignorar o modo lento
+      flag_message: Denunciar mensagens
       pin_message: Fixar e desfixar mensagens
       mention_channel_wide: Usar @here e @all
 

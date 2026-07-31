@@ -34,6 +34,7 @@ use Illuminate\Support\Str;
  * @property bool $is_private
  * @property string $post_permission
  * @property bool $threading_enabled
+ * @property int $slow_mode_seconds
  * @property bool $auto_join
  * @property bool $auto_join_on_reply
  * @property bool $post_discussions
@@ -92,6 +93,7 @@ class Channel extends AbstractModel
         'archived_discussion_id'      => 'integer',
         'archived_by_id'              => 'integer',
         'deleted_by_id'               => 'integer',
+        'slow_mode_seconds'           => 'integer',
         'is_private'                  => 'boolean',
         'threading_enabled'           => 'boolean',
         'auto_join'                   => 'boolean',

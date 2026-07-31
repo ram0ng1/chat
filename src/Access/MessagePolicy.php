@@ -96,7 +96,31 @@ class MessagePolicy extends AbstractPolicy
 
         $channel = $message->channel;
 
-        if ($channel === null || ! $actor->can('postMessage', $channel)) {
+        if ($channel === null) {
+            return false;
+        }
+
+        // Deliberately *not* `postMessage`. Deferring to it made an announcement
+        // channel completely inert: everyone can read it, only moderators may
+        // write, and so nobody else could even acknowledge what was posted. The
+        // point of such a channel is that people read it, and a reaction is the
+        // cheapest way to show they did.
+        //
+        // The other conditions posting checks still apply, because a reaction is
+        // still activity:
+        //  - the channel has to accept it (a closed or archived one does not);
+        //  - the actor has to be able to see the message;
+        //  - the actor has to be in the channel, for the same reason posting
+        //    requires it — a link is not membership.
+        if (! $channel->acceptsMessages()) {
+            return false;
+        }
+
+        if (! $this->view($actor, $message)) {
+            return false;
+        }
+
+        if ($channel->membershipFor($actor) === null) {
             return false;
         }
 
@@ -110,6 +134,38 @@ class MessagePolicy extends AbstractPolicy
         }
 
         return $this->view($actor, $message);
+    }
+
+    /**
+     * Reporting a message to the moderators.
+     *
+     * Refused on your own message — there is nobody to tell — and on a message
+     * already deleted, whose report would arrive about something no longer there.
+     * System messages have no author to hold responsible.
+     *
+     * Moderators are not excluded: someone who may act on this channel may still
+     * find a message in a channel they do not watch, and filing it is how it
+     * reaches whoever does.
+     */
+    public function flag(User $actor, Message $message): ?bool
+    {
+        if (! $actor->exists) {
+            return false;
+        }
+
+        if ($message->isDeleted() || $message->isSystem() || $message->user_id === null) {
+            return false;
+        }
+
+        if ($actor->id === $message->user_id) {
+            return false;
+        }
+
+        if (! $this->view($actor, $message)) {
+            return false;
+        }
+
+        return $actor->hasPermission('ramon-chat.flagMessage') ? true : false;
     }
 
     public function reply(User $actor, Message $message): ?bool

@@ -1,9 +1,9 @@
-import app from 'flarum/forum/app';
-import Notification from 'flarum/forum/components/Notification';
-import type Mithril from 'mithril';
+import app from "flarum/forum/app";
+import Notification from "flarum/forum/components/Notification";
+import type Mithril from "mithril";
 
-import chatState from '../state/chat';
-import ChatDrawer from './ChatDrawer';
+import chatState from "../state/chat";
+import ChatDrawer from "./ChatDrawer";
 
 /**
  * "X added you to #channel."
@@ -14,31 +14,46 @@ import ChatDrawer from './ChatDrawer';
  */
 export default class ChannelInviteNotification extends Notification {
   icon(): string {
-    return 'fas fa-comments';
+    return "fas fa-comments";
   }
 
   href(): string {
     const channelId = this.channelId();
 
-    return channelId ? app.route('chat.channel', { id: channelId }) : app.route('chat.index');
+    return channelId
+      ? app.route("chat.channel", { id: channelId })
+      : app.route("chat.index");
   }
 
   content(): Mithril.Children {
     const notification = this.attrs.notification;
     const inviter = notification.fromUser();
 
-    return app.translator.trans('ramon-chat.forum.notifications.channel_invite', {
-      username: inviter ? inviter.displayName() : app.translator.trans('ramon-chat.forum.notifications.someone', {}, true),
-      channel: this.channelName(),
-    });
+    return app.translator.trans(
+      "ramon-chat.forum.notifications.channel_invite",
+      {
+        username: inviter
+          ? inviter.displayName()
+          : app.translator.trans(
+              "ramon-chat.forum.notifications.someone",
+              {},
+              true,
+            ),
+        channel: this.channelName(),
+      },
+    );
   }
 
   excerpt(): Mithril.Children {
     // Marking a private channel as such is the whole context: it explains why the
     // channel appeared without you having found it yourself.
-    const data = this.attrs.notification.content() as { isPrivate?: boolean } | null;
+    const data = this.attrs.notification.content() as {
+      isPrivate?: boolean;
+    } | null;
 
-    return data?.isPrivate ? app.translator.trans('ramon-chat.forum.new_channel.private') : null;
+    return data?.isPrivate
+      ? app.translator.trans("ramon-chat.forum.new_channel.private")
+      : null;
   }
 
   /**
@@ -51,7 +66,8 @@ export default class ChannelInviteNotification extends Notification {
 
     if (!channelId) return;
 
-    const preferDrawer = app.session.user?.preferences()?.['ramon-chat.openInDrawer'] !== false;
+    const preferDrawer =
+      app.session.user?.preferences()?.["ramon-chat.openInDrawer"] !== false;
 
     if (!preferDrawer || window.innerWidth <= 767) return;
 
@@ -62,7 +78,9 @@ export default class ChannelInviteNotification extends Notification {
   }
 
   protected channelId(): number | null {
-    const data = this.attrs.notification.content() as { channelId?: number } | null;
+    const data = this.attrs.notification.content() as {
+      channelId?: number;
+    } | null;
 
     return data?.channelId ? Number(data.channelId) : null;
   }
@@ -73,8 +91,13 @@ export default class ChannelInviteNotification extends Notification {
    * when the notification was written for exactly that reason.
    */
   protected channelName(): string {
-    const data = this.attrs.notification.content() as { channelName?: string } | null;
+    const data = this.attrs.notification.content() as {
+      channelName?: string;
+    } | null;
 
-    return data?.channelName ?? app.translator.trans('ramon-chat.forum.nav.chat', {}, true);
+    return (
+      data?.channelName ??
+      app.translator.trans("ramon-chat.forum.nav.chat", {}, true)
+    );
   }
 }

@@ -1,17 +1,16 @@
-import app from 'flarum/forum/app';
-import Component from 'flarum/common/Component';
-import type { ComponentAttrs } from 'flarum/common/Component';
-import Button from 'flarum/common/components/Button';
-import LoadingIndicator from 'flarum/common/components/LoadingIndicator';
-import type Mithril from 'mithril';
+import app from "flarum/forum/app";
+import Component from "flarum/common/Component";
+import type { ComponentAttrs } from "flarum/common/Component";
+import Button from "flarum/common/components/Button";
+import type Mithril from "mithril";
 
-import type Channel from '../../common/models/Channel';
-import type Message from '../../common/models/Message';
-import type Thread from '../../common/models/Thread';
-import type ChatState from '../state/ChatState';
-import ChatMessage from './ChatMessage';
-import ChatComposer from './ChatComposer';
-import { MessageStreamSkeleton } from './Skeletons';
+import type Channel from "../../common/models/Channel";
+import type Message from "../../common/models/Message";
+import type Thread from "../../common/models/Thread";
+import type ChatState from "../state/ChatState";
+import ChatMessage from "./ChatMessage";
+import ChatComposer from "./ChatComposer";
+import { MessageStreamSkeleton } from "./Skeletons";
 
 export interface ThreadPanelAttrs extends ComponentAttrs {
   channel: Channel;
@@ -57,12 +56,13 @@ export default class ThreadPanel extends Component<ThreadPanelAttrs> {
   oncreate(vnode: Mithril.VnodeDOM<ThreadPanelAttrs>): void {
     super.oncreate(vnode);
 
-    this.scroller = vnode.dom.querySelector('.ChatThreadPanel-stream');
+    this.scroller = vnode.dom.querySelector(".ChatThreadPanel-stream");
     this.scrollToBottom();
   }
 
   onupdate(): void {
-    const count = this.attrs.state.threadStream(this.attrs.threadId).messages.length;
+    const count = this.attrs.state.threadStream(this.attrs.threadId).messages
+      .length;
 
     if (count > this.lastRenderedCount && this.pinned) {
       this.scrollToBottom();
@@ -74,7 +74,7 @@ export default class ThreadPanel extends Component<ThreadPanelAttrs> {
   view(): Mithril.Children {
     const { channel, threadId, state, onClose } = this.attrs;
     const stream = state.threadStream(threadId);
-    const thread = app.store.getById<Thread>('chat-threads', String(threadId));
+    const thread = app.store.getById<Thread>("chat-threads", String(threadId));
 
     return (
       <div className="ChatThreadPanel">
@@ -86,23 +86,32 @@ export default class ThreadPanel extends Component<ThreadPanelAttrs> {
                 untitled thread is still identifiable. */}
             {thread
               ? thread.displayTitle()
-              : app.translator.trans('ramon-chat.forum.thread.title')}
+              : app.translator.trans("ramon-chat.forum.thread.title")}
           </span>
 
           <Button
             className="Button Button--icon Button--flat"
             icon="fas fa-xmark"
-            title={app.translator.trans('ramon-chat.forum.thread.close')}
+            title={app.translator.trans(
+              "ramon-chat.forum.thread.close",
+              {},
+              true,
+            )}
             onclick={onClose}
           />
         </div>
 
-        <div className="ChatThreadPanel-stream" onscroll={(e: Event) => this.onScroll(e)}>
-          {stream.loading && stream.messages.length === 0 ? MessageStreamSkeleton(4) : null}
+        <div
+          className="ChatThreadPanel-stream"
+          onscroll={(e: Event) => this.onScroll(e)}
+        >
+          {stream.loading && stream.messages.length === 0
+            ? MessageStreamSkeleton(4)
+            : null}
 
           {stream.loadedInitial && stream.messages.length === 0 ? (
             <div className="ChatBrowse-empty">
-              {app.translator.trans('ramon-chat.forum.thread.no_replies')}
+              {app.translator.trans("ramon-chat.forum.thread.no_replies")}
             </div>
           ) : null}
 
@@ -174,7 +183,7 @@ export default class ThreadPanel extends Component<ThreadPanelAttrs> {
     const { state, channel, threadId } = this.attrs;
 
     state.setEditing(Number(channel.id()), message, threadId);
-    state.setDraft(Number(channel.id()), message.content() ?? '', threadId);
+    state.setDraft(Number(channel.id()), message.content() ?? "", threadId);
     m.redraw();
   }
 

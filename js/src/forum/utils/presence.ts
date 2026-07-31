@@ -1,4 +1,4 @@
-import type User from 'flarum/common/models/User';
+import type User from "flarum/common/models/User";
 
 /**
  * How long after their last activity a user still counts as online.

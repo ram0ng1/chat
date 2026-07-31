@@ -58,6 +58,10 @@ class ThreadResource extends AbstractDatabaseResource
     {
         return [
             Endpoint\Show::make()
+                // Authenticated again. Reading the chat is for accounts: the guest
+                // read permission this briefly supported has been withdrawn, and
+                // without the gate these endpoints would answer 200 with an empty
+                // collection to anyone, which is a slower way of saying no.
                 ->authenticated()
                 ->defaultInclude(['creator', 'originalMessage', 'originalMessage.user'])
                 ->eagerLoad(['lastMessage.user']),

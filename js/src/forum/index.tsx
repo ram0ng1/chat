@@ -1,46 +1,52 @@
-import app from 'flarum/forum/app';
-import { extend } from 'flarum/common/extend';
-import HeaderSecondary from 'flarum/forum/components/HeaderSecondary';
-import UserControls from 'flarum/forum/utils/UserControls';
-import Button from 'flarum/common/components/Button';
-import type ItemList from 'flarum/common/utils/ItemList';
-import type User from 'flarum/common/models/User';
-import type Mithril from 'mithril';
+import app from "flarum/forum/app";
+import { extend } from "flarum/common/extend";
+import HeaderSecondary from "flarum/forum/components/HeaderSecondary";
+import UserControls from "flarum/forum/utils/UserControls";
+import Button from "flarum/common/components/Button";
+import type ItemList from "flarum/common/utils/ItemList";
+import type User from "flarum/common/models/User";
+import type Mithril from "mithril";
 
-import Channel from '../common/models/Channel';
-import Message from '../common/models/Message';
-import Thread from '../common/models/Thread';
-import Upload from '../common/models/Upload';
+import Channel from "../common/models/Channel";
+import Message from "../common/models/Message";
+import Thread from "../common/models/Thread";
+import Upload from "../common/models/Upload";
+import MessageFlag from "../common/models/MessageFlag";
 
-import chatState from './state/chat';
-import ChatState from './state/ChatState';
-import ChatNavButton from './components/ChatNavButton';
-import ChatDrawer from './components/ChatDrawer';
-import ChatPage from './components/ChatPage';
-import ChatSidebar from './components/ChatSidebar';
-import ChannelView from './components/ChannelView';
-import ThreadPanel from './components/ThreadPanel';
-import PinnedPanel from './components/PinnedPanel';
-import ThreadsList from './components/ThreadsList';
-import ChatSearch from './components/ChatSearch';
-import ChatMessage from './components/ChatMessage';
-import ChatComposer from './components/ChatComposer';
-import BrowseChannelsPage from './components/BrowseChannelsPage';
-import ChannelFormModal from './components/ChannelFormModal';
-import ChannelInviteNotification from './components/ChannelInviteNotification';
-import ChannelInfoModal from './components/ChannelInfoModal';
-import ChatSelectionBar from './components/ChatSelectionBar';
-import ChatAutocomplete from './components/ChatAutocomplete';
-import RevisionsModal from './components/RevisionsModal';
-import { bindRealtime, setPollingFallback, realtimeBound } from './realtime';
-import { bindShortcuts } from './utils/shortcuts';
-import ChatPageResolver from './resolvers/ChatPageResolver';
+import chatState from "./state/chat";
+import ChatState from "./state/ChatState";
+import ChatNavButton from "./components/ChatNavButton";
+import ChatDrawer from "./components/ChatDrawer";
+import ChatPage from "./components/ChatPage";
+import ChatSidebar from "./components/ChatSidebar";
+import ChannelView from "./components/ChannelView";
+import ThreadPanel from "./components/ThreadPanel";
+import PinnedPanel from "./components/PinnedPanel";
+import ThreadsList from "./components/ThreadsList";
+import ChatSearch from "./components/ChatSearch";
+import ChatMessage from "./components/ChatMessage";
+import ChatComposer from "./components/ChatComposer";
+import BrowseChannelsPage from "./components/BrowseChannelsPage";
+import ChannelFormModal from "./components/ChannelFormModal";
+import ChannelInviteNotification from "./components/ChannelInviteNotification";
+import MessageFlaggedNotification from "./components/MessageFlaggedNotification";
+import ChannelInfoModal from "./components/ChannelInfoModal";
+import ChatSelectionBar from "./components/ChatSelectionBar";
+import ChatAutocomplete from "./components/ChatAutocomplete";
+import RevisionsModal from "./components/RevisionsModal";
+import FlagMessageModal from "./components/FlagMessageModal";
+import FlaggedMessagesList from "./components/FlaggedMessagesList";
+import { bindRealtime, setPollingFallback, realtimeBound } from "./realtime";
+import { bindShortcuts } from "./utils/shortcuts";
+import ChatPageResolver from "./resolvers/ChatPageResolver";
+import bindFlagsIntegration from "./utils/flagsIntegration";
 
 export {
   Channel,
   Message,
   Thread,
   Upload,
+  MessageFlag,
   ChatState,
   chatState,
   ChatNavButton,
@@ -57,10 +63,13 @@ export {
   BrowseChannelsPage,
   ChannelFormModal,
   ChannelInviteNotification,
+  MessageFlaggedNotification,
   ChannelInfoModal,
   ChatSelectionBar,
   ChatAutocomplete,
   RevisionsModal,
+  FlagMessageModal,
+  FlaggedMessagesList,
   // Exported for diagnosis: in the console,
   //   flarum.reg.get('ramon-chat', 'forum/index').realtimeBound()
   // tells you whether the chat is on the websocket or on the polling fallback.
@@ -80,13 +89,14 @@ export {
  */
 const POLL_INTERVAL = 3000;
 
-app.initializers.add('ramon-chat', () => {
+app.initializers.add("ramon-chat", () => {
   // Register JSON:API types before anything can request them — the store drops
   // payloads for types it has no model for.
-  app.store.models['chat-channels'] = Channel;
-  app.store.models['chat-messages'] = Message;
-  app.store.models['chat-threads'] = Thread;
-  app.store.models['chat-uploads'] = Upload;
+  app.store.models["chat-channels"] = Channel;
+  app.store.models["chat-messages"] = Message;
+  app.store.models["chat-threads"] = Thread;
+  app.store.models["chat-uploads"] = Upload;
+  app.store.models["chat-message-flags"] = MessageFlag;
 
   // ── Routes ────────────────────────────────────────────────────────────────
   // Names match the server-side declarations in extend.php. Without these the
@@ -98,62 +108,98 @@ app.initializers.add('ramon-chat', () => {
   // reads as a full reload.
   const chatPage = { component: ChatPage, resolverClass: ChatPageResolver };
 
-  app.routes['chat.index'] = { path: '/chat', ...chatPage };
-  app.routes['chat.channel'] = { path: '/chat/c/:id', ...chatPage };
-  app.routes['chat.thread'] = { path: '/chat/c/:id/t/:threadId', ...chatPage };
-  app.routes['chat.threads'] = { path: '/chat/threads', ...chatPage };
-  app.routes['chat.search'] = { path: '/chat/search', ...chatPage };
-  app.routes['chat.bookmarks'] = { path: '/chat/bookmarks', ...chatPage };
+  app.routes["chat.index"] = { path: "/chat", ...chatPage };
+  app.routes["chat.channel"] = { path: "/chat/c/:id", ...chatPage };
+  app.routes["chat.thread"] = { path: "/chat/c/:id/t/:threadId", ...chatPage };
+  app.routes["chat.threads"] = { path: "/chat/threads", ...chatPage };
+  app.routes["chat.search"] = { path: "/chat/search", ...chatPage };
+  app.routes["chat.bookmarks"] = { path: "/chat/bookmarks", ...chatPage };
+  app.routes["chat.flags"] = { path: "/chat/flags", ...chatPage };
 
   // A genuinely separate page, so it keeps the default resolver.
-  app.routes['chat.browse'] = { path: '/chat/browse', component: BrowseChannelsPage };
-  app.routes['chat.browse.filter'] = { path: '/chat/browse/:filter', component: BrowseChannelsPage };
+  app.routes["chat.browse"] = {
+    path: "/chat/browse",
+    component: BrowseChannelsPage,
+  };
+  app.routes["chat.browse.filter"] = {
+    path: "/chat/browse/:filter",
+    component: BrowseChannelsPage,
+  };
 
   // ── Notifications ─────────────────────────────────────────────────────────
   // The component that renders the alert, and the row in the user's notification
   // preferences that lets them turn it off.
   app.notificationComponents.chatChannelInvite = ChannelInviteNotification;
+  app.notificationComponents.chatMessageFlagged = MessageFlaggedNotification;
 
-  extend('flarum/forum/components/NotificationGrid', 'notificationTypes', function (items: ItemList<unknown>) {
-    items.add('chatChannelInvite', {
-      name: 'chatChannelInvite',
-      icon: 'fas fa-comments',
-      label: app.translator.trans('ramon-chat.forum.settings.notify_channel_invite'),
-    });
-  });
+  extend(
+    "flarum/forum/components/NotificationGrid",
+    "notificationTypes",
+    function (items: ItemList<unknown>) {
+      items.add("chatChannelInvite", {
+        name: "chatChannelInvite",
+        icon: "fas fa-comments",
+        label: app.translator.trans(
+          "ramon-chat.forum.settings.notify_channel_invite",
+        ),
+      });
+
+      // Administrators only, matching who the server actually notifies. Offering
+      // the row to anyone else advertises a notification they can never receive,
+      // and a preference that does nothing is worse than an absent one.
+      if (app.session.user?.isAdmin()) {
+        items.add("chatMessageFlagged", {
+          name: "chatMessageFlagged",
+          icon: "fas fa-flag",
+          label: app.translator.trans(
+            "ramon-chat.forum.settings.notify_message_flagged",
+          ),
+        });
+      }
+    },
+  );
 
   // ── Header trigger ────────────────────────────────────────────────────────
-  extend(HeaderSecondary.prototype, 'items', function (items) {
+  extend(HeaderSecondary.prototype, "items", function (items) {
     if (!canUseChat()) return;
 
-    items.add('chat', <ChatNavButton />, 15);
+    items.add("chat", <ChatNavButton />, 15);
   });
 
   // ── "Chat" on a user's profile and controls dropdown ──────────────────────
   // Same entry point flarum/messages uses for "Send message", so the two sit
   // together rather than in unrelated places.
   //
-  // ts-ignore for the same reason flarum/messages needs it: extend() infers the
+  // Named rather than inline. `@ts-ignore` suppresses the *next line* only, and
+  // the formatter wraps a long call across several — which moved the offending
+  // argument out from under the suppression and turned a known typing gap into a
+  // build error. A short statement cannot be re-wrapped.
+  //
+  // The gap itself is the one flarum/messages works around: extend() infers the
   // callback signature from the target method, and UserControls' published typing
-  // loses the `user` parameter, so the second argument does not typecheck even
-  // though it is passed at runtime.
-  // @ts-ignore
-  extend(UserControls, 'userControls', (items: ItemList<Mithril.Children>, user: User) => {
+  // loses the `user` parameter, even though it is passed at runtime.
+  const addChatToUserControls = (
+    items: ItemList<Mithril.Children>,
+    user: User,
+  ) => {
     if (!canUseChat()) return;
-    if (!app.forum.attribute<boolean>('canStartChatDirect')) return;
+    if (!app.forum.attribute<boolean>("canStartChatDirect")) return;
 
     // No point offering a chat with yourself.
     if (app.session.user?.id() === user.id()) return;
 
     items.add(
-      'chatDirect',
+      "chatDirect",
       <Button icon="fas fa-envelope" onclick={() => startDirectMessage(user)}>
-        {app.translator.trans('ramon-chat.forum.user_controls.start_chat')}
+        {app.translator.trans("ramon-chat.forum.user_controls.start_chat")}
       </Button>,
       // Just below flarum/messages' own button, which sits at the default 0.
-      -5
+      -5,
     );
-  });
+  };
+
+  // @ts-ignore
+  extend(UserControls, "userControls", addChatToUserControls);
 
   // Anything that reads `app.forum`/`app.session`, or mounts its own Mithril
   // root, has to run after ForumApplication.mount():
@@ -174,7 +220,7 @@ app.initializers.add('ramon-chat', () => {
   // `undefined` — reading `.prototype` off that is a TypeError. Extending the
   // instance installs an own property that shadows the prototype method, and
   // boot() calls `this.mount()`, so the override is picked up.
-  extend(app, 'mount', function () {
+  extend(app, "mount", function () {
     // Belt and braces. Core does not guard this call site either, and a chat
     // extension must never be able to take the forum down with it — a broken
     // chat is an annoyance, an unmountable forum is an outage.
@@ -197,6 +243,9 @@ app.initializers.add('ramon-chat', () => {
 
       bindShortcuts();
 
+      // Chat reports in flarum/flags' own list, when that extension is present.
+      bindFlagsIntegration();
+
       // Reopen it if the last visit left it open. Dismissal is deliberate: only
       // the close button (and switching to the full-screen page) clears this.
       if (chatState.restoreDrawer()) {
@@ -205,7 +254,7 @@ app.initializers.add('ramon-chat', () => {
           .then(() => m.redraw());
       }
     } catch (e) {
-      console.error('[ramon-chat] failed to start:', e);
+      console.error("[ramon-chat] failed to start:", e);
     }
   });
 });
@@ -220,8 +269,8 @@ app.initializers.add('ramon-chat', () => {
 export async function startDirectMessage(user: User): Promise<void> {
   try {
     const payload = await app.request<{ data: { id: string } }>({
-      method: 'POST',
-      url: `${app.forum.attribute('apiUrl')}/chat/direct`,
+      method: "POST",
+      url: `${app.forum.attribute("apiUrl")}/chat/direct`,
       body: { data: { attributes: { userIds: [Number(user.id())] } } },
     });
 
@@ -232,7 +281,10 @@ export async function startDirectMessage(user: User): Promise<void> {
     // Pull the channel into the store and the sidebar before showing it, so the
     // drawer does not open on an empty frame.
     try {
-      const channel = (await app.store.find('chat-channels', String(channelId))) as unknown as Channel;
+      const channel = (await app.store.find(
+        "chat-channels",
+        String(channelId),
+      )) as unknown as Channel;
 
       if (channel && !chatState.channels.some((c) => c.id() === channel.id())) {
         chatState.channels.unshift(channel);
@@ -243,27 +295,31 @@ export async function startDirectMessage(user: User): Promise<void> {
 
     chatState.setActiveChannel(channelId);
 
-    const preferDrawer = app.session.user?.preferences()?.['ramon-chat.openInDrawer'] !== false;
+    const preferDrawer =
+      app.session.user?.preferences()?.["ramon-chat.openInDrawer"] !== false;
 
     if (preferDrawer && window.innerWidth > 767) {
       await ChatDrawer.open();
     } else {
-      m.route.set(app.route('chat.channel', { id: channelId }));
+      m.route.set(app.route("chat.channel", { id: channelId }));
     }
   } catch (e: any) {
     app.alerts.show(
-      { type: 'error' },
-      e?.response?.errors?.[0]?.detail ?? app.translator.trans('ramon-chat.forum.user_controls.start_chat_failed')
+      { type: "error" },
+      e?.response?.errors?.[0]?.detail ??
+        app.translator.trans(
+          "ramon-chat.forum.user_controls.start_chat_failed",
+        ),
     );
   }
 }
 
 function mountDrawer(): void {
   const attach = () => {
-    if (document.getElementById('ramon-chat-drawer')) return;
+    if (document.getElementById("ramon-chat-drawer")) return;
 
-    const node = document.createElement('div');
-    node.id = 'ramon-chat-drawer';
+    const node = document.createElement("div");
+    node.id = "ramon-chat-drawer";
     document.body.appendChild(node);
 
     m.mount(node, ChatDrawer);
@@ -272,16 +328,24 @@ function mountDrawer(): void {
   if (document.body) {
     attach();
   } else {
-    document.addEventListener('DOMContentLoaded', attach, { once: true });
+    document.addEventListener("DOMContentLoaded", attach, { once: true });
   }
 }
 
+/**
+ * Whether to show the chat at all.
+ *
+ * An account is required. A guest read permission existed briefly and has been
+ * withdrawn; the `/chat/*` routes now answer 404 for anyone without access, so
+ * this and the server agree rather than one of them silently offering something
+ * the other refuses.
+ */
 function canUseChat(): boolean {
-  if (!app.forum.attribute<boolean>('canUseChat')) return false;
+  if (!app.forum.attribute<boolean>("canUseChat")) return false;
   if (!app.session.user) return false;
 
   // Honour the per-user opt-out from /settings.
-  return app.session.user.preferences()?.['ramon-chat.enabled'] !== false;
+  return app.session.user.preferences()?.["ramon-chat.enabled"] !== false;
 }
 
 /**
@@ -309,13 +373,18 @@ function startPolling(): void {
     const newest = stream.messages[stream.messages.length - 1];
 
     app.store
-      .find<Message[]>('chat-messages', {
-        filter: { channel: activeId, ...(newest ? { greaterThan: Number(newest.id()) } : {}) },
-        sort: 'id',
+      .find<Message[]>("chat-messages", {
+        filter: {
+          channel: activeId,
+          ...(newest ? { greaterThan: Number(newest.id()) } : {}),
+        },
+        sort: "id",
         page: { limit: 50 },
       })
       .then((results) => {
-        for (const message of (Array.isArray(results) ? results : []) as Message[]) {
+        for (const message of (Array.isArray(results)
+          ? results
+          : []) as Message[]) {
           chatState.upsertMessage(message);
         }
 

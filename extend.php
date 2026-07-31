@@ -32,19 +32,24 @@ return [
         ->css(__DIR__.'/less/forum.less')
         // Full-screen mode. The drawer is rendered over whatever page is open,
         // so it needs no route of its own.
-        ->route('/chat', 'chat.index')
-        ->route('/chat/c/{id}', 'chat.channel')
-        ->route('/chat/c/{id}/t/{threadId:\d+}', 'chat.thread')
-        ->route('/chat/browse', 'chat.browse')
-        ->route('/chat/browse/{filter}', 'chat.browse.filter')
-        ->route('/chat/threads', 'chat.threads')
-        ->route('/chat/search', 'chat.search')
+        ->route('/chat', 'chat.index', Frontend\RequireChatAccess::class)
+        ->route('/chat/c/{id}', 'chat.channel', Frontend\RequireChatAccess::class)
+        ->route('/chat/c/{id}/t/{threadId:\d+}', 'chat.thread', Frontend\RequireChatAccess::class)
+        ->route('/chat/browse', 'chat.browse', Frontend\RequireChatAccess::class)
+        ->route('/chat/browse/{filter}', 'chat.browse.filter', Frontend\RequireChatAccess::class)
+        ->route('/chat/threads', 'chat.threads', Frontend\RequireChatAccess::class)
+        ->route('/chat/search', 'chat.search', Frontend\RequireChatAccess::class)
         // Both halves are needed for every chat route: this one so a direct load or
         // a refresh of the URL is served the forum page at all, and the matching
         // `app.routes[...]` in js/src/forum/index.tsx so the client knows what to
         // mount once it boots. Registering only the client side leaves a route that
         // works while navigating and 404s on reload.
-        ->route('/chat/bookmarks', 'chat.bookmarks'),
+        ->route('/chat/bookmarks', 'chat.bookmarks', Frontend\RequireChatAccess::class)
+
+        // The moderation queue. Behind the same access gate as every other chat
+        // route; the queue's own contents are gated again by `ramon-chat.moderate`,
+        // both on the endpoints and in the resource's scope.
+        ->route('/chat/flags', 'chat.flags', Frontend\RequireChatAccess::class),
 
     (new Extend\Frontend('admin'))
         ->js(__DIR__.'/js/dist/admin.js')
@@ -95,6 +100,7 @@ return [
     new Extend\ApiResource(Api\Resource\ThreadResource::class),
     new Extend\ApiResource(Api\Resource\UploadResource::class),
     new Extend\ApiResource(Api\Resource\WebhookResource::class),
+    new Extend\ApiResource(Api\Resource\MessageFlagResource::class),
 
     (new Extend\ApiResource(ForumResource::class))
         ->fields(fn () => [
@@ -117,11 +123,46 @@ return [
             // The paperclip is drawn from this. The permission was enforced only in
             // UploadController, so someone without it still saw the control and got
             // a 403 on use — the server was right and the interface was lying.
+            // The sticker button is drawn from this. Enforced server-side too, in
+            // the message dispatcher — a hidden button is a courtesy, not a gate.
+            Schema\Boolean::make('canSendChatStickers')
+                ->get(fn ($forum, Context $context) => $context->getActor()->hasPermission('ramon-chat.sendStickers')),
+
             Schema\Boolean::make('canUploadChatFiles')
                 ->get(fn ($forum, Context $context) => $context->getActor()->hasPermission('ramon-chat.upload')),
 
             Schema\Boolean::make('canStartChatDirect')
                 ->get(fn ($forum, Context $context) => $context->getActor()->can('startDirect')),
+
+            // Draws the report button. The policy still decides per message — you
+            // cannot report your own, or one already deleted — so this only says
+            // whether the actor may report anything at all.
+            Schema\Boolean::make('canFlagChatMessages')
+                ->get(fn ($forum, Context $context) => $context->getActor()->hasPermission('ramon-chat.flagMessage')),
+
+            // The badge on the moderation link, and the link itself. Counted only
+            // for moderators, so the ordinary page load never runs this query.
+            Schema\Integer::make('chatOpenFlagsCount')
+                ->get(function ($forum, Context $context) {
+                    $actor = $context->getActor();
+
+                    if (! $actor->hasPermission('ramon-chat.moderate')) {
+                        return 0;
+                    }
+
+                    // `whereHas` before `whereNull`: the latter is typed as
+                    // returning a query builder rather than an Eloquent one, so
+                    // the relation method is not available after it.
+                    //
+                    // `whereVisibleTo` is registered by Flarum's
+                    // ScopeVisibilityTrait as a model scope, which static analysis
+                    // cannot see on a builder instance.
+                    return MessageFlag::query()
+                        // @phpstan-ignore method.notFound (Flarum model scope)
+                        ->whereHas('message', fn ($query) => $query->whereVisibleTo($actor))
+                        ->whereNull('resolved_at')
+                        ->count();
+                }),
         ]),
 
     (new Extend\ApiResource(UserResource::class))
@@ -153,9 +194,6 @@ return [
         ->default('ramon-chat.allow_uploads', true)
         ->default('ramon-chat.max_upload_size', 10485760)
         ->default('ramon-chat.allow_archiving_channels', true)
-        // `+1` first: it is the quick reaction on the hover bar, so the picker
-        // should open with the same emoji in the leading slot.
-        ->default('ramon-chat.default_reactions', '+1,heart,tada,eyes,laughing')
         ->default('ramon-chat.threading_default', false)
         // Notification sound. 'none' disables it; the others name a file under
         // assets/sounds, published to public/assets/extensions/ramon-chat.
@@ -169,7 +207,6 @@ return [
         ->serializeToForum('ramon-chat.minMessageLength', 'ramon-chat.min_message_length', 'intval')
         ->serializeToForum('ramon-chat.maxUploadSize', 'ramon-chat.max_upload_size', 'intval')
         ->serializeToForum('ramon-chat.allowUploads', 'ramon-chat.allow_uploads', 'boolval')
-        ->serializeToForum('ramon-chat.defaultReactions', 'ramon-chat.default_reactions')
         ->serializeToForum('ramon-chat.threadingDefault', 'ramon-chat.threading_default', 'boolval')
         ->serializeToForum('ramon-chat.notificationSound', 'ramon-chat.notification_sound')
         ->serializeToForum('ramon-chat.title', 'ramon-chat.title')
@@ -244,7 +281,13 @@ return [
         // No channels at all. Still registered so notification rows written by the
         // earlier version stay resolvable instead of rendering as an unknown type.
         ->type(Notification\ChatMessageBlueprint::class, [])
-        ->type(Notification\ChannelInviteBlueprint::class, ['alert']),
+        ->type(Notification\ChannelInviteBlueprint::class, ['alert'])
+
+        // Reports reach the moderators the way a flag on a post does, rather than
+        // waiting to be found the next time someone opens the queue. Alert only:
+        // a busy channel can produce a run of reports, and a mailbox is the wrong
+        // place for a queue.
+        ->type(Notification\MessageFlaggedBlueprint::class, ['alert']),
 
     // ── Domain listeners ─────────────────────────────────────────────────────
     (new Extend\Event())
@@ -252,6 +295,13 @@ return [
         ->listen(Event\ChannelWasCreated::class, Listener\AutoJoinUsers::class)
         ->listen(\Flarum\User\Event\Registered::class, Listener\JoinAutoJoinChannels::class)
         ->listen(Event\MessageWasDeleted::class, Listener\RecalculateUnreadCounts::class)
+        // Deleting a reported message is what closes the reports about it. Without
+        // this the queue keeps offering work that has already been done.
+        ->listen(Event\MessageWasDeleted::class, Listener\ResolveFlagsOnModeration::class)
+
+        // And takes its attachments off the disk. The chat disk is public, so a
+        // deleted image stayed readable by URL to anyone who had seen it.
+        ->listen(Event\MessageWasDeleted::class, Listener\PurgeUploadsOnDeletion::class)
         ->listen(Event\MessageWasMoved::class, Listener\RecalculateUnreadCounts::class)
         // Narrates membership changes into the stream, so a departure is visible to
         // whoever is left rather than silent.
@@ -293,7 +343,13 @@ return [
 
         ->addSearcher(Thread::class, Search\ThreadSearcher::class)
         ->addFilter(Search\ThreadSearcher::class, Search\Filter\ThreadChannelFilter::class)
-        ->addFilter(Search\ThreadSearcher::class, Search\Filter\ThreadParticipatingFilter::class),
+        ->addFilter(Search\ThreadSearcher::class, Search\Filter\ThreadParticipatingFilter::class)
+
+        // The moderation queue's one filter. Registered as a searcher because
+        // Flarum 2 rejects any query parameter it does not recognise, and a bare
+        // `?resolved=1` is not one — a filter has to come through here.
+        ->addSearcher(MessageFlag::class, Search\MessageFlagSearcher::class)
+        ->addFilter(Search\MessageFlagSearcher::class, Search\Filter\FlagResolvedFilter::class),
 
     // ── Category-driven auto-join, only meaningful with flarum/tags ──────────
     // A channel bound to a tag can grow from participation in that category. The

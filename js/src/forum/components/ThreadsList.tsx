@@ -1,14 +1,13 @@
-import app from 'flarum/forum/app';
-import Component from 'flarum/common/Component';
-import type { ComponentAttrs } from 'flarum/common/Component';
-import LoadingIndicator from 'flarum/common/components/LoadingIndicator';
-import humanTime from 'flarum/common/helpers/humanTime';
-import classList from 'flarum/common/utils/classList';
-import type Mithril from 'mithril';
+import app from "flarum/forum/app";
+import Component from "flarum/common/Component";
+import type { ComponentAttrs } from "flarum/common/Component";
+import humanTime from "flarum/common/helpers/humanTime";
+import classList from "flarum/common/utils/classList";
+import type Mithril from "mithril";
 
-import type Thread from '../../common/models/Thread';
-import type ChatState from '../state/ChatState';
-import { ThreadsSkeleton } from './Skeletons';
+import type Thread from "../../common/models/Thread";
+import type ChatState from "../state/ChatState";
+import { ThreadsSkeleton } from "./Skeletons";
 
 export interface ThreadsListAttrs extends ComponentAttrs {
   state: ChatState;
@@ -33,17 +32,15 @@ export default class ThreadsList extends Component<ThreadsListAttrs> {
 
   view(): Mithril.Children {
     if (this.loading) {
-      return (
-        <div className="ChatThreadsList">
-          {ThreadsSkeleton()}
-        </div>
-      );
+      return <div className="ChatThreadsList">{ThreadsSkeleton()}</div>;
     }
 
     if (this.threads.length === 0) {
       return (
         <div className="ChatThreadsList">
-          <div className="ChatBrowse-empty">{app.translator.trans('ramon-chat.forum.thread.no_threads')}</div>
+          <div className="ChatBrowse-empty">
+            {app.translator.trans("ramon-chat.forum.thread.no_threads")}
+          </div>
         </div>
       );
     }
@@ -63,31 +60,42 @@ export default class ThreadsList extends Component<ThreadsListAttrs> {
       <button
         type="button"
         key={thread.id()}
-        className={classList('ChatThreadsList-row', { 'ChatThreadsList-row--unread': thread.hasUnread() })}
+        className={classList("ChatThreadsList-row", {
+          "ChatThreadsList-row--unread": thread.hasUnread(),
+        })}
         onclick={() => this.open(thread)}
       >
-        <i className="ChatThreadsList-icon fas fa-comments" aria-hidden="true" />
+        <i
+          className="ChatThreadsList-icon fas fa-comments"
+          aria-hidden="true"
+        />
 
         <div className="ChatThreadsList-body">
           <div className="ChatThreadsList-title">{thread.displayTitle()}</div>
 
           <div className="ChatThreadsList-meta">
             {channel ? <span>{channel.displayName()}</span> : null}
-            <span>{app.translator.trans('ramon-chat.forum.thread.replies', { count: thread.repliesCount() })}</span>
+            <span>
+              {app.translator.trans("ramon-chat.forum.thread.replies", {
+                count: thread.repliesCount(),
+              })}
+            </span>
             {at ? <span>{humanTime(at)}</span> : null}
           </div>
         </div>
 
-        {thread.hasUnread() ? <span className="ChatThreadsList-badge">{thread.unreadCount()}</span> : null}
+        {thread.hasUnread() ? (
+          <span className="ChatThreadsList-badge">{thread.unreadCount()}</span>
+        ) : null}
       </button>
     );
   }
 
   protected async load(): Promise<void> {
     try {
-      const results = (await app.store.find('chat-threads', {
+      const results = (await app.store.find("chat-threads", {
         filter: { participating: true },
-        sort: '-lastMessageAt',
+        sort: "-lastMessageAt",
         page: { limit: 50 },
       })) as unknown as Thread[];
 
@@ -108,6 +116,8 @@ export default class ThreadsList extends Component<ThreadsListAttrs> {
     this.attrs.state.setActiveChannel(channelId);
     this.attrs.state.activeThreadId = Number(thread.id());
 
-    m.route.set(app.route('chat.thread', { id: channelId, threadId: thread.id() }));
+    m.route.set(
+      app.route("chat.thread", { id: channelId, threadId: thread.id() }),
+    );
   }
 }

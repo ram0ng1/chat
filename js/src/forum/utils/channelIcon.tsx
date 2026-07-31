@@ -1,7 +1,7 @@
-import type Mithril from 'mithril';
+import type Mithril from "mithril";
 
-import type Channel from '../../common/models/Channel';
-import { displayEmoji } from './emoji';
+import type Channel from "../../common/models/Channel";
+import { displayEmoji } from "./emoji";
 
 /**
  * The mark that stands for a channel: its picture, its emoji, or a hash.

@@ -1,8 +1,8 @@
-import app from 'flarum/forum/app';
-import Link from 'flarum/common/components/Link';
-import username from 'flarum/common/helpers/username';
-import type User from 'flarum/common/models/User';
-import type Mithril from 'mithril';
+import app from "flarum/forum/app";
+import Link from "flarum/common/components/Link";
+import username from "flarum/common/helpers/username";
+import type User from "flarum/common/models/User";
+import type Mithril from "mithril";
 
 /**
  * A username that goes to the profile.
@@ -15,7 +15,9 @@ import type Mithril from 'mithril';
  * Falls back to plain text for a deleted or unloaded author: `app.route.user()`
  * needs a real record, and a link to nowhere is worse than no link.
  */
-export default function userLink(user: User | null | false | undefined): Mithril.Children {
+export default function userLink(
+  user: User | null | false | undefined,
+): Mithril.Children {
   if (!user) return username(user as any);
 
   return (

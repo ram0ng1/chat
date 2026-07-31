@@ -1,19 +1,19 @@
-import app from 'flarum/forum/app';
-import Page from 'flarum/common/components/Page';
-import type { IPageAttrs } from 'flarum/common/components/Page';
-import LoadingIndicator from 'flarum/common/components/LoadingIndicator';
-import type Mithril from 'mithril';
+import app from "flarum/forum/app";
+import Page from "flarum/common/components/Page";
+import type { IPageAttrs } from "flarum/common/components/Page";
+import type Mithril from "mithril";
 
-import type Channel from '../../common/models/Channel';
-import chatState from '../state/chat';
-import ChatSidebar from './ChatSidebar';
-import ChannelView from './ChannelView';
-import ThreadPanel from './ThreadPanel';
-import PinnedPanel from './PinnedPanel';
-import ThreadsList from './ThreadsList';
-import BookmarksList from './BookmarksList';
-import ChatSearch from './ChatSearch';
-import { ChannelSkeleton } from './Skeletons';
+import type Channel from "../../common/models/Channel";
+import chatState from "../state/chat";
+import ChatSidebar from "./ChatSidebar";
+import ChannelView from "./ChannelView";
+import ThreadPanel from "./ThreadPanel";
+import PinnedPanel from "./PinnedPanel";
+import ThreadsList from "./ThreadsList";
+import BookmarksList from "./BookmarksList";
+import FlaggedMessagesList from "./FlaggedMessagesList";
+import ChatSearch from "./ChatSearch";
+import { ChannelSkeleton } from "./Skeletons";
 
 /**
  * Full-screen chat.
@@ -21,13 +21,15 @@ import { ChannelSkeleton } from './Skeletons';
  * Sidebar plus channel side by side on desktop; on mobile the router shows one or
  * the other, since a 280px sidebar beside a channel is unusable at phone widths.
  */
-export default class ChatPage<CustomAttrs extends IPageAttrs = IPageAttrs> extends Page<CustomAttrs> {
+export default class ChatPage<
+  CustomAttrs extends IPageAttrs = IPageAttrs,
+> extends Page<CustomAttrs> {
   private loading = true;
 
   oninit(vnode: Mithril.Vnode<CustomAttrs>): void {
     super.oninit(vnode);
 
-    app.setTitle(app.translator.trans('ramon-chat.forum.nav.chat', {}, true));
+    app.setTitle(app.translator.trans("ramon-chat.forum.nav.chat", {}, true));
 
     // The drawer and the page are mutually exclusive views of the same state.
     //
@@ -74,7 +76,7 @@ export default class ChatPage<CustomAttrs extends IPageAttrs = IPageAttrs> exten
    * outside the page.
    */
   protected syncFromRoute(): void {
-    const routeId = m.route.param('id');
+    const routeId = m.route.param("id");
     const channelId = routeId ? Number(routeId) : null;
 
     // Only when the route actually names one. `/chat/search` and `/chat/threads`
@@ -85,11 +87,11 @@ export default class ChatPage<CustomAttrs extends IPageAttrs = IPageAttrs> exten
 
       // Deep link to a channel the sidebar has not loaded.
       if (!chatState.channel(channelId)) {
-        app.store.find('chat-channels', String(channelId)).catch(() => {});
+        app.store.find("chat-channels", String(channelId)).catch(() => {});
       }
     }
 
-    const threadParam = m.route.param('threadId');
+    const threadParam = m.route.param("threadId");
     const threadId = threadParam ? Number(threadParam) : null;
 
     if (threadId !== chatState.activeThreadId) {
@@ -110,7 +112,10 @@ export default class ChatPage<CustomAttrs extends IPageAttrs = IPageAttrs> exten
     return (
       <div className="ChatPage">
         {narrow && channel ? null : (
-          <ChatSidebar state={chatState} onSelect={(c: Channel) => this.select(c)} />
+          <ChatSidebar
+            state={chatState}
+            onSelect={(c: Channel) => this.select(c)}
+          />
         )}
 
         <div className="ChatPage-main">
@@ -124,26 +129,35 @@ export default class ChatPage<CustomAttrs extends IPageAttrs = IPageAttrs> exten
     routeName: string | undefined,
     channel: Channel | null,
     narrow: boolean,
-    threadId: number | null
+    threadId: number | null,
   ): Mithril.Children {
     // The pane's real shape, not a spinner: this is the entire right-hand side
     // of the page on first load.
     if (this.loading) return ChannelSkeleton();
 
-    if (routeName === 'chat.search') {
+    if (routeName === "chat.search") {
       // The channel button passes `?channel=`; the sidebar link does not, and
       // then the search spans every channel the actor can read.
-      const scope = m.route.param('channel');
+      const scope = m.route.param("channel");
 
-      return <ChatSearch state={chatState} channelId={scope ? Number(scope) : null} />;
+      return (
+        <ChatSearch
+          state={chatState}
+          channelId={scope ? Number(scope) : null}
+        />
+      );
     }
 
-    if (routeName === 'chat.threads') {
+    if (routeName === "chat.threads") {
       return <ThreadsList state={chatState} />;
     }
 
-    if (routeName === 'chat.bookmarks') {
+    if (routeName === "chat.bookmarks") {
       return <BookmarksList state={chatState} />;
+    }
+
+    if (routeName === "chat.flags") {
+      return <FlaggedMessagesList state={chatState} />;
     }
 
     // Built as an array rather than a JSX fragment with a conditional slot.
@@ -177,7 +191,7 @@ export default class ChatPage<CustomAttrs extends IPageAttrs = IPageAttrs> exten
           threadId={threadId}
           state={chatState}
           onClose={() => this.closeThread(channel)}
-        />
+        />,
       );
     } else if (channel && chatState.showPinned) {
       panes.push(
@@ -189,7 +203,7 @@ export default class ChatPage<CustomAttrs extends IPageAttrs = IPageAttrs> exten
             chatState.showPinned = false;
             m.redraw();
           }}
-        />
+        />,
       );
     }
 
@@ -200,7 +214,7 @@ export default class ChatPage<CustomAttrs extends IPageAttrs = IPageAttrs> exten
     // Keyed because it shares the pane array with the keyed channel view.
     return (
       <div className="ChatBrowse-empty" key="empty">
-        {app.translator.trans('ramon-chat.forum.sidebar.no_channels')}
+        {app.translator.trans("ramon-chat.forum.sidebar.no_channels")}
       </div>
     );
   }
@@ -209,7 +223,7 @@ export default class ChatPage<CustomAttrs extends IPageAttrs = IPageAttrs> exten
     try {
       await Promise.all([chatState.loadChannels(), chatState.loadDrafts()]);
 
-      const routeId = m.route.param('id');
+      const routeId = m.route.param("id");
 
       if (routeId) {
         chatState.setActiveChannel(Number(routeId));
@@ -218,16 +232,18 @@ export default class ChatPage<CustomAttrs extends IPageAttrs = IPageAttrs> exten
         // list is truncated): fetch it directly rather than showing "empty".
         if (!chatState.channel(chatState.activeChannelId)) {
           try {
-            await app.store.find('chat-channels', String(routeId));
+            await app.store.find("chat-channels", String(routeId));
           } catch {
             chatState.setActiveChannel(null);
           }
         }
       } else if (!chatState.activeChannelId) {
-        chatState.setActiveChannel(chatState.channels[0] ? Number(chatState.channels[0].id()) : null);
+        chatState.setActiveChannel(
+          chatState.channels[0] ? Number(chatState.channels[0].id()) : null,
+        );
       }
 
-      const threadId = m.route.param('threadId');
+      const threadId = m.route.param("threadId");
       chatState.activeThreadId = threadId ? Number(threadId) : null;
     } finally {
       this.loading = false;
@@ -237,12 +253,12 @@ export default class ChatPage<CustomAttrs extends IPageAttrs = IPageAttrs> exten
 
   protected select(channel: Channel): void {
     chatState.setActiveChannel(Number(channel.id()));
-    m.route.set(app.route('chat.channel', { id: channel.id() }));
+    m.route.set(app.route("chat.channel", { id: channel.id() }));
   }
 
   protected deselect(): void {
     chatState.setActiveChannel(null);
-    m.route.set(app.route('chat.index'));
+    m.route.set(app.route("chat.index"));
   }
 
   /**
@@ -251,6 +267,6 @@ export default class ChatPage<CustomAttrs extends IPageAttrs = IPageAttrs> exten
    */
   protected closeThread(channel: Channel): void {
     chatState.closeThread();
-    m.route.set(app.route('chat.channel', { id: channel.id() }));
+    m.route.set(app.route("chat.channel", { id: channel.id() }));
   }
 }

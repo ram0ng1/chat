@@ -1,4 +1,4 @@
-import ChatState from './ChatState';
+import ChatState from "./ChatState";
 
 /**
  * The process-wide chat state.
