@@ -38,6 +38,7 @@ import FlagMessageModal from "./components/FlagMessageModal";
 import FlaggedMessagesList from "./components/FlaggedMessagesList";
 import { bindRealtime, setPollingFallback, realtimeBound } from "./realtime";
 import { bindShortcuts } from "./utils/shortcuts";
+import { shouldUseChatDrawer } from "./utils/surface";
 import ChatPageResolver from "./resolvers/ChatPageResolver";
 import bindFlagsIntegration from "./utils/flagsIntegration";
 
@@ -295,10 +296,7 @@ export async function startDirectMessage(user: User): Promise<void> {
 
     chatState.setActiveChannel(channelId);
 
-    const preferDrawer =
-      app.session.user?.preferences()?.["ramon-chat.openInDrawer"] !== false;
-
-    if (preferDrawer && window.innerWidth > 767) {
+    if (shouldUseChatDrawer()) {
       await ChatDrawer.open();
     } else {
       m.route.set(app.route("chat.channel", { id: channelId }));

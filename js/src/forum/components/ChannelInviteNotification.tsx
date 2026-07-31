@@ -4,6 +4,7 @@ import type Mithril from "mithril";
 
 import chatState from "../state/chat";
 import ChatDrawer from "./ChatDrawer";
+import { shouldUseChatDrawer } from "../utils/surface";
 
 /**
  * "X added you to #channel."
@@ -66,10 +67,10 @@ export default class ChannelInviteNotification extends Notification {
 
     if (!channelId) return;
 
-    const preferDrawer =
-      app.session.user?.preferences()?.["ramon-chat.openInDrawer"] !== false;
-
-    if (!preferDrawer || window.innerWidth <= 767) return;
+    // Falling through to the href is the right behaviour when the drawer is not
+    // the surface — including inside Flarum's own drawer, where the notification
+    // list is a page and the chat should be one too.
+    if (!shouldUseChatDrawer()) return;
 
     e.preventDefault();
 
