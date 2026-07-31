@@ -94,7 +94,6 @@ ramon-chat:
       direct_messages: Mensagens diretas
       browse_channels: Navegar por canais
       new_channel: Novo canal
-      new_direct_message: Nova mensagem
       no_channels: Você ainda não entrou em nenhum canal.
 
     channel:

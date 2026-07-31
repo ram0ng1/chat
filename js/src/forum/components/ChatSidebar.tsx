@@ -81,17 +81,7 @@ export default class ChatSidebar extends Component<ChatSidebarAttrs> {
               {this.section(
                 "ramon-chat.forum.sidebar.direct_messages",
                 state.directChannels(),
-                app.forum.attribute<boolean>("canStartChatDirect")
-                  ? {
-                      icon: "fas fa-plus",
-                      title: app.translator.trans(
-                        "ramon-chat.forum.sidebar.new_direct_message",
-                        {},
-                        true,
-                      ),
-                      action: () => this.startDirect(),
-                    }
-                  : null,
+                null,
               )}
 
               {/* An empty sidebar has to offer a way out, or a fresh install is a
@@ -298,11 +288,5 @@ export default class ChatSidebar extends Component<ChatSidebarAttrs> {
         m.route.set(app.route("chat.channel", { id: channel.id() }));
       },
     });
-  }
-
-  protected startDirect(): void {
-    // NewDirectMessageModal is phase 3. The affordance is hidden until then
-    // rather than shown as a no-op — see ChatSidebar-sectionHeader-action above,
-    // which is gated on canStartChatDirect.
   }
 }
