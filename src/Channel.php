@@ -12,6 +12,7 @@ namespace Ramon\Chat;
 use Carbon\Carbon;
 use Flarum\Database\AbstractModel;
 use Flarum\Database\ScopeVisibilityTrait;
+use Flarum\Extension\ExtensionManager;
 use Flarum\Foundation\EventGeneratorTrait;
 use Flarum\User\User;
 use Illuminate\Database\Eloquent\Builder;
@@ -268,10 +269,14 @@ class Channel extends AbstractModel
     /**
      * The tag this channel inherits permissions from. Resolved dynamically so
      * the model does not hard-depend on flarum/tags being installed.
+     *
+     * Gated on the extension being *enabled*, not on the class existing: the
+     * class is autoloaded from vendor/ either way, and loading this relation
+     * against a `tags` table whose migrations never ran is a 500.
      */
     public function tag(): ?BelongsTo
     {
-        if (! class_exists(\Flarum\Tags\Tag::class)) {
+        if (! resolve(ExtensionManager::class)->isEnabled('flarum-tags')) {
             return null;
         }
 
