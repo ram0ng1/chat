@@ -1,7 +1,6 @@
 import app from "flarum/forum/app";
 import Modal from "flarum/common/components/Modal";
 import type { IInternalModalAttrs } from "flarum/common/components/Modal";
-import LoadingIndicator from "flarum/common/components/LoadingIndicator";
 import humanTime from "flarum/common/helpers/humanTime";
 import type Mithril from "mithril";
 

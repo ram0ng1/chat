@@ -109,7 +109,11 @@ export default class ImageLightbox extends Component<ImageLightboxAttrs> {
                 true,
               )}
               onclick={() =>
-                window.open(safeFileUrl(upload.url()), "_blank", "noopener,noreferrer")
+                window.open(
+                  safeFileUrl(upload.url()),
+                  "_blank",
+                  "noopener,noreferrer",
+                )
               }
             />
 

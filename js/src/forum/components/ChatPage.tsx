@@ -1,7 +1,6 @@
 import app from "flarum/forum/app";
 import Page from "flarum/common/components/Page";
 import type { IPageAttrs } from "flarum/common/components/Page";
-import LoadingIndicator from "flarum/common/components/LoadingIndicator";
 import type Mithril from "mithril";
 
 import type Channel from "../../common/models/Channel";

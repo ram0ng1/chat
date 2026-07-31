@@ -483,6 +483,16 @@
         flex-shrink: 0;
       }
     }
+
+    // Slow mode is the one variant that ends by itself. Solid border and full
+    // text colour so it reads as a state the channel is in rather than as the
+    // dead-end the dashed ones announce, and the seconds change under the reader
+    // — a dashed, faded box counting down would look broken.
+    &--slow {
+      border-style: solid;
+      color: var(--avocado-text-dark);
+      font-variant-numeric: tabular-nums;
+    }
   }
 
   &-liveRegion {
@@ -1031,6 +1041,7 @@
       font-weight: 800;
     }
   }
+
 }
 
 // Autocomplete dropdown for @mentions and :emoji:.

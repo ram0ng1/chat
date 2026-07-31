@@ -93,7 +93,8 @@ class SlowMode
             return 0;
         }
 
-        $until = (int) $this->cache->get($this->key($channel, $actor), 0);
+        // `Store::get()` takes no default, unlike the cache Repository's.
+        $until = (int) ($this->cache->get($this->key($channel, $actor)) ?? 0);
 
         return max(0, $until - time());
     }

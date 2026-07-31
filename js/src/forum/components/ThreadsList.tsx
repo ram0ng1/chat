@@ -1,7 +1,6 @@
 import app from "flarum/forum/app";
 import Component from "flarum/common/Component";
 import type { ComponentAttrs } from "flarum/common/Component";
-import LoadingIndicator from "flarum/common/components/LoadingIndicator";
 import humanTime from "flarum/common/helpers/humanTime";
 import classList from "flarum/common/utils/classList";
 import type Mithril from "mithril";

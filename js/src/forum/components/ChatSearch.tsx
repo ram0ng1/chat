@@ -3,8 +3,6 @@ import Component from "flarum/common/Component";
 import type { ComponentAttrs } from "flarum/common/Component";
 import Button from "flarum/common/components/Button";
 import Avatar from "flarum/common/components/Avatar";
-import LoadingIndicator from "flarum/common/components/LoadingIndicator";
-import username from "flarum/common/helpers/username";
 import humanTime from "flarum/common/helpers/humanTime";
 import type Mithril from "mithril";
 
