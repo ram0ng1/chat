@@ -15,6 +15,7 @@ import type { Suggestion } from "./ChatAutocomplete";
 import { searchEmoji } from "../utils/emoji";
 import { messagePreview } from "../utils/preview";
 import { humanDuration } from "../utils/duration";
+import { authorName } from "../utils/bot";
 import {
   stickersAvailable,
   stickerIcon,
@@ -437,7 +438,7 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
           {editing
             ? app.translator.trans("ramon-chat.forum.composer.editing")
             : app.translator.trans("ramon-chat.forum.message.replying_to", {
-                username: username(target.user()),
+                username: authorName(target),
               })}
         </span>
         <span className="ChatComposer-context-preview">
