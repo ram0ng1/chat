@@ -10,6 +10,7 @@ import chatState from "../state/chat";
 import ChannelFormModal from "./ChannelFormModal";
 import { BrowseSkeleton } from "./Skeletons";
 import { channelIcon } from "../utils/channelIcon";
+import { mobileTitleControl } from "../utils/toolbar";
 
 type BrowseFilter = "all" | "open" | "closed" | "archived" | "mine";
 
@@ -51,6 +52,10 @@ export default class BrowseChannelsPage<
   view(): Mithril.Children {
     return (
       <div className="ChatBrowse">
+        {mobileTitleControl(
+          app.translator.trans("ramon-chat.forum.browse.title", {}, true),
+        )}
+
         {/* The back link sits above the title rather than beside it: it is
             navigation, not a peer of the page's primary action, and putting the
             three on one row made the title collide with the buttons as soon as the
