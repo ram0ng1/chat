@@ -199,25 +199,50 @@ class AnnounceDiscussions
             return null;
         }
 
+        // Every syntax is searched, and the winner is the one that appears
+        // earliest in the text — not the one whose pattern happens to be tried
+        // first. Ordering by syntax picked a markdown badge halfway down a post
+        // over the BBCode logo at the very top, which is not what "the first
+        // image" means to anyone reading it.
         $patterns = [
-            '/!\[[^\]]*\]\(\s*([^)\s]+)/',              // ![alt](url)
-            '/\[img\b[^\]]*\]\s*([^\[\s]+)/i',          // [img]url[/img]
-            '/<img[^>]+src=["\']([^"\']+)/i',             // <img src="url">
+            '/!\[[^\]]*\]\(\s*([^)\s]+)/',            // ![alt](url)
+            '/\[img\b[^\]]*\]\s*([^\[\s]+)/i',        // [img]url[/img]
+            '/<img[^>]+src=["\']([^"\']+)/i',         // <img src="url">
         ];
 
+        $best = null;
+        $bestAt = PHP_INT_MAX;
+
         foreach ($patterns as $pattern) {
-            if (! preg_match($pattern, $content, $m)) {
+            // Every occurrence, not the first. With `preg_match` a rejected
+            // candidate exhausted its whole syntax: one `javascript:` image at the
+            // top of a post hid every real markdown image below it.
+            if (! preg_match_all($pattern, $content, $matches, PREG_OFFSET_CAPTURE | PREG_SET_ORDER)) {
                 continue;
             }
 
-            $url = trim($m[1]);
+            foreach ($matches as $m) {
+                [$url, $at] = $m[1];
+                $url = trim($url);
 
-            if (preg_match('~^https?://~i', $url)) {
-                return mb_substr($url, 0, 500);
+                // Only http(s): the value ends up in an `src`, and `javascript:`
+                // or `data:` there is the one thing that must never happen.
+                if (! preg_match('~^https?://~i', $url)) {
+                    continue;
+                }
+
+                if ($at < $bestAt) {
+                    $best = $url;
+                    $bestAt = $at;
+                }
+
+                // Ordered within a pattern, so the first accepted one is the
+                // earliest this syntax can offer.
+                break;
             }
         }
 
-        return null;
+        return $best === null ? null : mb_substr($best, 0, 500);
     }
 
     /**
