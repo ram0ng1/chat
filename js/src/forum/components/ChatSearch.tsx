@@ -6,12 +6,11 @@ import Avatar from "flarum/common/components/Avatar";
 import humanTime from "flarum/common/helpers/humanTime";
 import type Mithril from "mithril";
 
-import userLink from "../utils/userLink";
-
 import type Message from "../../common/models/Message";
 import type ChatState from "../state/ChatState";
 import { SearchResultsSkeleton } from "./Skeletons";
 import { messagePreview } from "../utils/preview";
+import { authorLink } from "../utils/bot";
 
 export interface ChatSearchAttrs extends ComponentAttrs {
   state: ChatState;
@@ -147,7 +146,7 @@ export default class ChatSearch extends Component<ChatSearchAttrs> {
         <div className="ChatSearch-result-body">
           <div className="ChatSearch-result-meta">
             <span className="ChatSearch-result-author">
-              {userLink(message.user())}
+              {authorLink(message)}
             </span>
             {channel ? (
               <span className="ChatSearch-result-channel">
