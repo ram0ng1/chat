@@ -3,6 +3,7 @@ import Model from "flarum/common/Model";
 import type User from "flarum/common/models/User";
 import type Channel from "./Channel";
 import type Message from "./Message";
+import { messagePreview } from "../utils/preview";
 
 /**
  * Per-thread tracking level. Mirrors Ramon\Chat\ThreadUser.
@@ -60,15 +61,18 @@ export default class Thread extends Model {
     // `hasOne` resolves to `false` when the relationship is not loaded, which is
     // distinct from a loaded-but-null relationship.
     const root = this.originalMessage();
-    const content = root ? root.content() : null;
+
+    // Through `messagePreview`, not `content()`: the latter is the *source*, so a
+    // thread branched off a bot announcement was titled `**[Chat Extension](/d/20)**`
+    // — the markup rather than the words. Every other place that shows a message
+    // inside something else already reads the rendered HTML; this one was missed.
+    const content = root ? messagePreview(root, excerptLength) : "";
 
     if (!content) {
       return app.translator.trans("ramon-chat.forum.thread.untitled", {}, true);
     }
 
-    return content.length > excerptLength
-      ? content.slice(0, excerptLength).trimEnd() + "…"
-      : content;
+    return content;
   }
 
   apiEndpoint(): string {

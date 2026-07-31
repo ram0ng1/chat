@@ -7,7 +7,7 @@ import classList from "flarum/common/utils/classList";
 import type Mithril from "mithril";
 
 import type Message from "../../common/models/Message";
-import { messagePreview } from "../utils/preview";
+import { messagePreview } from "../../common/utils/preview";
 import { authorName } from "../utils/bot";
 
 export interface FlagMessageModalAttrs extends IFormModalAttrs {

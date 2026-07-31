@@ -9,7 +9,7 @@ import type Mithril from "mithril";
 import type Message from "../../common/models/Message";
 import type ChatState from "../state/ChatState";
 import { SearchResultsSkeleton } from "./Skeletons";
-import { messagePreview } from "../utils/preview";
+import { messagePreview } from "../../common/utils/preview";
 import { authorLink } from "../utils/bot";
 
 export interface ChatSearchAttrs extends ComponentAttrs {
