@@ -85,6 +85,7 @@ class AnnounceDiscussions
             }
 
             $excerpt = $this->excerpt($post);
+            $image = $this->firstImage($post);
 
             $body = $this->body($discussion, $excerpt);
 
@@ -115,6 +116,12 @@ class AnnounceDiscussions
                         // reading it live would mean a query per announcement on
                         // every scroll of the stream.
                         'excerpt'  => $excerpt,
+
+                        // The post's first picture, shown as a small mark at the
+                        // head of the card — the way a link preview leads with a
+                        // favicon. Snapshotted with the rest: an announcement is a
+                        // record of what was posted.
+                        'image'    => $image,
                     ]
                 );
 
@@ -174,6 +181,46 @@ class AnnounceDiscussions
     }
 
     /**
+     * The post's first image, to head the announcement card with.
+     *
+     * Markdown, BBCode and HTML all appear in post source, so all three are
+     * looked for. Only http(s) is accepted: the value ends up in an `src`, and a
+     * `javascript:` or `data:` URL there is the one thing that must never happen.
+     *
+     * Any image type the browser draws is fine — svg, png, jpeg, webp — so this
+     * does not filter on extension. A URL that turns out not to be an image
+     * simply fails to load and the card renders without a mark.
+     */
+    protected function firstImage(object $post): ?string
+    {
+        $content = (string) ($post->content ?? '');
+
+        if ($content === '') {
+            return null;
+        }
+
+        $patterns = [
+            '/!\[[^\]]*\]\(\s*([^)\s]+)/',              // ![alt](url)
+            '/\[img\b[^\]]*\]\s*([^\[\s]+)/i',          // [img]url[/img]
+            '/<img[^>]+src=["\']([^"\']+)/i',             // <img src="url">
+        ];
+
+        foreach ($patterns as $pattern) {
+            if (! preg_match($pattern, $content, $m)) {
+                continue;
+            }
+
+            $url = trim($m[1]);
+
+            if (preg_match('~^https?://~i', $url)) {
+                return mb_substr($url, 0, 500);
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * A short plain-text opening of the post, for the announcement card.
      *
      * Built from the raw content rather than the rendered HTML: formatting needs a
@@ -227,6 +274,12 @@ class AnnounceDiscussions
 
             $content = $collapsed;
         }
+
+        // `[img]` before the generic BBCode strip, and with its contents. The
+        // generic pass removes the *tags*, and a BBCode image carries its URL as
+        // the tag's content — so an announcement opened with a bare
+        // `https://…/icon.svg` sitting in the middle of the sentence.
+        $content = preg_replace('/\[img\b[^\]]*\].*?\[\/img\]/is', ' ', $content) ?? $content;
 
         // HTML and BBCode. A post is source text, not rendered output, so both can
         // be present verbatim — and an `<img>` that survives here is drawn in the
