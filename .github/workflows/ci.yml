@@ -62,8 +62,17 @@ jobs:
           [ "${#files[@]}" -gt 0 ] || { echo "Nenhum arquivo PHP encontrado"; exit 1; }
           printf '%s\0' "${files[@]}" | xargs -0 -n1 -P4 php -l
 
+      # Com retry: um 502 do Packagist em qualquer metadata (`~dev.json`, por causa
+      # do minimum-stability) derruba o job inteiro, e é uma falha de infra que não
+      # diz nada sobre o commit. Três tentativas com espera crescente.
       - name: Instalar dependências PHP
-        run: composer update --no-interaction --no-progress --prefer-dist
+        run: |
+          for i in 1 2 3; do
+            composer update --no-interaction --no-progress --prefer-dist && exit 0
+            echo "::warning::composer falhou (tentativa $i/3), repetindo em ${i}0s"
+            sleep "${i}0"
+          done
+          exit 1
 
       - name: Testes unitários (PHPUnit)
         run: vendor/bin/phpunit --testsuite unit
@@ -108,7 +117,13 @@ jobs:
           restore-keys: composer-${{ runner.os }}-
 
       - name: Instalar dependências PHP
-        run: composer update --no-interaction --no-progress --prefer-dist --no-scripts
+        run: |
+          for i in 1 2 3; do
+            composer update --no-interaction --no-progress --prefer-dist --no-scripts && exit 0
+            echo "::warning::composer falhou (tentativa $i/3), repetindo em ${i}0s"
+            sleep "${i}0"
+          done
+          exit 1
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
@@ -148,7 +163,13 @@ jobs:
           tools: composer:v2
 
       - name: Instalar dependências
-        run: composer update --no-interaction --no-progress --prefer-dist --no-scripts
+        run: |
+          for i in 1 2 3; do
+            composer update --no-interaction --no-progress --prefer-dist --no-scripts && exit 0
+            echo "::warning::composer falhou (tentativa $i/3), repetindo em ${i}0s"
+            sleep "${i}0"
+          done
+          exit 1
 
       - name: PHPStan analyse
         run: vendor/bin/phpstan analyse --no-progress --memory-limit=1G --error-format=github

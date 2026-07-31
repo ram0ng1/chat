@@ -59,7 +59,13 @@ jobs:
           tools: composer:v2
 
       - name: Resolver dependências (composer update)
-        run: composer update --no-interaction --no-progress --prefer-stable --no-scripts
+        run: |
+          for i in 1 2 3; do
+            composer update --no-interaction --no-progress --prefer-stable --no-scripts && exit 0
+            echo "::warning::composer falhou (tentativa $i/3), repetindo em ${i}0s"
+            sleep "${i}0"
+          done
+          exit 1
 
       # Bloqueante: o exit do psalm é propagado após garantir que o SARIF
       # exista para upload.
