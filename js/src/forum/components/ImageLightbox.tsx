@@ -3,12 +3,12 @@ import Component from "flarum/common/Component";
 import type { ComponentAttrs } from "flarum/common/Component";
 import Button from "flarum/common/components/Button";
 import humanTime from "flarum/common/helpers/humanTime";
-import username from "flarum/common/helpers/username";
 import type Mithril from "mithril";
 
 import type Message from "../../common/models/Message";
 import type Upload from "../../common/models/Upload";
 import { safeFileUrl } from "../utils/url";
+import { authorName } from "../utils/bot";
 
 export interface ImageLightboxAttrs extends ComponentAttrs {
   /** Every image in the message, so the viewer can move between them. */
@@ -84,9 +84,7 @@ export default class ImageLightbox extends Component<ImageLightboxAttrs> {
       >
         <div className="ChatLightbox-bar">
           <div className="ChatLightbox-meta">
-            <span className="ChatLightbox-author">
-              {username(message.user())}
-            </span>
+            <span className="ChatLightbox-author">{authorName(message)}</span>
             {at ? (
               <span className="ChatLightbox-time">{humanTime(at)}</span>
             ) : null}

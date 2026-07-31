@@ -7,8 +7,6 @@ import humanTime from "flarum/common/helpers/humanTime";
 import classList from "flarum/common/utils/classList";
 import type Mithril from "mithril";
 
-import userLink from "../utils/userLink";
-
 import type Message from "../../common/models/Message";
 import type ChatState from "../state/ChatState";
 import { displayEmoji } from "../utils/emoji";
@@ -185,11 +183,45 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
     );
   }
 
+  /**
+   * The picture an announced discussion opened with, drawn at the head of the
+   * card the way a link preview leads with a favicon.
+   *
+   * Only for bot announcements: an ordinary message showing its own attachments
+   * already has the uploads row, and a second copy of the same image at the top
+   * would be noise.
+   *
+   * The URL is filtered again here even though the server already accepted only
+   * http(s). It lands in an `src`, the payload travels through JSON:API to get
+   * here, and "the server checked" is a property of today's server.
+   */
+  protected announcementIcon(message: Message): Mithril.Children {
+    if (!message.isBot() || !message.systemKey()) return null;
+
+    const data = message.systemData() as { image?: string } | null;
+    const url = safeFileUrl(data?.image);
+
+    if (!url) return null;
+
+    return (
+      <img
+        className="ChatMessage-announcementIcon"
+        src={url}
+        alt=""
+        loading="lazy"
+        // A picture that fails to load must not leave a broken-image glyph in
+        // the middle of the card; removing the node is cleaner than styling it.
+        onerror={(e: Event) => (e.target as HTMLElement)?.remove()}
+      />
+    );
+  }
+
   protected content(message: Message): Mithril.Children {
     const html = message.contentHtml();
 
     return (
       <div className="ChatMessage-content">
+        {this.announcementIcon(message)}
         {html ? m.trust(html) : message.content()}
         {/* The "edited" marker is the affordance for the history — the same place
             core puts it on a post. A button, not a span, so it is reachable by
@@ -283,7 +315,7 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
     return (
       <div className="ChatMessage-replyTo">
         <i className="fas fa-reply" aria-hidden="true" />
-        <span>{userLink(target.user())}</span>
+        <span>{authorLink(target)}</span>
         <span className="ChatMessage-replyTo-content">
           {messagePreview(target, 120)}
         </span>

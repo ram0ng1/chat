@@ -2250,6 +2250,20 @@
 // replied to, reacted to or grouped, because it was not really a message. This is:
 // the avatar, the name, the time and the actions are all the ordinary ones, and the
 // card treatment is confined to the body.
+// The picture an announced discussion opened with. Sized like a favicon and set
+// beside the text rather than above it: the card is a one-line summary, and an
+// image given its own row would outweigh the title it belongs to.
+.ChatMessage-announcementIcon {
+  float: left;
+  width: 34px;
+  height: 34px;
+  margin: 2px @chat-space-md @chat-space-xs 0;
+  border-radius: @chat-radius-sm;
+  object-fit: contain;
+  // Whatever the picture's own background is, it sits on a tinted card here.
+  background: var(--avocado-surface-1);
+}
+
 .ChatMessage--announcement {
   .ChatMessage-content {
     padding-left: 12px;
