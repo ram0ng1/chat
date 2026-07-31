@@ -228,7 +228,13 @@
     // were reading a channel, your threads or your bookmarks — the one thing a
     // navigation list exists to tell you.
     &--active {
-      color: var(--primary-color);
+      // The strong text colour, not the accent. A quick link's resting state is
+      // muted, so the active one has to brighten — but `--primary-color` on the
+      // selected background is a saturated colour on a dark surface, and in the
+      // dark theme the active link came out dimmer than the inactive ones. The
+      // channel rows below say the same thing with background and weight alone,
+      // and now these agree with them.
+      color: var(--avocado-text-dark);
       background: var(--chat-row-selected-bg);
       font-weight: 800;
     }
@@ -416,11 +422,24 @@
     }
   }
 
+  // Secondary, so it yields first. Both this and the channel's name were
+  // truncating on equal terms, and on a phone the flex line resolved by
+  // squeezing the *name* to two characters while the description kept its width
+  // — the header read "Ge… Conversa do dia a …", which names nothing.
   &-description {
     .chat-truncate();
+    flex: 0 1 auto;
+    min-width: 0;
     font-size: @chat-font-meta;
     font-weight: 500;
     color: var(--avocado-muted-label);
+
+    // Below the breakpoint there is no room for both: the strip already carries
+    // a back arrow and four actions. The name wins, and the description is a
+    // tap away in the channel's own panel.
+    @media (max-width: @chat-mobile-breakpoint) {
+      display: none;
+    }
   }
 
   &-headerActions {

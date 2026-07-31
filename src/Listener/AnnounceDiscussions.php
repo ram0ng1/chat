@@ -178,9 +178,22 @@ class AnnounceDiscussions
      *
      * Built from the raw content rather than the rendered HTML: formatting needs a
      * request context this listener does not have, and the card wants text anyway.
-     * Quotes and images are dropped instead of being flattened into stray brackets,
-     * since a post that opens with a quote would otherwise show someone else's words
-     * as its excerpt.
+     *
+     * ## Why this is more than a couple of regexes
+     *
+     * Whatever comes out of here is appended to a markdown body and then rendered.
+     * Anything left half-stripped is not inert text — it is live markup a second
+     * time around. Two shapes proved that:
+     *
+     *  - `[![CI](shield.svg)](target)`, an image inside a link. A single pass with
+     *    `[^\]]*` cannot reach past the inner `]`, so it consumed the first half
+     *    and left `![CI](target)` behind — which the formatter then rendered as an
+     *    image. Collapsing has to repeat until the text stops changing.
+     *  - A post written in HTML. Markdown stripping never touched `<img src=…>`,
+     *    so the tag survived into the announcement and drew a picture there.
+     *
+     * So: strip, repeat, and then neutralise what remains rather than trusting the
+     * strip to have been complete.
      */
     protected function excerpt(object $post): ?string
     {
@@ -190,16 +203,47 @@ class AnnounceDiscussions
             return null;
         }
 
-        $content = preg_replace('/\[quote[^\]]*\].*?\[\/quote\]/is', '', $content) ?? $content;
-        $content = preg_replace('/<blockquote.*?<\/blockquote>/is', '', $content) ?? $content;
+        // Quotes first, and while they are still line-shaped. Stripping the
+        // leading ">" as punctuation later would leave the quoted words behind and
+        // pass off someone else's sentence as this post's opening.
+        $content = preg_replace('/\[quote[^\]]*\].*?\[\/quote\]/is', ' ', $content) ?? $content;
+        $content = preg_replace('/<blockquote.*?<\/blockquote>/is', ' ', $content) ?? $content;
+        $content = preg_replace('/^[ 	]*>[^
+]*$/m', ' ', $content) ?? $content;
 
-        // Markdown blockquotes are line-based, so they have to go before the
-        // newlines do — stripping the leading ">" as punctuation would leave the
-        // quoted words behind and pass them off as this post's opening.
-        $content = preg_replace('/^[ \t]*>[^\n]*$/m', '', $content) ?? $content;
+        // Fenced and inline code: the contents are rarely a useful opening line and
+        // frequently contain the very characters this is trying to remove.
+        $content = preg_replace('/```.*?```/s', ' ', $content) ?? $content;
+        $content = preg_replace('/`[^`]*`/', ' ', $content) ?? $content;
 
-        $content = preg_replace('/!?\[([^\]]*)\]\([^)]*\)/', '$1', $content) ?? $content;
-        $content = preg_replace('/[`*_#~]+/', '', $content) ?? $content;
+        // Links and images, innermost first, until nothing changes. Bounded so a
+        // pathological post cannot spin here.
+        for ($pass = 0; $pass < 6; $pass++) {
+            $collapsed = preg_replace('/!?\[([^\[\]]*)\]\([^)\s]*(?:\s+[^)]*)?\)/', '$1', $content) ?? $content;
+
+            if ($collapsed === $content) {
+                break;
+            }
+
+            $content = $collapsed;
+        }
+
+        // HTML and BBCode. A post is source text, not rendered output, so both can
+        // be present verbatim — and an `<img>` that survives here is drawn in the
+        // channel.
+        $content = preg_replace('/<[^>]*>/', ' ', $content) ?? $content;
+        $content = preg_replace('/\[\/?[a-z*][^\]]*\]/i', ' ', $content) ?? $content;
+
+        // Emphasis, headings, list bullets and horizontal rules.
+        $content = preg_replace('/^[ 	]*(?:[-*+]|\d+\.)\s+/m', ' ', $content) ?? $content;
+        $content = preg_replace('/[`*_~]+/', '', $content) ?? $content;
+        $content = preg_replace('/^\s*#+\s*/m', ' ', $content) ?? $content;
+
+        // What is left is meant to be text. These are the characters that could
+        // still start markup once this is appended to the message body, and by now
+        // none of them belongs to anything.
+        $content = str_replace(['[', ']', '<', '>', '`'], '', $content);
+
         $content = trim(preg_replace('/\s+/u', ' ', $content) ?? $content);
 
         if ($content === '') {
