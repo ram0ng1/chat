@@ -115,7 +115,6 @@ ramon-chat:
       direct_messages: Direct Messages
       browse_channels: Browse channels
       new_channel: New channel
-      new_direct_message: New message
       no_channels: You have not joined any channels yet.
 
     channel:
