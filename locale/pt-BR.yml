@@ -56,9 +56,8 @@ ramon-chat:
 
           Responder: {url}
       html:
-        body: |
-          <p>**{author}** mencionou você em **{channel}**.</p>
-          <p><a href="{url}">Abrir o canal</a></p>
+        intro: "<strong>{author}</strong> mencionou você em <strong>{channel}</strong>."
+        action: Abrir o canal
 
   notifications:
     chat_mention: "{username} mencionou você em {channel}"

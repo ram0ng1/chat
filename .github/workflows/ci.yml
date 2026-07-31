@@ -22,6 +22,13 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # O Packagist devolve 502 intermitente em objetos isolados do CDN — sempre o
+  # mesmo arquivo, por minutos, enquanto o resto do repositório responde 200. Abrir
+  # 12 conexões simultâneas (o padrão) contra uma borda nesse estado multiplica a
+  # chance de topar com ela; uma de cada vez é mais lento e chega ao fim.
+  COMPOSER_MAX_PARALLEL_HTTP: '6'
+
 # Default-deny do GITHUB_TOKEN; cada job declara o que precisa.
 permissions: {}
 
@@ -62,11 +69,42 @@ jobs:
           [ "${#files[@]}" -gt 0 ] || { echo "Nenhum arquivo PHP encontrado"; exit 1; }
           printf '%s\0' "${files[@]}" | xargs -0 -n1 -P4 php -l
 
-      - name: Instalar dependências PHP
-        run: composer update --no-interaction --no-progress --prefer-dist
+      # `composer update`, não `install`: o lock commitado resolve para pacotes que
+      # exigem PHP >= 8.4.1, então a perna 8.3 da matriz não conseguiria instalá-lo.
+      - name: Cache do composer
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.cache/composer
+          key: composer-${{ runner.os }}-php${{ matrix.php }}-${{ hashFiles('composer.json') }}
+          restore-keys: composer-${{ runner.os }}-php${{ matrix.php }}-
 
-      - name: Testes (PHPUnit)
+      # Retry longo porque a falha é do Packagist, não do commit: um 502 de borda
+      # persiste por minutos no mesmo objeto. Três tentativas em 60s não bastaram.
+      - name: Instalar dependências PHP
+        run: |
+          backoff=(15 30 60 120)
+          for i in 0 1 2 3 4; do
+            composer update --no-interaction --no-progress --prefer-dist && exit 0
+            [ "$i" -eq 4 ] && break
+            echo "::warning::composer falhou (tentativa $((i+1))/5), repetindo em ${backoff[$i]}s"
+            sleep "${backoff[$i]}"
+          done
+          echo "::error::composer não resolveu as dependências em 5 tentativas (~3,75 min). Se o log acusa 502 do repo.packagist.org, é incidente upstream — reexecute o job."
+          exit 1
+
+      - name: Testes unitários (PHPUnit)
         run: vendor/bin/phpunit --testsuite unit
+
+      # A suíte de integração existia sem nunca rodar em lugar nenhum, e por isso
+      # os 10 testes estavam quebrados — fixtures sem `password`, conteúdo gravado
+      # como texto cru em vez de XML do s9e. Sem este passo, ela volta a apodrecer.
+      # SetupScript lê a configuração de variáveis de ambiente e usa SQLite por
+      # padrão, então não há nada a provisionar.
+      - name: Preparar banco de testes
+        run: php tests/integration/setup.php
+
+      - name: Testes de integração (PHPUnit)
+        run: vendor/bin/phpunit --testsuite integration
 
   js:
     name: JS
@@ -97,7 +135,16 @@ jobs:
           restore-keys: composer-${{ runner.os }}-
 
       - name: Instalar dependências PHP
-        run: composer update --no-interaction --no-progress --prefer-dist --no-scripts
+        run: |
+          backoff=(15 30 60 120)
+          for i in 0 1 2 3 4; do
+            composer update --no-interaction --no-progress --prefer-dist --no-scripts && exit 0
+            [ "$i" -eq 4 ] && break
+            echo "::warning::composer falhou (tentativa $((i+1))/5), repetindo em ${backoff[$i]}s"
+            sleep "${backoff[$i]}"
+          done
+          echo "::error::composer não resolveu as dependências em 5 tentativas (~3,75 min). Se o log acusa 502 do repo.packagist.org, é incidente upstream — reexecute o job."
+          exit 1
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
@@ -136,8 +183,24 @@ jobs:
           coverage: none
           tools: composer:v2
 
+      - name: Cache do composer
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.cache/composer
+          key: composer-${{ runner.os }}-phpstan-${{ hashFiles('composer.json') }}
+          restore-keys: composer-${{ runner.os }}-phpstan-
+
       - name: Instalar dependências
-        run: composer update --no-interaction --no-progress --prefer-dist --no-scripts
+        run: |
+          backoff=(15 30 60 120)
+          for i in 0 1 2 3 4; do
+            composer update --no-interaction --no-progress --prefer-dist --no-scripts && exit 0
+            [ "$i" -eq 4 ] && break
+            echo "::warning::composer falhou (tentativa $((i+1))/5), repetindo em ${backoff[$i]}s"
+            sleep "${backoff[$i]}"
+          done
+          echo "::error::composer não resolveu as dependências em 5 tentativas (~3,75 min). Se o log acusa 502 do repo.packagist.org, é incidente upstream — reexecute o job."
+          exit 1
 
       - name: PHPStan analyse
         run: vendor/bin/phpstan analyse --no-progress --memory-limit=1G --error-format=github

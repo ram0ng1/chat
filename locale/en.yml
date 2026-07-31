@@ -68,9 +68,13 @@ ramon-chat:
 
           Reply: {url}
       html:
-        body: |
-          <p>**{author}** mentioned you in **{channel}**.</p>
-          <p><a href="{url}">Open the channel</a></p>
+        # Emphasis lives here as HTML, not Markdown: the view interpolates this
+        # straight into the message body. Running it through the post formatter
+        # instead made the markup depend on which formatting extensions the admin
+        # had enabled — without flarum/markdown the `**` showed up literally, and
+        # the core Escaper printed any raw tag as text either way.
+        intro: "<strong>{author}</strong> mentioned you in <strong>{channel}</strong>."
+        action: Open the channel
 
   ##
   # Notification list entries.

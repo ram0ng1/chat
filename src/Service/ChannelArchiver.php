@@ -11,6 +11,7 @@ namespace Ramon\Chat\Service;
 
 use Carbon\Carbon;
 use Flarum\Discussion\Discussion;
+use Flarum\Extension\ExtensionManager;
 use Flarum\Foundation\ValidationException;
 use Flarum\Locale\Translator;
 use Flarum\Post\CommentPost;
@@ -40,7 +41,8 @@ class ChannelArchiver
         protected ConnectionInterface $db,
         protected Events $events,
         protected Translator $translator,
-        protected TranscriptRenderer $transcript
+        protected TranscriptRenderer $transcript,
+        protected ExtensionManager $extensions
     ) {
     }
 
@@ -81,7 +83,11 @@ class ChannelArchiver
                 // transcript lands where the conversation belonged.
                 $discussion->save();
 
-                if ($channel->tag_id !== null && method_exists($discussion, 'tags')) {
+                // Not `method_exists($discussion, 'tags')`: flarum/tags registers
+                // the relation through Extend\Model rather than declaring a method,
+                // so that test is false even when tags is enabled — which quietly
+                // filed every archive under no category at all.
+                if ($channel->tag_id !== null && $this->extensions->isEnabled('flarum-tags')) {
                     $discussion->tags()->sync([$channel->tag_id]);
                 }
             }

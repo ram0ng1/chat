@@ -140,6 +140,14 @@ return [
             Schema\Boolean::make('canFlagChatMessages')
                 ->get(fn ($forum, Context $context) => $context->getActor()->hasPermission('ramon-chat.flagMessage')),
 
+            // The composer restarts its own countdown after a send rather than
+            // waiting for the server to tell it to, so it needs to know who the
+            // wait does not apply to. `slowModeRemaining` already answers this on
+            // load — this is the same answer, for the moment there is no fresh
+            // channel payload to read it from.
+            Schema\Boolean::make('canBypassChatSlowMode')
+                ->get(fn ($forum, Context $context) => $context->getActor()->hasPermission('ramon-chat.bypassSlowMode')),
+
             // The badge on the moderation link, and the link itself. Counted only
             // for moderators, so the ordinary page load never runs this query.
             Schema\Integer::make('chatOpenFlagsCount')
