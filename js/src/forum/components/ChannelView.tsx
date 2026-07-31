@@ -15,7 +15,7 @@ import ChannelInfoModal from "./ChannelInfoModal";
 import ChatSelectionBar from "./ChatSelectionBar";
 import { MessageStreamSkeleton } from "./Skeletons";
 import { channelIcon } from "../utils/channelIcon";
-import { messagePreview } from "../utils/preview";
+import { messagePreview } from "../../common/utils/preview";
 
 export interface ChannelViewAttrs extends ComponentAttrs {
   channel: Channel;

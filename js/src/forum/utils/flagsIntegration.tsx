@@ -5,7 +5,7 @@ import HeaderListItem from "flarum/forum/components/HeaderListItem";
 import type Mithril from "mithril";
 
 import type MessageFlag from "../../common/models/MessageFlag";
-import { messagePreview } from "./preview";
+import { messagePreview } from "../../common/utils/preview";
 import { authorName } from "./bot";
 
 /**

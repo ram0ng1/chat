@@ -1,4 +1,4 @@
-import type Message from "../../common/models/Message";
+import type Message from "../models/Message";
 
 /**
  * A one-line, plain-text summary of a message.

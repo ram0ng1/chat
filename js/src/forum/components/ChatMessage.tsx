@@ -17,7 +17,7 @@ import { verifiedBadge } from "../utils/integrations";
 import RevisionsModal from "./RevisionsModal";
 import FlagMessageModal from "./FlagMessageModal";
 import ImageLightbox from "./ImageLightbox";
-import { messagePreview } from "../utils/preview";
+import { messagePreview } from "../../common/utils/preview";
 
 export interface ChatMessageAttrs extends ComponentAttrs {
   message: Message;
