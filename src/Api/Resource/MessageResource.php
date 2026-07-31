@@ -210,6 +210,41 @@ class MessageResource extends AbstractDatabaseResource
                 })
                 ->response(fn () => new EmptyResponse(204)),
 
+            // Removing the row for good, tombstone and all. A second step after
+            // deletion rather than a stronger first one: this cannot be undone, and
+            // a channel full of tombstones is the problem it exists to solve.
+            Endpoint\Endpoint::make('purge')
+                ->route('POST', '/{id}/purge')
+                ->authenticated()
+                ->action(function (Context $context) {
+                    /** @var Message $message */
+                    $message = $context->model;
+                    $actor = $context->getActor();
+
+                    if (! $actor->can('forceDelete', $message)) {
+                        throw new ForbiddenException();
+                    }
+
+                    // Held before the row goes, because afterwards there is nothing
+                    // left to ask which channel and thread to recount.
+                    $channel = $message->channel;
+                    $thread = $message->thread;
+
+                    // Reactions, mentions, revisions, bookmarks, reports and upload
+                    // rows all cascade on the foreign key. The files themselves are
+                    // already gone: they were removed when the message was deleted,
+                    // which this can only follow.
+                    $message->delete();
+
+                    // `chat_channels.last_message_id` and the thread's counters are
+                    // plain columns with no foreign key, so nothing in the database
+                    // repairs them — a purged last message would leave the sidebar
+                    // pointing at a row that no longer exists.
+                    $channel?->refreshMetadata()->save();
+                    $thread?->refreshMetadata()->save();
+                })
+                ->response(fn () => new EmptyResponse(204)),
+
             Endpoint\Endpoint::make('restore')
                 ->route('POST', '/{id}/restore')
                 ->authenticated()
@@ -493,6 +528,9 @@ class MessageResource extends AbstractDatabaseResource
 
             Schema\Boolean::make('canPin')
                 ->get(fn (Message $m, Context $context) => $context->getActor()->can('pin', $m)),
+
+            Schema\Boolean::make('canForceDelete')
+                ->get(fn (Message $m, Context $context) => $context->getActor()->can('forceDelete', $m)),
 
             Schema\Boolean::make('canFlag')
                 ->get(fn (Message $m, Context $context) => $context->getActor()->can('flag', $m)),
