@@ -909,7 +909,13 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
       // The channel's own cooldown, restarted from what the send just consumed.
       // Editing an existing message does not: slow mode is about how often you
       // speak, not how often you correct yourself.
-      if (!editing) {
+      //
+      // `slowModeRemaining` is exemption-aware and so covers the load path, but
+      // this one reads the channel's raw setting — without the same check, a
+      // holder of `bypassSlowMode` sends once and is then locked out for the full
+      // window by the interface alone, while the server would have taken the next
+      // message happily.
+      if (!editing && !app.forum.attribute("canBypassChatSlowMode")) {
         this.startCooldown(Number(channel.slowModeSeconds() ?? 0));
       }
 
