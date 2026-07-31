@@ -7,9 +7,16 @@
 
 // ── Header trigger ───────────────────────────────────────────────────────────
 // The speech bubble that sits beside search, per Discourse.
-// The mention count uses core's `.Bubble`, which already positions itself against
-// a header button — only the ambient-unread dot is ours.
+//
+// The unread count carries core's `.Bubble.HeaderDropdownBubble` and is styled
+// entirely by core — including the `@phone` offset that moves it clear of the
+// icon when the header becomes a list of rows inside the drawer. Nothing about
+// its placement is repeated here; overriding one edge of an absolutely positioned
+// box that core anchors by the other is what produced the full-width grey slab.
 .ChatNavButton {
+  // The bubble is `position: absolute`, so the button has to be its containing
+  // block — core's `.Dropdown` provides this for the bell and for
+  // flarum/messages' dropdown; we are a bare button and provide it ourselves.
   position: relative;
 
   // The same treatment core gives a HeaderDropdown toggle — the flag and bell
@@ -19,26 +26,22 @@
   // Scoped to the same breakpoint core scopes it to: on a phone the header moves
   // into the drawer and its controls show their labels, so hiding ours there would
   // leave an unlabelled icon in a list of named rows.
-  @media @tablet-up {
-    .Button--icon();
-  }
-
-  // The unread count, positioned the way core positions the bell's. Core's
-  // `.Bubble` supplies the size, radius and digit handling; only the placement is
-  // ours, because our button is not inside a HeaderDropdown.
   //
-  // The dot this replaced said "something happened" and left you to open the chat
-  // to find out how much — the one question the header exists to answer.
-  &-bubble {
-    position: absolute;
-    top: 2px;
-    right: 2px;
+  // And scoped to the icon being drawn at all. The mixin hides .Button-label, so
+  // applying it unconditionally left an empty 36px circle on desktop whenever the
+  // admin turned the icon off — a button with neither icon nor text.
+  &.hasIcon {
+    @media @tablet-up {
+      .Button--icon();
+    }
   }
 
-  // .Button--icon hides .Button-label, which is where the Bubble's sibling text
-  // would sit; the badge itself has to stay visible.
-  .Bubble {
-    display: block;
+  // The gap core puts between a header control's icon and its label, applied at
+  // the same place core applies it (`.HeaderDropdown .Dropdown-toggle`). Only
+  // visible in the drawer, where the label is shown — without it the icon and the
+  // word sit flush against each other, unlike every row around them.
+  .Button-label {
+    margin-left: 7px;
   }
 }
 
@@ -103,9 +106,34 @@
     width: auto;
     height: 100vh;
     max-height: 100vh;
+
+    // `dvh` second, as a progressive override — a browser that does not know the
+    // unit drops the declaration and keeps the `vh` above it.
+    //
+    // On a phone `100vh` is the viewport with the URL bar *retracted*, which is
+    // taller than what is on screen while the bar is showing. The overflow lands
+    // at the bottom of the panel, which is where the composer is: you open the
+    // chat and the box you came to type in is below the fold until you scroll the
+    // page itself. `dvh` tracks the bar as it moves.
+    height: 100dvh;
+    max-height: 100dvh;
+
     border-radius: 0;
     border-left: 0;
     border-right: 0;
+  }
+}
+
+// ── Phone toolbar title ──────────────────────────────────────────────────────
+// Core owns the appearance of `.App-titleControl` — width, centring, colour, the
+// ellipsis — but only inside `@media @phone`, because that bar exists only there.
+// Above the breakpoint the element is left unstyled, which in `.ChatPage` means a
+// stray flex item wedged between the toolbar and the sidebar. Hidden rather than
+// conditionally rendered: a JS check on viewport width does not survive a resize
+// without a redraw, and this is a media query's job.
+.ChatToolbarTitle {
+  @media @tablet-up {
+    display: none;
   }
 }
 
@@ -130,7 +158,12 @@
     // `--header-height-phone`, not `--header-height`: core pads `.App` with the
     // phone value at this width, so using the desktop one leaves the page a few
     // pixels short of the viewport.
+    //
+    // And `dvh` over the top of `vh`, for the reason given on `.ChatDrawer`: with
+    // `vh` the composer sits under the browser's URL bar until the page is
+    // scrolled. Both are kept so browsers without `dvh` still get a height.
     height: ~"calc(100vh - var(--header-height-phone, 46px))";
+    height: ~"calc(100dvh - var(--header-height-phone, 46px))";
 
     // On mobile the sidebar and the channel are separate views rather than
     // adjacent panes; the router decides which is mounted.

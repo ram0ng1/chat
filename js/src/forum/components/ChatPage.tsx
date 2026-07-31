@@ -15,6 +15,8 @@ import BookmarksList from "./BookmarksList";
 import FlaggedMessagesList from "./FlaggedMessagesList";
 import ChatSearch from "./ChatSearch";
 import { ChannelSkeleton } from "./Skeletons";
+import { mobileTitleControl } from "../utils/toolbar";
+import { chatTitle } from "../utils/branding";
 
 /**
  * Full-screen chat.
@@ -112,6 +114,8 @@ export default class ChatPage<
 
     return (
       <div className="ChatPage">
+        {mobileTitleControl(this.toolbarTitle(routeName))}
+
         {narrow && channel ? null : (
           <ErrorBoundary area="sidebar">
             <ChatSidebar
@@ -128,6 +132,38 @@ export default class ChatPage<
         </div>
       </div>
     );
+  }
+
+  /**
+   * What the phone toolbar calls this page.
+   *
+   * Keyed off the route rather than the open channel, for the reason given on
+   * `mobileTitleControl`. The strings are the sidebar's own, so a section is named
+   * the same in the bar as in the list it came from and no new translations are
+   * introduced for installs that have already been translated.
+   */
+  protected toolbarTitle(routeName: string | undefined): string {
+    const sections: Record<string, string> = {
+      "chat.threads": "my_threads",
+      "chat.bookmarks": "bookmarks",
+      "chat.search": "search",
+      "chat.flags": "flags",
+    };
+
+    const section = routeName ? sections[routeName] : undefined;
+
+    if (section) {
+      return app.translator.trans(
+        `ramon-chat.forum.sidebar.${section}`,
+        {},
+        true,
+      );
+    }
+
+    // The channel list and any channel open on top of it. `chatTitle()` rather
+    // than the translation directly, so an admin who renamed the feature sees the
+    // new name here too.
+    return chatTitle();
   }
 
   protected mainPane(
