@@ -79,6 +79,36 @@ class MessagePolicy extends AbstractPolicy
         return null;
     }
 
+    /**
+     * Removing the row itself, tombstone and all.
+     *
+     * Only on a message that is already deleted. Two steps, deliberately: a
+     * tombstone is reversible and this is not, so the destructive act is never one
+     * click away from a live conversation. It also matches what it is for —
+     * clearing tombstones that have piled up, not moderating in the first place.
+     *
+     * A thread's root is refused. `chat_threads.original_message_id` is a plain
+     * column with no foreign key, so purging the root would leave the thread
+     * pointing at a row that no longer exists; and destroying a branch of the
+     * conversation is not what "tidy up this tombstone" should mean.
+     *
+     * `ramon-chat.moderate` rather than a permission of its own: it already means
+     * "may act on other people's messages here", and this is the strongest form of
+     * an act that permission already grants.
+     */
+    public function forceDelete(User $actor, Message $message): ?bool
+    {
+        if (! $message->isDeleted()) {
+            return false;
+        }
+
+        if ($message->isThreadRoot()) {
+            return false;
+        }
+
+        return $actor->hasPermission('ramon-chat.moderate') ? true : false;
+    }
+
     public function restore(User $actor, Message $message): ?bool
     {
         if (! $message->isDeleted()) {

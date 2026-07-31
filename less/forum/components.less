@@ -148,6 +148,24 @@
   }
 }
 
+// What a broken subtree looks like. Deliberately plain: it is an apology, not a
+// feature, and it should read as "this part is unavailable" rather than draw the
+// eye away from the parts that still work.
+.ChatErrorBoundary {
+  .chat-flex-row(@chat-space-sm);
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  padding: @chat-space-xl @chat-space-lg;
+  font-size: @chat-font-label;
+  color: var(--avocado-muted-label);
+  text-align: center;
+
+  i {
+    color: var(--alert-error-bg, #d83e3e);
+  }
+}
+
 // ── Keyboard focus ───────────────────────────────────────────────────────────
 // The chat draws most of its controls as bare `<button>` elements — quick links,
 // channel rows, reaction chips, sticker tiles, reason pills, the bookmark body.
@@ -697,6 +715,25 @@
     color: var(--avocado-muted-label);
   }
 
+  // Only on the tombstone, and quiet: an irreversible action should be reachable,
+  // not inviting. It brightens on hover like the other row actions do.
+  &-purge {
+    flex-shrink: 0;
+    opacity: 0;
+    color: var(--avocado-muted-label);
+    transition: opacity var(--avocado-t-fast), color var(--avocado-t-fast);
+
+    &:hover,
+    &:focus-visible {
+      color: var(--alert-error-bg, #d83e3e);
+    }
+  }
+
+  &:hover &-purge,
+  &-purge:focus-visible {
+    opacity: 1;
+  }
+
   &-content {
     font-size: @chat-font-message;
     line-height: 1.45;
@@ -731,6 +768,9 @@
 
   // Deleted message tombstone.
   &-tombstone {
+    .chat-flex-row(@chat-space-sm);
+    justify-content: space-between;
+
     font-size: @chat-font-label;
     font-style: italic;
     color: var(--chat-tombstone-color);

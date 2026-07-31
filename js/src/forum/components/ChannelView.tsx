@@ -660,7 +660,7 @@ export default class ChannelView extends Component<ChannelViewAttrs> {
       state.channels = state.channels.filter((c) => c.id() !== channel.id());
       state.setActiveChannel(null);
 
-      if (m.route.get().includes("/chat/c/")) {
+      if ((m.route.get() ?? "").includes("/chat/c/")) {
         m.route.set(app.route("chat.index"));
       }
     } catch (e: any) {

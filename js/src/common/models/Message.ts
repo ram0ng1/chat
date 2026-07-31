@@ -80,6 +80,9 @@ export default class Message extends Model {
   canPin = Model.attribute<boolean>("canPin");
   canFlag = Model.attribute<boolean>("canFlag");
 
+  /** Whether the row itself may be removed, tombstone and all. */
+  canForceDelete = Model.attribute<boolean>("canForceDelete");
+
   // ── Relationships ──────────────────────────────────────────────────────────
   user = Model.hasOne<User | null>("user");
   editedBy = Model.hasOne<User | null>("editedBy");

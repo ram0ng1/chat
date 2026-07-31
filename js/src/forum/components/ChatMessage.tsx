@@ -158,7 +158,11 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
     if (!message.isModeratorDeleted()) {
       return (
         <div className="ChatMessage-tombstone">
-          {app.translator.trans("ramon-chat.forum.message.deleted")}
+          <span>
+            {app.translator.trans("ramon-chat.forum.message.deleted")}
+          </span>
+
+          {this.purgeButton(message)}
         </div>
       );
     }
@@ -172,13 +176,20 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
     // no idea who to ask.
     return (
       <div className="ChatMessage-tombstone">
-        {moderator
-          ? app.translator.trans("ramon-chat.forum.message.deleted_by_named", {
-              username: username(moderator),
-            })
-          : app.translator.trans(
-              "ramon-chat.forum.message.deleted_by_moderator",
-            )}
+        <span>
+          {moderator
+            ? app.translator.trans(
+                "ramon-chat.forum.message.deleted_by_named",
+                {
+                  username: username(moderator),
+                },
+              )
+            : app.translator.trans(
+                "ramon-chat.forum.message.deleted_by_moderator",
+              )}
+        </span>
+
+        {this.purgeButton(message)}
       </div>
     );
   }
@@ -214,6 +225,61 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
         onerror={(e: Event) => (e.target as HTMLElement)?.remove()}
       />
     );
+  }
+
+  /**
+   * Removes the row for good.
+   *
+   * Offered on the tombstone rather than in the hover bar: a channel that has
+   * collected tombstones is where this is wanted, and putting an irreversible
+   * action next to "reply" and "react" is asking for a mis-click.
+   *
+   * The confirmation names what is lost, because "are you sure?" does not.
+   */
+  protected purgeButton(message: Message): Mithril.Children {
+    if (!message.canForceDelete()) return null;
+
+    return (
+      <Button
+        className="Button Button--flat Button--icon ChatMessage-purge"
+        icon="fas fa-eraser"
+        title={app.translator.trans("ramon-chat.forum.message.purge", {}, true)}
+        onclick={() => this.purge(message)}
+      />
+    );
+  }
+
+  protected async purge(message: Message): Promise<void> {
+    if (
+      !confirm(
+        app.translator.trans(
+          "ramon-chat.forum.message.purge_confirm",
+          {},
+          true,
+        ),
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await app.request({
+        method: "POST",
+        url: `${app.forum.attribute("apiUrl")}/chat-messages/${message.id()}/purge`,
+      });
+
+      this.attrs.state.removeMessage(
+        Number(message.channelId()),
+        Number(message.id()),
+      );
+    } catch {
+      app.alerts.show(
+        { type: "error" },
+        app.translator.trans("ramon-chat.forum.message.purge_failed"),
+      );
+    } finally {
+      m.redraw();
+    }
   }
 
   protected content(message: Message): Mithril.Children {

@@ -6,6 +6,7 @@ import type Mithril from "mithril";
 import type Channel from "../../common/models/Channel";
 import chatState from "../state/chat";
 import ChatSidebar from "./ChatSidebar";
+import ErrorBoundary from "./ErrorBoundary";
 import ChannelView from "./ChannelView";
 import ThreadPanel from "./ThreadPanel";
 import PinnedPanel from "./PinnedPanel";
@@ -112,14 +113,18 @@ export default class ChatPage<
     return (
       <div className="ChatPage">
         {narrow && channel ? null : (
-          <ChatSidebar
-            state={chatState}
-            onSelect={(c: Channel) => this.select(c)}
-          />
+          <ErrorBoundary area="sidebar">
+            <ChatSidebar
+              state={chatState}
+              onSelect={(c: Channel) => this.select(c)}
+            />
+          </ErrorBoundary>
         )}
 
         <div className="ChatPage-main">
-          {this.mainPane(routeName, channel, narrow, threadId)}
+          <ErrorBoundary area="page">
+            {this.mainPane(routeName, channel, narrow, threadId)}
+          </ErrorBoundary>
         </div>
       </div>
     );
