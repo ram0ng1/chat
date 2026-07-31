@@ -480,6 +480,7 @@ ramon-chat:
       upload: Upload files in chat
       react: React to messages
       create_thread: Start threads from a reply
+      bypass_slow_mode: Skip slow mode
       flag_message: Report messages
       pin_message: Pin and unpin messages
       mention_channel_wide: Use @here and @all

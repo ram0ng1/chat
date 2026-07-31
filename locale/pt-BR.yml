@@ -456,6 +456,7 @@ ramon-chat:
       upload: Enviar arquivos no chat
       react: Reagir a mensagens
       create_thread: Criar tópicos a partir de uma resposta
+      bypass_slow_mode: Ignorar o modo lento
       flag_message: Denunciar mensagens
       pin_message: Fixar e desfixar mensagens
       mention_channel_wide: Usar @here e @all

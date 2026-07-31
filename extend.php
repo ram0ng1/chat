@@ -298,6 +298,10 @@ return [
         // Deleting a reported message is what closes the reports about it. Without
         // this the queue keeps offering work that has already been done.
         ->listen(Event\MessageWasDeleted::class, Listener\ResolveFlagsOnModeration::class)
+
+        // And takes its attachments off the disk. The chat disk is public, so a
+        // deleted image stayed readable by URL to anyone who had seen it.
+        ->listen(Event\MessageWasDeleted::class, Listener\PurgeUploadsOnDeletion::class)
         ->listen(Event\MessageWasMoved::class, Listener\RecalculateUnreadCounts::class)
         // Narrates membership changes into the stream, so a departure is visible to
         // whoever is left rather than silent.

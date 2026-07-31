@@ -107,14 +107,17 @@ class SlowMode
     /**
      * Who slow mode does not apply to.
      *
-     * Moderators, on the same reasoning Discord uses for Manage Messages: the
-     * people asked to calm a conversation down cannot do it while being throttled
-     * by the measure they just enabled. Administrators hold the permission
-     * already, so they are covered by the same check.
+     * Its own permission rather than `ramon-chat.moderate`, which conflated two
+     * questions: who may act on other people's messages, and who the channel's
+     * pace applies to. A bot account or a support agent may need to answer
+     * without waiting while holding no moderation power at all, and a forum may
+     * equally want its moderators keeping the same rhythm as everyone else.
+     *
+     * Seeded to MODERATOR, so the forums already running slow mode see no change.
      */
     protected function isExempt(Channel $channel, User $actor): bool
     {
-        return $actor->hasPermission('ramon-chat.moderate');
+        return $actor->hasPermission('ramon-chat.bypassSlowMode');
     }
 
     protected function key(Channel $channel, User $actor): string
