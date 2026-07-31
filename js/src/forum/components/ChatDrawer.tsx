@@ -8,6 +8,7 @@ import type Mithril from "mithril";
 import type Channel from "../../common/models/Channel";
 import chatState from "../state/chat";
 import ChatSidebar from "./ChatSidebar";
+import ErrorBoundary from "./ErrorBoundary";
 import ChannelView from "./ChannelView";
 import PinnedPanel from "./PinnedPanel";
 import ThreadPanel from "./ThreadPanel";
@@ -136,7 +137,9 @@ export default class ChatDrawer extends Component<ComponentAttrs> {
         </div>
 
         {chatState.drawerCollapsed ? null : (
-          <div className="ChatDrawer-body">{this.body(channel)}</div>
+          <div className="ChatDrawer-body">
+            <ErrorBoundary area="drawer">{this.body(channel)}</ErrorBoundary>
+          </div>
         )}
       </div>
     );

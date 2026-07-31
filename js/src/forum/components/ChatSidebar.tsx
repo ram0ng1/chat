@@ -138,9 +138,16 @@ export default class ChatSidebar extends Component<ChatSidebarAttrs> {
     key: string,
     badge?: number,
   ): Mithril.Children {
-    // `m.route.get()` rather than comparing to a stored value: the route can also
+    // Read from the router rather than from a stored value: the route can also
     // change from browser back/forward, which no click handler observes.
-    const active = m.route.get().split("?")[0] === app.route(routeName);
+    //
+    // `?? ""` because `m.route.get()` is typed as a string and is not one until
+    // the router has resolved a route. The sidebar also draws inside the drawer,
+    // which mounts on its own root over whatever page is open, so it can render
+    // before that — and an exception here takes down the entire Mithril tree,
+    // not just this button.
+    const current = m.route.get() ?? "";
+    const active = current.split("?")[0] === app.route(routeName);
 
     return (
       <button
