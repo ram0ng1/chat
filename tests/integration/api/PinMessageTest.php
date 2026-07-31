@@ -27,6 +27,9 @@ class PinMessageTest extends TestCase
 {
     use RetrievesAuthorizedUsers;
 
+    /** BCrypt for "too-obscure", the same hash `normalUser()` carries. */
+    private const PASSWORD_HASH = '$2y$10$LO59tiT7uggl6Oe23o/O6.utnF6ipngYjvMvaxo1TciKqBttDNKim';
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -36,7 +39,10 @@ class PinMessageTest extends TestCase
         $this->prepareDatabase([
             'users' => [
                 $this->normalUser(),
-                ['id' => 3, 'username' => 'member', 'email' => 'member@machine.local', 'is_email_confirmed' => 1],
+                // `password` is NOT NULL on `users`; omitting it aborts the whole
+                // fixture before a single assertion runs. `normalUser()` supplies
+                // its own, which is why only the hand-written rows need this.
+                ['id' => 3, 'username' => 'member', 'password' => self::PASSWORD_HASH, 'email' => 'member@machine.local', 'is_email_confirmed' => 1],
             ],
             'group_permission' => [
                 ['group_id' => Group::MEMBER_ID, 'permission' => 'ramon-chat.use'],
@@ -65,7 +71,10 @@ class PinMessageTest extends TestCase
                     'user_id'    => 2,
                     'number'     => 1,
                     'type'       => 'text',
-                    'content'    => 'pin me',
+                    // Stored content is s9e/TextFormatter XML, not raw text — every
+                    // write path goes through `setContentAttribute`. A bare string
+                    // here renders as a 500 the moment the message is serialized.
+                    'content'    => '<t>pin me</t>',
                     'created_at' => Carbon::now()->toDateTimeString(),
                     'updated_at' => Carbon::now()->toDateTimeString(),
                 ],
@@ -107,7 +116,11 @@ class PinMessageTest extends TestCase
     {
         $response = $this->send($this->request('POST', '/api/chat-messages/1/pin'));
 
-        $this->assertEquals(401, $response->getStatusCode());
+        // 400, not 401: CheckCsrfToken sits ahead of authentication in the pipeline,
+        // so a token-less guest POST never reaches the policy. What matters is that
+        // it is refused and nothing changed — the status code is Flarum's to choose.
+        $this->assertEquals(400, $response->getStatusCode());
+        $this->assertNull(Message::query()->find(1)->pinned_at, 'a refused request changes nothing');
     }
 
     public function test_pinned_messages_are_listable(): void

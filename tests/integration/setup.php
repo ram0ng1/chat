@@ -13,12 +13,14 @@
  * Run once before the suite:
  *
  *     composer install
- *     vendor/bin/flarum-test-server setup
+ *     php tests/integration/setup.php
  *     vendor/bin/phpunit --testsuite integration
  *
  * The database it points at is dropped and rebuilt on every run, so it must not be
- * the forum's own. flarum/testing reads its connection details from
- * tests/integration/tmp/config.php, which `setup` writes interactively.
+ * the forum's own. Connection details come from the DB_DRIVER / DB_HOST / DB_PORT /
+ * DB_DATABASE / DB_USERNAME / DB_PASSWORD / DB_PREFIX environment variables and
+ * default to SQLite, so an unattended run needs no arguments. The resulting config
+ * is written under vendor/flarum/testing/src/integration/tmp/.
  */
 
 use Flarum\Testing\integration\Setup\SetupScript;

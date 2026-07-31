@@ -28,6 +28,9 @@ class CreateThreadPermissionTest extends TestCase
 {
     use RetrievesAuthorizedUsers;
 
+    /** BCrypt for "too-obscure", the same hash `normalUser()` carries. */
+    private const PASSWORD_HASH = '$2y$10$LO59tiT7uggl6Oe23o/O6.utnF6ipngYjvMvaxo1TciKqBttDNKim';
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -37,7 +40,10 @@ class CreateThreadPermissionTest extends TestCase
         $this->prepareDatabase([
             'users' => [
                 $this->normalUser(),
-                ['id' => 3, 'username' => 'brancher', 'email' => 'brancher@machine.local', 'is_email_confirmed' => 1],
+                // `password` is NOT NULL on `users`; omitting it aborts the whole
+                // fixture before a single assertion runs. `normalUser()` supplies
+                // its own, which is why only the hand-written rows need this.
+                ['id' => 3, 'username' => 'brancher', 'password' => self::PASSWORD_HASH, 'email' => 'brancher@machine.local', 'is_email_confirmed' => 1],
             ],
             'group_permission' => [
                 ['group_id' => Group::MEMBER_ID, 'permission' => 'ramon-chat.use'],
@@ -74,12 +80,23 @@ class CreateThreadPermissionTest extends TestCase
                     'user_id'    => 2,
                     'number'     => 1,
                     'type'       => 'text',
-                    'content'    => 'branch off me',
+                    // Stored content is s9e/TextFormatter XML, not raw text — every
+                    // write path goes through `setContentAttribute`. A bare string
+                    // here renders as a 500 the moment the message is serialized.
+                    'content'    => '<t>branch off me</t>',
                     'created_at' => Carbon::now()->toDateTimeString(),
                     'updated_at' => Carbon::now()->toDateTimeString(),
                 ],
             ],
         ]);
+
+        // `2026_07_30_000003` seeds createThread to MEMBER, and the extension's
+        // migrations run after prepareDatabase() — so without this revoke, user 2
+        // holds the permission and the "refused" case silently tests nothing.
+        $this->database()->table('group_permission')
+            ->where('group_id', Group::MEMBER_ID)
+            ->where('permission', 'ramon-chat.createThread')
+            ->delete();
 
         $this->database()->table('group_permission')->insert([
             'group_id'   => 100,
