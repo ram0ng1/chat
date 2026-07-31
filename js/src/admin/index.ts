@@ -268,6 +268,21 @@ app.initializers.add("ramon-chat", () => {
       "reply",
       92,
     )
+    // Not "reply": this one is about the channel's pace, not about what someone
+    // may write. Grouped with moderation because that is who tends to hold it,
+    // though the whole point of it being separate is that it need not be.
+    .registerPermission(
+      {
+        icon: "fas fa-gauge-high",
+        label: app.translator.trans(
+          "ramon-chat.admin.permissions.bypass_slow_mode",
+        ),
+        permission: "ramon-chat.bypassSlowMode",
+      },
+      "moderate",
+      94,
+    )
+
     // Filing a report, not reading the queue. Under "reply" because it is
     // something an ordinary member does; reading what they filed is `moderate`.
     .registerPermission(
