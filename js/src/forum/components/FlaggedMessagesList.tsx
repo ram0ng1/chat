@@ -12,7 +12,7 @@ import type Message from "../../common/models/Message";
 import type MessageFlag from "../../common/models/MessageFlag";
 import type ChatState from "../state/ChatState";
 import { MessageStreamSkeleton } from "./Skeletons";
-import { messagePreview } from "../utils/preview";
+import { messagePreview } from "../../common/utils/preview";
 import { authorAvatar, authorName } from "../utils/bot";
 
 export interface FlaggedMessagesListAttrs extends ComponentAttrs {
