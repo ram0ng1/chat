@@ -8,18 +8,20 @@ import type Mithril from "mithril";
 import ChatDrawer from "./ChatDrawer";
 import chatState from "../state/chat";
 import { chatTitle, chatIcon } from "../utils/branding";
+import { shouldUseChatDrawer } from "../utils/surface";
 
 /**
  * The chat entry point in the header — Discourse's speech bubble next to search.
  *
- * Renders a bare `<button>` carrying core's own header-button classes rather than
- * wrapping a `Button` in a positioned `<div>`. The header lays its controls out
- * with flex and targets `.Button` directly; an extra wrapper element gets stretched
- * and the icon ends up squashed into an oval.
+ * The markup is a copy of core's `HeaderDropdown.getButtonContent()`, which is what
+ * `flarum/messages` renders through `DialogsDropdown`: icon, then bubble, then
+ * label, on a `.Button.Button--flat`. Matching it exactly is what makes the control
+ * behave in both places it is drawn — as a round icon in the desktop header, and as
+ * a named row inside the drawer on a phone — without a parallel set of rules.
  *
- * The unread badge uses core's `.Bubble` for the same reason: it is the markup
- * NotificationsDropdown emits, so it inherits the right size, offset and contrast
- * instead of needing a parallel set of rules to keep in sync.
+ * It is a plain `<button>` rather than a `HeaderDropdown` subclass because there is
+ * no menu: the chat opens its own drawer or its page. Subclassing would drag in
+ * `Dropdown-menu` markup and a toggle state that nothing here uses.
  */
 export default class ChatNavButton<
   CustomAttrs extends ComponentAttrs = ComponentAttrs,
@@ -29,6 +31,17 @@ export default class ChatNavButton<
     const unread = this.unreadChannels();
     const icon = chatIcon();
     const label = chatTitle();
+
+    // A count, the way core's notification bell shows one — not a dot. A dot says
+    // "something happened" and leaves you to open the chat to find out how much,
+    // which is the one question the header is there to answer.
+    //
+    // Mentions take precedence over ambient channel traffic, and the `new` class
+    // below is what distinguishes them: core repaints `.HeaderDropdownBubble`
+    // with the header colour under `.new`. That is the same signal the bell uses
+    // for an unread notification, so the two read alike.
+    const count = mentions > 0 ? mentions : unread;
+    const digits = count > 99 ? "99+" : String(count);
 
     return (
       <button
@@ -44,33 +57,32 @@ export default class ChatNavButton<
       >
         {icon ? <Icon name={icon} className="Button-icon" /> : null}
 
-        {/* A count, the way core's notification bell shows one — not a dot.
-            A dot says "something happened" and leaves you to open the chat to find
-            out how much, which is the one question the header is there to answer.
-
-            Mentions still take precedence and keep their own colour: they are
-            addressed to you specifically, and collapsing them into the same number
-            as ambient channel traffic loses that. */}
-        {mentions > 0 ? (
+        {/* `HeaderDropdownBubble` alongside `Bubble`, exactly as core emits it.
+            The first supplies the colours and — critically — the phone offset;
+            the second the size, radius and absolute placement. Positioning it
+            ourselves was the bug behind the grey slab in the drawer: core anchors
+            the bubble with `left: 18px`, our override added `right: 2px` without
+            clearing `left`, and an absolutely positioned box given both stretches
+            to fill the distance between them. On a 36px header button that is
+            invisible; on a full-width drawer row it is the whole row. */}
+        {count > 0 ? (
           <span
-            className="Bubble Bubble--highlighted ChatNavButton-bubble"
-            data-digits={String(Math.min(mentions, 99)).length}
+            className="Bubble HeaderDropdownBubble"
+            data-digits={digits.length}
             aria-hidden="true"
           >
-            {mentions > 99 ? "99+" : mentions}
-          </span>
-        ) : unread > 0 ? (
-          <span
-            className="Bubble ChatNavButton-bubble"
-            data-digits={String(Math.min(unread, 99)).length}
-            aria-hidden="true"
-          >
-            {unread > 99 ? "99+" : unread}
+            {digits}
           </span>
         ) : null}
 
+        {/* Always emitted, never blanked when there is an icon — core's
+            getButtonContent() does the same. On a phone the header moves into the
+            drawer and its controls are laid out as named rows; a button that
+            renders no text there is an anonymous icon sitting between "Flagged
+            Posts" and "Messages". Hiding the label is the stylesheet's job, and it
+            only does so from @tablet-up. */}
         <span className="Button-label">
-          <span className="Button-labelText">{icon ? "" : label}</span>
+          <span className="Button-labelText">{label}</span>
         </span>
       </button>
     );
@@ -79,15 +91,12 @@ export default class ChatNavButton<
   /**
    * Opens the drawer or the full-screen page, following the user's preference.
    *
-   * On narrow viewports the drawer goes full-bleed anyway, so the page is used
-   * instead — a "drawer" that covers the whole screen but keeps drawer chrome is
-   * worse than the page it is imitating.
+   * Nothing closes Flarum's drawer on the way out: `ChatPage` extends core's
+   * `Page`, whose `oninit` calls `app.drawer.hide()`. Doing it again here would
+   * start the hide animation twice.
    */
   open(): void {
-    const preferDrawer =
-      app.session.user?.preferences()?.["ramon-chat.openInDrawer"] !== false;
-
-    if (preferDrawer && window.innerWidth > 767) {
+    if (shouldUseChatDrawer()) {
       ChatDrawer.open();
 
       return;
