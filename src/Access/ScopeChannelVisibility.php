@@ -9,6 +9,7 @@
 
 namespace Ramon\Chat\Access;
 
+use Flarum\Extension\ExtensionManager;
 use Flarum\Tags\Tag;
 use Flarum\User\User;
 use Illuminate\Database\Eloquent\Builder;
@@ -23,6 +24,10 @@ use Illuminate\Database\Eloquent\Builder;
  */
 class ScopeChannelVisibility
 {
+    public function __construct(protected ExtensionManager $extensions)
+    {
+    }
+
     public function __invoke(User $actor, Builder $query): void
     {
         // The global gate. Without it there is nothing to scope.
@@ -38,7 +43,12 @@ class ScopeChannelVisibility
 
         $query->whereNull('chat_channels.deleted_at');
 
-        $tagsAvailable = class_exists(Tag::class);
+        // Not `class_exists(Tag::class)`: the class is autoloaded whenever the
+        // package sits in vendor/, which says nothing about whether its migrations
+        // ran. A forum that pulled flarum/tags in as a dependency and never enabled
+        // it has the class and no `tags` table, and the subquery below then fails
+        // the whole channel listing with a 500.
+        $tagsAvailable = $this->extensions->isEnabled('flarum-tags');
 
         $query->where(function (Builder $query) use ($actor, $tagsAvailable) {
             // Direct channels: participants only, and only while they have not
