@@ -9,6 +9,9 @@ ramon-chat:
     message_too_long: "Messages cannot be longer than {max} characters."
     rate_limited: You are sending messages too quickly. Please slow down.
     invalid_reaction: That is not a valid emoji reaction.
+    slow_mode_wait: "Slow mode is on in this channel. You can post again in {seconds}s."
+    flag_reason_invalid: That is not a reason a message can be reported for.
+    flag_detail_required: Please say what is wrong with this message.
     invalid_reply_target: You cannot reply to a message from another channel.
     invalid_thread_target: That thread does not belong to this channel.
     invalid_channel_status: A channel can only be set to open or closed.
@@ -29,6 +32,7 @@ ramon-chat:
     direct_needs_participant: Choose at least one person to message.
     direct_too_many: "A group chat can have at most {max} participants."
     direct_unknown_user: One of those users does not exist.
+    stickers_not_allowed: You are not allowed to send stickers.
     members_empty: Choose at least one person to add.
     members_too_many: "You can add at most {max} people at once."
     cannot_remove_self: Use "Leave channel" to remove yourself.
@@ -106,11 +110,11 @@ ramon-chat:
       my_threads: My Threads
       bookmarks: Bookmarks
       search: Search
+      flags: Reported
       channels: Channels
       direct_messages: Direct Messages
       browse_channels: Browse channels
       new_channel: New channel
-      new_direct_message: New message
       no_channels: You have not joined any channels yet.
 
     channel:
@@ -157,7 +161,8 @@ ramon-chat:
       edit: Edit
       delete: Delete
       restore: Restore
-      flag: Flag
+      flag: Report message
+      flagged: You reported this message
       move: Move to channel
       quote_in_discussion: Quote in discussion
       select: Select
@@ -174,11 +179,55 @@ ramon-chat:
 
     # Messages the actor saved. The bookmark button has always existed; this is
     # where they are read back.
+    duration:
+      seconds: "{count}s"
+      minutes: "{count}m"
+      hours: "{count}h"
+
+    flag:
+      title: Report message
+      reason: Why are you reporting this?
+      reasons:
+        spam: Spam
+        inappropriate: Inappropriate
+        harassment: Harassment
+        off_topic: Off topic
+        other: Something else
+      detail: Anything else the moderators should know (optional)
+      detail_required: Tell the moderators what is wrong
+      detail_placeholder: Only the moderators will see this.
+      submit: Send report
+      sent: Reported. A moderator will take a look.
+      failed: Could not send the report.
+
+    flags:
+      title: Reported messages
+      show_resolved: Include resolved
+      empty: Nothing has been reported.
+      empty_all: No reports yet.
+      forbidden: You do not have permission to see reported messages.
+      go_to: Go to message
+      dismiss: Dismiss
+      delete_message: Delete message
+      message_gone: The reported message no longer exists.
+      message_deleted: This message has been deleted.
+      resolved_by: "Resolved by {moderator}"
+      flarum_item: "{username} was reported in {em}{channel}{/em} for {reason}"
+      load_failed: Could not load the reports.
+      action_failed: Could not complete that action.
+
     bookmarks:
       empty: You have not saved any messages yet.
       no_text: (attachment only)
       remove: Remove bookmark
       remove_failed: The bookmark could not be removed.
+
+    # The full-screen image viewer, opened by clicking an image in the stream.
+    lightbox:
+      close: Close
+      previous: Previous image
+      next: Next image
+      open_original: Open the original
 
     thread:
       title: Thread
@@ -199,6 +248,9 @@ ramon-chat:
       placeholder_closed: This channel is closed
       send: Send
       attach: Attach a file
+      sticker: Insert a sticker
+      sticker_search: Search stickers
+      sticker_none: No stickers found.
       emoji: Emoji
       insert_date: Insert date
       cancel_edit: Cancel
@@ -208,6 +260,7 @@ ramon-chat:
       uploading: Uploading…
       upload_failed: Upload failed.
       too_large: That file is too large.
+      slow_mode_wait: "Slow mode is on. You can write again in {duration}."
       send_failed: Your message could not be sent.
 
     typing:
@@ -221,6 +274,9 @@ ramon-chat:
       jump_to_latest: Jump to latest
 
     new_channel:
+      slow_mode: Slow mode
+      slow_mode_off: "Off"
+      slow_mode_help: How long each person waits between messages in this channel. Moderators are exempt.
       name: Channel name
       name_placeholder: e.g. general
       description: Description
@@ -334,6 +390,7 @@ ramon-chat:
       failed: The edit history could not be loaded.
 
     notifications:
+      message_flagged: "{username} reported a message in {channel}"
       channel_invite: "{username} added you to {channel}"
       someone: Someone
 
@@ -350,6 +407,7 @@ ramon-chat:
       open_in_drawer: Open chat in a drawer instead of full screen
       sound: Notification sound
       sound_none: None
+      notify_message_flagged: Someone reports a chat message
       notify_channel_invite: Someone adds me to a chat channel
 
   ##
@@ -378,8 +436,6 @@ ramon-chat:
       max_upload_size: Maximum upload size (bytes)
 
       behaviour_title: Behaviour
-      default_reactions: Default emoji reactions
-      default_reactions_help: Comma-separated emoji shortcodes, without colons.
       title_label: Chat name
       title_help: Shown on the header button and the drawer. Leave blank to use "Chat".
       icon_label: Chat icon
@@ -419,9 +475,12 @@ ramon-chat:
       create_channel: Create channels
       edit_channel: Edit channels
       moderate: Moderate chat
+      send_stickers: Send stickers in chat
       upload: Upload files in chat
       react: React to messages
       create_thread: Start threads from a reply
+      bypass_slow_mode: Skip slow mode
+      flag_message: Report messages
       pin_message: Pin and unpin messages
       mention_channel_wide: Use @here and @all
 

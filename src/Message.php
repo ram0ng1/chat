@@ -322,6 +322,11 @@ class Message extends AbstractModel implements Formattable
         return $this->hasMany(Bookmark::class, 'message_id');
     }
 
+    public function flags(): HasMany
+    {
+        return $this->hasMany(MessageFlag::class, 'message_id');
+    }
+
     /**
      * Records the pre-edit content so the edit history stays reconstructable,
      * then applies the new content.

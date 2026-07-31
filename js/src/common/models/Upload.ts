@@ -1,24 +1,24 @@
-import Model from 'flarum/common/Model';
-import type User from 'flarum/common/models/User';
+import Model from "flarum/common/Model";
+import type User from "flarum/common/models/User";
 
 export default class Upload extends Model {
-  fileName = Model.attribute<string>('fileName');
-  mimeType = Model.attribute<string | null>('mimeType');
-  size = Model.attribute<number>('size');
+  fileName = Model.attribute<string>("fileName");
+  mimeType = Model.attribute<string | null>("mimeType");
+  size = Model.attribute<number>("size");
 
   /**
    * Present for images so the client can reserve layout space and avoid a
    * reflow as attachments load.
    */
-  width = Model.attribute<number | null>('width');
-  height = Model.attribute<number | null>('height');
+  width = Model.attribute<number | null>("width");
+  height = Model.attribute<number | null>("height");
 
-  messageId = Model.attribute<number | null>('messageId');
-  url = Model.attribute<string>('url');
-  isImage = Model.attribute<boolean>('isImage');
-  createdAt = Model.attribute('createdAt', Model.transformDate);
+  messageId = Model.attribute<number | null>("messageId");
+  url = Model.attribute<string>("url");
+  isImage = Model.attribute<boolean>("isImage");
+  createdAt = Model.attribute("createdAt", Model.transformDate);
 
-  user = Model.hasOne<User | null>('user');
+  user = Model.hasOne<User | null>("user");
 
   /**
    * A pending upload belongs to a composer session that has not sent yet.
@@ -29,7 +29,7 @@ export default class Upload extends Model {
 
   humanSize(): string {
     const bytes = this.size() ?? 0;
-    const units = ['B', 'KB', 'MB', 'GB'];
+    const units = ["B", "KB", "MB", "GB"];
     let value = bytes;
     let unit = 0;
 
@@ -38,10 +38,10 @@ export default class Upload extends Model {
       unit++;
     }
 
-    return (unit === 0 ? value : value.toFixed(1)) + ' ' + units[unit];
+    return (unit === 0 ? value : value.toFixed(1)) + " " + units[unit];
   }
 
   apiEndpoint(): string {
-    return '/chat-uploads' + (this.exists ? '/' + this.id() : '');
+    return "/chat-uploads" + (this.exists ? "/" + this.id() : "");
   }
 }

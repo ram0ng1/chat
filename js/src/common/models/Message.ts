@@ -1,9 +1,9 @@
-import app from 'flarum/forum/app';
-import Model from 'flarum/common/Model';
-import type User from 'flarum/common/models/User';
-import type Channel from './Channel';
-import type Thread from './Thread';
-import type Upload from './Upload';
+import app from "flarum/forum/app";
+import Model from "flarum/common/Model";
+import type User from "flarum/common/models/User";
+import type Channel from "./Channel";
+import type Thread from "./Thread";
+import type Upload from "./Upload";
 
 /**
  * A single reaction bucket, as sent by MessageResource::reactionSummary().
@@ -21,57 +21,78 @@ export default class Message extends Model {
   /**
    * Author-facing source text. Null on a deleted message the actor may not see.
    */
-  content = Model.attribute<string | null>('content');
-  contentHtml = Model.attribute<string | null>('contentHtml');
+  content = Model.attribute<string | null>("content");
+  contentHtml = Model.attribute<string | null>("contentHtml");
 
-  type = Model.attribute<string>('type');
-  systemKey = Model.attribute<string | null>('systemKey');
-  systemData = Model.attribute<Record<string, unknown> | null>('systemData');
+  type = Model.attribute<string>("type");
+  systemKey = Model.attribute<string | null>("systemKey");
+  systemData = Model.attribute<Record<string, unknown> | null>("systemData");
 
   // ── Position ───────────────────────────────────────────────────────────────
-  number = Model.attribute<number | null>('number');
-  channelId = Model.attribute<number>('channelId');
-  threadId = Model.attribute<number | null>('threadId');
-  replyToId = Model.attribute<number | null>('replyToId');
+  number = Model.attribute<number | null>("number");
+  channelId = Model.attribute<number>("channelId");
+  threadId = Model.attribute<number | null>("threadId");
+  replyToId = Model.attribute<number | null>("replyToId");
 
-  createdAt = Model.attribute('createdAt', Model.transformDate);
-  editedAt = Model.attribute('editedAt', Model.transformDate);
-  deletedAt = Model.attribute('deletedAt', Model.transformDate);
+  createdAt = Model.attribute("createdAt", Model.transformDate);
+  editedAt = Model.attribute("editedAt", Model.transformDate);
+  deletedAt = Model.attribute("deletedAt", Model.transformDate);
 
-  isDeleted = Model.attribute<boolean>('isDeleted');
-  isEdited = Model.attribute<boolean>('isEdited');
+  isDeleted = Model.attribute<boolean>("isDeleted");
 
-  isPinned = Model.attribute<boolean>('isPinned');
-  pinnedAt = Model.attribute('pinnedAt', Model.transformDate);
+  /**
+   * Whether someone other than the author removed it.
+   *
+   * Distinct from `isRedacted()`, which only says the text was withheld from
+   * this reader — true for a self-deleted message too.
+   */
+  isModeratorDeleted = Model.attribute<boolean>("isModeratorDeleted");
+  isEdited = Model.attribute<boolean>("isEdited");
+
+  isPinned = Model.attribute<boolean>("isPinned");
+  pinnedAt = Model.attribute("pinnedAt", Model.transformDate);
 
   // ── Engagement ─────────────────────────────────────────────────────────────
-  reactionSummary = Model.attribute<ReactionSummary>('reactionSummary');
-  mentionedUsers = Model.attribute<number[]>('mentionedUsers');
-  mentionsChannelWide = Model.attribute<boolean>('mentionsChannelWide');
-  isBookmarked = Model.attribute<boolean>('isBookmarked');
+  reactionSummary = Model.attribute<ReactionSummary>("reactionSummary");
+  mentionedUsers = Model.attribute<number[]>("mentionedUsers");
+  mentionsChannelWide = Model.attribute<boolean>("mentionsChannelWide");
+  isBookmarked = Model.attribute<boolean>("isBookmarked");
+
+  /** Whether *this* reader has an open report against it. */
+  isFlagged = Model.attribute<boolean>("isFlagged");
+
+  /**
+   * Open reports on this message.
+   *
+   * Withheld from anyone without `ramon-chat.moderate`, so it is undefined rather
+   * than zero for ordinary readers — a visible count would tell everyone which
+   * messages are being reported, and tell an author they had been.
+   */
+  flagsCount = Model.attribute<number | undefined>("flagsCount");
 
   // ── Capability flags ───────────────────────────────────────────────────────
-  canEdit = Model.attribute<boolean>('canEdit');
-  canDelete = Model.attribute<boolean>('canDelete');
-  canReact = Model.attribute<boolean>('canReact');
-  canReply = Model.attribute<boolean>('canReply');
-  canCreateThread = Model.attribute<boolean>('canCreateThread');
-  canMove = Model.attribute<boolean>('canMove');
-  canPin = Model.attribute<boolean>('canPin');
+  canEdit = Model.attribute<boolean>("canEdit");
+  canDelete = Model.attribute<boolean>("canDelete");
+  canReact = Model.attribute<boolean>("canReact");
+  canReply = Model.attribute<boolean>("canReply");
+  canCreateThread = Model.attribute<boolean>("canCreateThread");
+  canMove = Model.attribute<boolean>("canMove");
+  canPin = Model.attribute<boolean>("canPin");
+  canFlag = Model.attribute<boolean>("canFlag");
 
   // ── Relationships ──────────────────────────────────────────────────────────
-  user = Model.hasOne<User | null>('user');
-  editedBy = Model.hasOne<User | null>('editedBy');
-  deletedBy = Model.hasOne<User | null>('deletedBy');
-  replyTo = Model.hasOne<Message | null>('replyTo');
-  thread = Model.hasOne<Thread | null>('thread');
-  channel = Model.hasOne<Channel | null>('channel');
-  uploads = Model.hasMany<Upload>('uploads');
+  user = Model.hasOne<User | null>("user");
+  editedBy = Model.hasOne<User | null>("editedBy");
+  deletedBy = Model.hasOne<User | null>("deletedBy");
+  replyTo = Model.hasOne<Message | null>("replyTo");
+  thread = Model.hasOne<Thread | null>("thread");
+  channel = Model.hasOne<Channel | null>("channel");
+  uploads = Model.hasMany<Upload>("uploads");
 
   // ── Derived helpers ────────────────────────────────────────────────────────
 
   isSystem(): boolean {
-    return this.type() === 'system';
+    return this.type() === "system";
   }
 
   /**
@@ -82,7 +103,7 @@ export default class Message extends Model {
    * and avatar come from the admin's settings.
    */
   isBot(): boolean {
-    return this.type() === 'bot';
+    return this.type() === "bot";
   }
 
   /**
@@ -112,7 +133,10 @@ export default class Message extends Model {
    * Whether this message should render collapsed under the previous one: same
    * author, close in time, and neither is a system message.
    */
-  isGroupedWith(previous: Message | null | undefined, withinSeconds = 300): boolean {
+  isGroupedWith(
+    previous: Message | null | undefined,
+    withinSeconds = 300,
+  ): boolean {
     if (!previous) return false;
     if (this.isSystem() || previous.isSystem()) return false;
     if (this.threadId() !== previous.threadId()) return false;
@@ -144,10 +168,13 @@ export default class Message extends Model {
   totalReactions(): number {
     const summary: ReactionSummary = this.reactionSummary() ?? {};
 
-    return Object.values(summary).reduce<number>((sum, entry) => sum + entry.count, 0);
+    return Object.values(summary).reduce<number>(
+      (sum, entry) => sum + entry.count,
+      0,
+    );
   }
 
   apiEndpoint(): string {
-    return '/chat-messages' + (this.exists ? '/' + this.id() : '');
+    return "/chat-messages" + (this.exists ? "/" + this.id() : "");
   }
 }

@@ -10,6 +10,7 @@
 namespace Ramon\Chat\Service;
 
 use Carbon\Carbon;
+use Flarum\Extension\ExtensionManager;
 use Flarum\Foundation\ValidationException;
 use Flarum\Locale\Translator;
 use Flarum\Settings\SettingsRepositoryInterface;
@@ -36,11 +37,13 @@ class MessageDispatcher
 {
     public function __construct(
         protected ConnectionInterface $db,
+        protected ExtensionManager $extensions,
         protected Events $events,
         protected SettingsRepositoryInterface $settings,
         protected Translator $translator,
         protected MentionResolver $mentions,
         protected RateLimiter $rateLimiter,
+        protected SlowMode $slowMode,
         protected UnreadTracker $unread
     ) {
     }
@@ -62,7 +65,14 @@ class MessageDispatcher
         $content = trim($content);
 
         $this->assertValidContent($content, $uploadIds);
+        $this->assertMaySendStickers($actor, $content);
         $this->rateLimiter->assertWithinLimit($actor);
+
+        // After the content checks, before anything is written. A message that
+        // fails validation must not cost the sender their turn — being told
+        // "too short" and then "wait 30 seconds" for the same keystroke is the
+        // kind of thing that makes people give up on a channel.
+        $this->slowMode->assertMayPost($channel, $actor);
 
         // A reply that starts a thread must anchor to a message in this channel;
         // otherwise the thread would span channels and break the (channel,
@@ -146,6 +156,10 @@ class MessageDispatcher
             $this->events->dispatch(new ThreadWasCreated($thread, $actor));
         }
 
+        // Started only once the message is actually in. Marking the cooldown
+        // before the transaction would penalise a send that then failed.
+        $this->slowMode->noteSent($channel, $actor);
+
         $this->events->dispatch(new MessageWasSent($message, $actor));
 
         return $message;
@@ -227,6 +241,60 @@ class MessageDispatcher
             'notification_level' => ThreadUser::LEVEL_ALWAYS,
             'created_at'         => $now,
             'updated_at'         => $now,
+        ]);
+    }
+
+    /**
+     * Refuses a message carrying a sticker shortcode from someone not allowed to
+     * send one.
+     *
+     * The composer hides its button for these people, but a hidden button is a
+     * courtesy — the shortcode is plain text and anyone can type it, or post it
+     * straight to the API. Without this the permission would decorate the
+     * interface and grant nothing.
+     *
+     * Only shortcodes that match a real sticker count. Someone writing `:-)` or
+     * quoting `:not_a_sticker:` is writing text, and refusing that would make the
+     * permission feel arbitrary.
+     *
+     * Skipped entirely when ramon/stickers is absent: there is nothing to send, so
+     * there is nothing to gate, and an install without it should not have messages
+     * refused for mentioning a colon.
+     *
+     * @throws ValidationException
+     */
+    protected function assertMaySendStickers(User $actor, string $content): void
+    {
+        if ($content === '' || $actor->hasPermission('ramon-chat.sendStickers')) {
+            return;
+        }
+
+        // Asked of the extension manager rather than by probing for a `stickers`
+        // table. `ConnectionInterface` does not declare `getSchemaBuilder()` — it
+        // lives on the concrete Connection — so that probe would fatal on any
+        // driver implementing only the interface. It was also the wrong question:
+        // what matters is whether the extension is enabled, not whether a table
+        // happens to be left over from an uninstall.
+        if (! $this->extensions->isEnabled('ramon-stickers')) {
+            return;
+        }
+
+        preg_match_all('/:[\w+-]+:/', $content, $matches);
+
+        if ($matches[0] === []) {
+            return;
+        }
+
+        $used = $this->db->table('stickers')
+            ->whereIn('text_to_replace', array_unique($matches[0]))
+            ->exists();
+
+        if (! $used) {
+            return;
+        }
+
+        throw new ValidationException([
+            'content' => $this->translator->trans('ramon-chat.api.stickers_not_allowed'),
         ]);
     }
 

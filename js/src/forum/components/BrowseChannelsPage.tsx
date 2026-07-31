@@ -1,20 +1,17 @@
-import app from 'flarum/forum/app';
-import Page from 'flarum/common/components/Page';
-import type { IPageAttrs } from 'flarum/common/components/Page';
-import Button from 'flarum/common/components/Button';
-import LoadingIndicator from 'flarum/common/components/LoadingIndicator';
-import classList from 'flarum/common/utils/classList';
-import type Mithril from 'mithril';
+import app from "flarum/forum/app";
+import Page from "flarum/common/components/Page";
+import type { IPageAttrs } from "flarum/common/components/Page";
+import Button from "flarum/common/components/Button";
+import classList from "flarum/common/utils/classList";
+import type Mithril from "mithril";
 
-import { displayEmoji } from '../utils/emoji';
+import type Channel from "../../common/models/Channel";
+import chatState from "../state/chat";
+import ChannelFormModal from "./ChannelFormModal";
+import { BrowseSkeleton } from "./Skeletons";
+import { channelIcon } from "../utils/channelIcon";
 
-import type Channel from '../../common/models/Channel';
-import chatState from '../state/chat';
-import ChannelFormModal from './ChannelFormModal';
-import { BrowseSkeleton } from './Skeletons';
-import { channelIcon } from '../utils/channelIcon';
-
-type BrowseFilter = 'all' | 'open' | 'closed' | 'archived' | 'mine';
+type BrowseFilter = "all" | "open" | "closed" | "archived" | "mine";
 
 /**
  * Discourse's "Browse channels" page: every channel the actor can see, with join
@@ -23,21 +20,28 @@ type BrowseFilter = 'all' | 'open' | 'closed' | 'archived' | 'mine';
  * This is also the only place a channel can be created, so it is reachable from
  * the sidebar even when the actor has joined nothing.
  */
-export default class BrowseChannelsPage<CustomAttrs extends IPageAttrs = IPageAttrs> extends Page<CustomAttrs> {
+export default class BrowseChannelsPage<
+  CustomAttrs extends IPageAttrs = IPageAttrs,
+> extends Page<CustomAttrs> {
   private channels: Channel[] = [];
   private loading = true;
-  private filter: BrowseFilter = 'all';
-  private query = '';
+  private filter: BrowseFilter = "all";
+  private query = "";
   private searchTimer: number | null = null;
 
   oninit(vnode: Mithril.Vnode<CustomAttrs>): void {
     super.oninit(vnode);
 
-    app.setTitle(app.translator.trans('ramon-chat.forum.browse.title', {}, true));
+    app.setTitle(
+      app.translator.trans("ramon-chat.forum.browse.title", {}, true),
+    );
 
-    const routeFilter = m.route.param('filter') as BrowseFilter | undefined;
+    const routeFilter = m.route.param("filter") as BrowseFilter | undefined;
 
-    if (routeFilter && ['all', 'open', 'closed', 'archived', 'mine'].includes(routeFilter)) {
+    if (
+      routeFilter &&
+      ["all", "open", "closed", "archived", "mine"].includes(routeFilter)
+    ) {
       this.filter = routeFilter;
     }
 
@@ -54,28 +58,38 @@ export default class BrowseChannelsPage<CustomAttrs extends IPageAttrs = IPageAt
         <Button
           className="Button Button--link ChatBrowse-back"
           icon="fas fa-arrow-left"
-          onclick={() => m.route.set(app.route('chat.index'))}
+          onclick={() => m.route.set(app.route("chat.index"))}
         >
-          {app.translator.trans('ramon-chat.forum.nav.chat')}
+          {app.translator.trans("ramon-chat.forum.nav.chat")}
         </Button>
 
         <div className="ChatBrowse-header">
-          <h1 className="ChatBrowse-title">{app.translator.trans('ramon-chat.forum.browse.title')}</h1>
+          <h1 className="ChatBrowse-title">
+            {app.translator.trans("ramon-chat.forum.browse.title")}
+          </h1>
 
-          {app.forum.attribute<boolean>('canCreateChatChannel') ? (
-            <Button className="Button Button--primary" icon="fas fa-plus" onclick={() => this.create()}>
-              {app.translator.trans('ramon-chat.forum.browse.new_channel')}
+          {app.forum.attribute<boolean>("canCreateChatChannel") ? (
+            <Button
+              className="Button Button--primary"
+              icon="fas fa-plus"
+              onclick={() => this.create()}
+            >
+              {app.translator.trans("ramon-chat.forum.browse.new_channel")}
             </Button>
           ) : null}
         </div>
 
         <div className="ChatBrowse-toolbar">
           <div className="ChatBrowse-filters">
-            {(['all', 'open', 'closed', 'archived', 'mine'] as BrowseFilter[]).map((f) => (
+            {(
+              ["all", "open", "closed", "archived", "mine"] as BrowseFilter[]
+            ).map((f) => (
               <button
                 key={f}
                 type="button"
-                className={classList('ChatBrowse-filter', { 'ChatBrowse-filter--active': this.filter === f })}
+                className={classList("ChatBrowse-filter", {
+                  "ChatBrowse-filter--active": this.filter === f,
+                })}
                 onclick={() => this.setFilter(f)}
               >
                 {app.translator.trans(`ramon-chat.forum.browse.filter_${f}`)}
@@ -84,13 +98,22 @@ export default class BrowseChannelsPage<CustomAttrs extends IPageAttrs = IPageAt
           </div>
 
           <div className="ChatBrowse-search">
-            <i className="ChatBrowse-search-icon fas fa-magnifying-glass" aria-hidden="true" />
+            <i
+              className="ChatBrowse-search-icon fas fa-magnifying-glass"
+              aria-hidden="true"
+            />
             <input
               className="ChatBrowse-search-input"
               type="search"
-              placeholder={app.translator.trans('ramon-chat.forum.browse.search_placeholder', {}, true)}
+              placeholder={app.translator.trans(
+                "ramon-chat.forum.browse.search_placeholder",
+                {},
+                true,
+              )}
               value={this.query}
-              oninput={(e: Event) => this.onSearch((e.target as HTMLInputElement).value)}
+              oninput={(e: Event) =>
+                this.onSearch((e.target as HTMLInputElement).value)
+              }
             />
           </div>
         </div>
@@ -98,9 +121,13 @@ export default class BrowseChannelsPage<CustomAttrs extends IPageAttrs = IPageAt
         {this.loading ? (
           BrowseSkeleton()
         ) : this.channels.length === 0 ? (
-          <div className="ChatBrowse-empty">{app.translator.trans('ramon-chat.forum.browse.empty')}</div>
+          <div className="ChatBrowse-empty">
+            {app.translator.trans("ramon-chat.forum.browse.empty")}
+          </div>
         ) : (
-          <div className="ChatBrowse-list">{this.channels.map((channel) => this.card(channel))}</div>
+          <div className="ChatBrowse-list">
+            {this.channels.map((channel) => this.card(channel))}
+          </div>
         )}
       </div>
     );
@@ -109,9 +136,7 @@ export default class BrowseChannelsPage<CustomAttrs extends IPageAttrs = IPageAt
   protected card(channel: Channel): Mithril.Children {
     return (
       <div className="ChatBrowseCard" key={channel.id()}>
-        <div className="ChatBrowseCard-icon">
-          {channelIcon(channel)}
-        </div>
+        <div className="ChatBrowseCard-icon">{channelIcon(channel)}</div>
 
         <div className="ChatBrowseCard-body">
           <div className="ChatBrowseCard-name">
@@ -119,29 +144,48 @@ export default class BrowseChannelsPage<CustomAttrs extends IPageAttrs = IPageAt
 
             {channel.isPrivate() ? (
               <span className="ChatBrowseCard-status">
-                <i className="ChatBrowseCard-lock fas fa-lock" aria-hidden="true" />{' '}
-                {app.translator.trans('ramon-chat.forum.new_channel.private')}
+                <i
+                  className="ChatBrowseCard-lock fas fa-lock"
+                  aria-hidden="true"
+                />{" "}
+                {app.translator.trans("ramon-chat.forum.new_channel.private")}
               </span>
             ) : null}
             {channel.isOpen() ? null : (
               <span className="ChatBrowseCard-status">
                 {app.translator.trans(
-                  channel.isArchived() ? 'ramon-chat.forum.browse.filter_archived' : 'ramon-chat.forum.browse.filter_closed'
+                  channel.isArchived()
+                    ? "ramon-chat.forum.browse.filter_archived"
+                    : "ramon-chat.forum.browse.filter_closed",
                 )}
               </span>
             )}
           </div>
 
-          {channel.description() ? <div className="ChatBrowseCard-description">{channel.description()}</div> : null}
+          {channel.description() ? (
+            <div className="ChatBrowseCard-description">
+              {channel.description()}
+            </div>
+          ) : null}
 
           <div className="ChatBrowseCard-meta">
-            <span>{app.translator.trans('ramon-chat.forum.channel.members', { count: channel.userCount() ?? 0 })}</span>
+            <span>
+              {app.translator.trans("ramon-chat.forum.channel.members", {
+                count: channel.userCount() ?? 0,
+              })}
+            </span>
             {/* Was a hardcoded "msg" — the one untranslated string on the page. */}
             <span>
-              {app.translator.trans('ramon-chat.forum.browse.messages', { count: channel.messagesCount() ?? 0 })}
+              {app.translator.trans("ramon-chat.forum.browse.messages", {
+                count: channel.messagesCount() ?? 0,
+              })}
             </span>
             {channel.threadingEnabled() ? (
-              <span>{app.translator.trans('ramon-chat.forum.channel.threading_enabled')}</span>
+              <span>
+                {app.translator.trans(
+                  "ramon-chat.forum.channel.threading_enabled",
+                )}
+              </span>
             ) : null}
           </div>
         </div>
@@ -151,18 +195,25 @@ export default class BrowseChannelsPage<CustomAttrs extends IPageAttrs = IPageAt
             <Button
               className="Button Button--icon Button--flat"
               icon="fas fa-pen-to-square"
-              title={app.translator.trans('ramon-chat.forum.channel.edit')}
+              title={app.translator.trans(
+                "ramon-chat.forum.channel.edit",
+                {},
+                true,
+              )}
               onclick={() => this.edit(channel)}
             />
           ) : null}
 
           {channel.isFollowing() ? (
             <Button className="Button" onclick={() => this.open(channel)}>
-              {app.translator.trans('ramon-chat.forum.nav.chat')}
+              {app.translator.trans("ramon-chat.forum.nav.chat")}
             </Button>
           ) : channel.canJoin() ? (
-            <Button className="Button Button--primary" onclick={() => this.join(channel)}>
-              {app.translator.trans('ramon-chat.forum.channel.join')}
+            <Button
+              className="Button Button--primary"
+              onclick={() => this.join(channel)}
+            >
+              {app.translator.trans("ramon-chat.forum.channel.join")}
             </Button>
           ) : null}
         </div>
@@ -194,30 +245,39 @@ export default class BrowseChannelsPage<CustomAttrs extends IPageAttrs = IPageAt
 
     // 'all' deliberately sends no status filter: closed and archived channels are
     // browsable, they are simply frozen.
-    if (this.filter === 'open' || this.filter === 'closed' || this.filter === 'archived') {
+    if (
+      this.filter === "open" ||
+      this.filter === "closed" ||
+      this.filter === "archived"
+    ) {
       filter.status = this.filter;
     }
 
-    if (this.filter === 'mine') {
+    if (this.filter === "mine") {
       filter.following = true;
     }
 
-    if (this.query.trim() !== '') {
+    if (this.query.trim() !== "") {
       filter.q = this.query.trim();
     }
 
     try {
-      const results = (await app.store.find('chat-channels', {
+      const results = (await app.store.find("chat-channels", {
         filter,
-        sort: '-lastMessageAt',
+        sort: "-lastMessageAt",
         page: { limit: 50 },
       })) as unknown as Channel[];
 
       // Direct channels are not browsable — they are private by construction.
-      this.channels = (Array.isArray(results) ? results : []).filter((c) => c.isCategory());
+      this.channels = (Array.isArray(results) ? results : []).filter((c) =>
+        c.isCategory(),
+      );
     } catch (e) {
       this.channels = [];
-      app.alerts.show({ type: 'error' }, app.translator.trans('ramon-chat.forum.browse.empty'));
+      app.alerts.show(
+        { type: "error" },
+        app.translator.trans("ramon-chat.forum.browse.empty"),
+      );
     } finally {
       this.loading = false;
       m.redraw();
@@ -239,11 +299,14 @@ export default class BrowseChannelsPage<CustomAttrs extends IPageAttrs = IPageAt
   protected async join(channel: Channel): Promise<void> {
     try {
       await app.request({
-        method: 'POST',
-        url: `${app.forum.attribute('apiUrl')}/chat-channels/${channel.id()}/join`,
+        method: "POST",
+        url: `${app.forum.attribute("apiUrl")}/chat-channels/${channel.id()}/join`,
       });
 
-      channel.pushAttributes({ isFollowing: true, userCount: (channel.userCount() ?? 0) + 1 });
+      channel.pushAttributes({
+        isFollowing: true,
+        userCount: (channel.userCount() ?? 0) + 1,
+      });
 
       if (!chatState.channels.some((c) => c.id() === channel.id())) {
         chatState.channels.unshift(channel);
@@ -252,12 +315,15 @@ export default class BrowseChannelsPage<CustomAttrs extends IPageAttrs = IPageAt
       m.redraw();
     } catch (e: any) {
       const detail = e?.response?.errors?.[0]?.detail;
-      app.alerts.show({ type: 'error' }, detail ?? app.translator.trans('ramon-chat.forum.channel.join'));
+      app.alerts.show(
+        { type: "error" },
+        detail ?? app.translator.trans("ramon-chat.forum.channel.join"),
+      );
     }
   }
 
   protected open(channel: Channel): void {
     chatState.setActiveChannel(Number(channel.id()));
-    m.route.set(app.route('chat.channel', { id: channel.id() }));
+    m.route.set(app.route("chat.channel", { id: channel.id() }));
   }
 }

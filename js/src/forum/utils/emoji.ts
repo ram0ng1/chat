@@ -17,29 +17,29 @@
  *
  * 55 KB of JSON has no business in the main bundle for a feature most page views
  * never touch. The dynamic import puts it in its own chunk, and a small inline
- * table covers the default reaction set so the first paint is never blank.
+ * table covers the common reaction set so the first paint is never blank.
  */
 
 /**
- * Covers the shipped `ramon-chat.default_reactions` plus a few obvious ones, so
- * the common case renders synchronously and the chunk load is invisible.
+ * The reactions the hover bar and the picker open with, plus a few obvious ones,
+ * so the common case renders synchronously and the chunk load is invisible.
  */
 const COMMON: Record<string, string> = {
-  heart: '❤️',
-  '+1': '👍',
-  '-1': '👎',
-  tada: '🎉',
-  eyes: '👀',
-  laughing: '😆',
-  smile: '😄',
-  cry: '😢',
-  fire: '🔥',
-  rocket: '🚀',
-  thinking: '🤔',
-  clap: '👏',
-  speech_balloon: '💬',
-  white_check_mark: '✅',
-  x: '❌',
+  heart: "❤️",
+  "+1": "👍",
+  "-1": "👎",
+  tada: "🎉",
+  eyes: "👀",
+  laughing: "😆",
+  smile: "😄",
+  cry: "😢",
+  fire: "🔥",
+  rocket: "🚀",
+  thinking: "🤔",
+  clap: "👏",
+  speech_balloon: "💬",
+  white_check_mark: "✅",
+  x: "❌",
 };
 
 /** name → unicode, built by inverting the package's unicode → names map. */
@@ -60,7 +60,7 @@ export function loadEmojiMap(): void {
   // `./emojiMap`, not the package by name: the chunk registration keys off a path
   // resolved relative to this file, so a bare package name yields an unregistered
   // chunk whose URL 404s. See the comment in emojiMap.ts.
-  import('./emojiMap')
+  import("./emojiMap")
     .then((module) => {
       const source = (module.default ?? module) as Record<string, string[]>;
       const inverted: Record<string, string> = {};
@@ -89,7 +89,7 @@ export function loadEmojiMap(): void {
 
 /** Strips the delimiters and whitespace from `:name:`. */
 function normalise(input: string): string {
-  return input.trim().replace(/^:+|:+$/g, '');
+  return input.trim().replace(/^:+|:+$/g, "");
 }
 
 /**
@@ -102,7 +102,7 @@ function normalise(input: string): string {
 export function looksLikeEmoji(input: string): boolean {
   const value = input.trim();
 
-  if (value === '' || value.length > 8) return false;
+  if (value === "" || value.length > 8) return false;
 
   return /[\p{Extended_Pictographic}\p{Emoji_Presentation}]/u.test(value);
 }
@@ -120,7 +120,7 @@ export function resolveEmoji(input: string | null | undefined): string | null {
 
   const name = normalise(input).toLowerCase();
 
-  if (name === '') return null;
+  if (name === "") return null;
 
   // Trigger the full map so an unknown-now shortcode resolves after it lands.
   loadEmojiMap();
@@ -132,7 +132,10 @@ export function resolveEmoji(input: string | null | undefined): string | null {
  * Renders an emoji for display, falling back to the raw shortcode so an unknown
  * value is visible and debuggable rather than silently blank.
  */
-export function displayEmoji(input: string | null | undefined, fallback = ''): string {
+export function displayEmoji(
+  input: string | null | undefined,
+  fallback = "",
+): string {
   if (!input) return fallback;
 
   return resolveEmoji(input) ?? `:${normalise(input)}:`;
@@ -162,7 +165,7 @@ export function searchEmoji(query: string, limit = 48): EmojiSuggestion[] {
   const contains: EmojiSuggestion[] = [];
 
   for (const [name, unicode] of Object.entries(source)) {
-    if (term === '') {
+    if (term === "") {
       prefix.push({ name, unicode });
 
       if (prefix.length >= limit) break;
@@ -194,7 +197,7 @@ export function emojiMapReady(): boolean {
  * check in ChannelResource so the form rejects it before the request.
  */
 export function isValidEmoji(input: string | null | undefined): boolean {
-  if (!input || input.trim() === '') return true; // empty is allowed
+  if (!input || input.trim() === "") return true; // empty is allowed
 
   return resolveEmoji(input) !== null;
 }

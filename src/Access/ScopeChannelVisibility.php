@@ -26,6 +26,10 @@ class ScopeChannelVisibility
     public function __invoke(User $actor, Builder $query): void
     {
         // The global gate. Without it there is nothing to scope.
+        //
+        // One right, not two. A separate `ramon-chat.view` briefly let guests read
+        // public channels; it has been withdrawn, so participating and reading are
+        // the same permission again.
         if (! $actor->hasPermissionLike('ramon-chat.use')) {
             $query->whereRaw('1 = 0');
 

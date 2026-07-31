@@ -34,6 +34,7 @@ use Ramon\Chat\Event\UserLeftChannel;
 use Ramon\Chat\Notification\ChannelInviteBlueprint;
 use Ramon\Chat\Service\ChannelArchiver;
 use Ramon\Chat\Service\MembershipManager;
+use Ramon\Chat\Service\SlowMode;
 use Ramon\Chat\Service\UnreadTracker;
 use Tobyz\JsonApiServer\Context as OriginalContext;
 use Tobyz\JsonApiServer\Exception\ForbiddenException;
@@ -151,6 +152,10 @@ class ChannelResource extends AbstractDatabaseResource
     {
         return [
             Endpoint\Show::make()
+                // Authenticated again. Reading the chat is for accounts: the guest
+                // read permission this briefly supported has been withdrawn, and
+                // without the gate these endpoints would answer 200 with an empty
+                // collection to anyone, which is a slower way of saying no.
                 ->authenticated()
                 ->eagerLoad(['creator', 'lastMessage.user']),
 
@@ -534,6 +539,31 @@ class ChannelResource extends AbstractDatabaseResource
 
             Schema\Boolean::make('threadingEnabled')
                 ->writable(fn (Channel $c, Context $context) => $this->mayWriteCategoryField($c, $context)),
+
+            // Slow mode, in seconds. 0 is off.
+            //
+            // Editable by whoever may edit the channel rather than by
+            // administrators only: it is a dial for a conversation moving too
+            // fast to follow, and the person who notices that is the one already
+            // looking after the room.
+            //
+            // Clamped rather than rejected. The interface offers a fixed set of
+            // steps, so an out-of-range value means a client got it wrong, and
+            // failing the whole save over it would be theatre. Six hours is the
+            // ceiling, matching Discord's.
+            Schema\Integer::make('slowModeSeconds')
+                ->writable(fn (Channel $c, Context $context) => $this->mayWriteCategoryField($c, $context))
+                ->set(function (Channel $channel, $value) {
+                    $channel->slow_mode_seconds = max(0, min(21600, (int) $value));
+                }),
+
+            // What the composer counts down from. Per-actor and answered by the
+            // server: a reload would otherwise forget the cooldown and offer a
+            // send that is then refused.
+            Schema\Integer::make('slowModeRemaining')
+                ->get(fn (Channel $c, Context $context) => $c->exists
+                    ? resolve(SlowMode::class)->remainingFor($c, $context->getActor())
+                    : 0),
 
             Schema\Boolean::make('autoJoin')
                 ->writable(fn (Channel $c, Context $context) => $context->getActor()->isAdmin()

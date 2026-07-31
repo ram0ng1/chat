@@ -200,6 +200,53 @@ class BroadcastListener
             // uploads were omitted rendered as an empty row on every screen but the
             // sender's, where the API response had supplied them.
             'uploads'     => $deleted ? [] : $this->uploadsPayload($message),
+
+            // Who the message is addressed to. Carried for the same reason the
+            // uploads are: the recipient builds the row from this payload alone.
+            //
+            // Without it a message arriving live could not be recognised as a
+            // mention — the highlight never appeared, and the notification sound
+            // had no way to honour a channel set to "mentions only", so it chimed
+            // on every message in every channel the user belonged to.
+            'mentionedUsers'      => $deleted ? [] : $message->mentions
+                ->where('type', 'user')
+                ->pluck('user_id')
+                ->filter()
+                ->values()
+                ->all(),
+
+            'mentionsChannelWide' => ! $deleted
+                && $message->mentions->contains(fn ($mention) => $mention->isChannelWide()),
+
+            // The author, inlined for the same reason the uploads are.
+            //
+            // `userId` alone is only a *reference*: the client resolves it against
+            // whatever it already has in its local store, and a recipient who has
+            // never seen that person — a fresh page, a first message from someone
+            // new — resolves it to nothing and draws the row as "[deleted]".
+            // Sending the few fields the row actually uses costs a fraction of the
+            // message body and removes the failure entirely.
+            'user'        => $this->userPayload($message),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    protected function userPayload(Message $message): ?array
+    {
+        $user = $message->relationLoaded('user') ? $message->user : $message->user()->first();
+
+        if ($user === null) {
+            return null;
+        }
+
+        return [
+            'id'          => (int) $user->id,
+            'username'    => $user->username,
+            'displayName' => $user->display_name,
+            'avatarUrl'   => $user->avatar_url,
+            'slug'        => (string) ($user->slug ?? $user->id),
         ];
     }
 

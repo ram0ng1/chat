@@ -9,6 +9,7 @@
 *.webp binary
 *.woff binary
 *.woff2 binary
+CLAUDE.md
 
 # Kept out of the Composer dist archive: they are needed to develop the extension,
 # not to run it, and they are a large share of the download.

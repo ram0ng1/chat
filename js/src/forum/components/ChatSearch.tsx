@@ -1,18 +1,17 @@
-import app from 'flarum/forum/app';
-import Component from 'flarum/common/Component';
-import type { ComponentAttrs } from 'flarum/common/Component';
-import Button from 'flarum/common/components/Button';
-import Avatar from 'flarum/common/components/Avatar';
-import LoadingIndicator from 'flarum/common/components/LoadingIndicator';
-import username from 'flarum/common/helpers/username';
-import humanTime from 'flarum/common/helpers/humanTime';
-import type Mithril from 'mithril';
+import app from "flarum/forum/app";
+import Component from "flarum/common/Component";
+import type { ComponentAttrs } from "flarum/common/Component";
+import Button from "flarum/common/components/Button";
+import Avatar from "flarum/common/components/Avatar";
+import humanTime from "flarum/common/helpers/humanTime";
+import type Mithril from "mithril";
 
-import userLink from '../utils/userLink';
+import userLink from "../utils/userLink";
 
-import type Message from '../../common/models/Message';
-import type ChatState from '../state/ChatState';
-import { SearchResultsSkeleton } from './Skeletons';
+import type Message from "../../common/models/Message";
+import type ChatState from "../state/ChatState";
+import { SearchResultsSkeleton } from "./Skeletons";
+import { messagePreview } from "../utils/preview";
 
 export interface ChatSearchAttrs extends ComponentAttrs {
   state: ChatState;
@@ -33,7 +32,7 @@ const PAGE_SIZE = 30;
  * check to keep in step here.
  */
 export default class ChatSearch extends Component<ChatSearchAttrs> {
-  private query = '';
+  private query = "";
   private results: Message[] = [];
   private searching = false;
   /** Whether a query has run, to tell "no results" apart from "nothing typed". */
@@ -47,23 +46,38 @@ export default class ChatSearch extends Component<ChatSearchAttrs> {
   }
 
   view(): Mithril.Children {
-    const channel = this.attrs.channelId ? this.attrs.state.channel(this.attrs.channelId) : null;
+    const channel = this.attrs.channelId
+      ? this.attrs.state.channel(this.attrs.channelId)
+      : null;
 
     return (
       <div className="ChatSearch">
         <div className="ChatSearch-bar">
-          <i className="ChatSearch-icon fas fa-magnifying-glass" aria-hidden="true" />
+          <i
+            className="ChatSearch-icon fas fa-magnifying-glass"
+            aria-hidden="true"
+          />
 
           <input
             className="ChatSearch-input"
             type="search"
             value={this.query}
-            placeholder={app.translator.trans('ramon-chat.forum.search.placeholder', {}, true)}
-            aria-label={app.translator.trans('ramon-chat.forum.search.title', {}, true)}
-            oninput={(e: Event) => this.onInput((e.target as HTMLInputElement).value)}
+            placeholder={app.translator.trans(
+              "ramon-chat.forum.search.placeholder",
+              {},
+              true,
+            )}
+            aria-label={app.translator.trans(
+              "ramon-chat.forum.search.title",
+              {},
+              true,
+            )}
+            oninput={(e: Event) =>
+              this.onInput((e.target as HTMLInputElement).value)
+            }
             onkeydown={(e: KeyboardEvent) => {
               // Enter searches immediately rather than waiting out the debounce.
-              if (e.key === 'Enter') this.run();
+              if (e.key === "Enter") this.run();
             }}
           />
 
@@ -78,7 +92,7 @@ export default class ChatSearch extends Component<ChatSearchAttrs> {
 
         {channel ? (
           <div className="ChatSearch-scope">
-            {app.translator.trans('ramon-chat.forum.search.in_channel', {
+            {app.translator.trans("ramon-chat.forum.search.in_channel", {
               channel: channel.displayName(),
             })}
           </div>
@@ -95,14 +109,26 @@ export default class ChatSearch extends Component<ChatSearchAttrs> {
     }
 
     if (!this.searched) {
-      return <div className="ChatBrowse-empty">{app.translator.trans('ramon-chat.forum.search.prompt')}</div>;
+      return (
+        <div className="ChatBrowse-empty">
+          {app.translator.trans("ramon-chat.forum.search.prompt")}
+        </div>
+      );
     }
 
     if (this.results.length === 0) {
-      return <div className="ChatBrowse-empty">{app.translator.trans('ramon-chat.forum.search.empty')}</div>;
+      return (
+        <div className="ChatBrowse-empty">
+          {app.translator.trans("ramon-chat.forum.search.empty")}
+        </div>
+      );
     }
 
-    return <div className="ChatSearch-results">{this.results.map((message) => this.result(message))}</div>;
+    return (
+      <div className="ChatSearch-results">
+        {this.results.map((message) => this.result(message))}
+      </div>
+    );
   }
 
   protected result(message: Message): Mithril.Children {
@@ -120,14 +146,24 @@ export default class ChatSearch extends Component<ChatSearchAttrs> {
 
         <div className="ChatSearch-result-body">
           <div className="ChatSearch-result-meta">
-            <span className="ChatSearch-result-author">{userLink(message.user())}</span>
-            {channel ? <span className="ChatSearch-result-channel">{channel.displayName()}</span> : null}
-            {at ? <span className="ChatSearch-result-time">{humanTime(at)}</span> : null}
+            <span className="ChatSearch-result-author">
+              {userLink(message.user())}
+            </span>
+            {channel ? (
+              <span className="ChatSearch-result-channel">
+                {channel.displayName()}
+              </span>
+            ) : null}
+            {at ? (
+              <span className="ChatSearch-result-time">{humanTime(at)}</span>
+            ) : null}
           </div>
 
           {/* Plain text, not contentHtml: a result row is a one-line excerpt, and
               rendered markup would drag block elements and images into it. */}
-          <div className="ChatSearch-result-excerpt">{message.content() ?? ''}</div>
+          <div className="ChatSearch-result-excerpt">
+            {messagePreview(message)}
+          </div>
         </div>
       </button>
     );
@@ -140,7 +176,7 @@ export default class ChatSearch extends Component<ChatSearchAttrs> {
 
     if (this.timer !== null) window.clearTimeout(this.timer);
 
-    if (value.trim() === '') {
+    if (value.trim() === "") {
       this.results = [];
       this.searched = false;
 
@@ -158,7 +194,7 @@ export default class ChatSearch extends Component<ChatSearchAttrs> {
 
     const term = this.query.trim();
 
-    if (term === '') return;
+    if (term === "") return;
 
     const mine = ++this.sequence;
 
@@ -166,12 +202,12 @@ export default class ChatSearch extends Component<ChatSearchAttrs> {
     m.redraw();
 
     try {
-      const results = (await app.store.find('chat-messages', {
+      const results = (await app.store.find("chat-messages", {
         filter: {
           q: term,
           ...(this.attrs.channelId ? { channel: this.attrs.channelId } : {}),
         },
-        sort: '-id',
+        sort: "-id",
         page: { limit: PAGE_SIZE },
       })) as unknown as Message[];
 
@@ -193,7 +229,7 @@ export default class ChatSearch extends Component<ChatSearchAttrs> {
   }
 
   protected clear(): void {
-    this.query = '';
+    this.query = "";
     this.results = [];
     this.searched = false;
 
@@ -215,6 +251,6 @@ export default class ChatSearch extends Component<ChatSearchAttrs> {
     if (!channelId) return;
 
     this.attrs.state.setActiveChannel(channelId);
-    m.route.set(app.route('chat.channel', { id: channelId }));
+    m.route.set(app.route("chat.channel", { id: channelId }));
   }
 }

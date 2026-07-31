@@ -453,8 +453,14 @@ rules:
       cwe: "CWE-79: Cross-site Scripting"
       confidence: HIGH
       flarum-playbook: "CLAUDE.md §22"
+    # `[^(){};]` rather than `[^;]`: JSX carries almost no semicolons, so the
+    # old class ran for dozens of lines and paired an `m.trust(contentHtml)`
+    # with an unrelated `trans()` in the next element — a blocking error on
+    # exactly the pattern core itself uses to render a post. Excluding parens and
+    # braces keeps the match inside one expression while still allowing the
+    # wrapped multi-line form.
     pattern-regex: |-
-      m\.trust\s*\([^;]*\.trans\s*\(
+      m\.trust\s*\(\s*[^(){};]*\.trans\s*\(
 
   # ---------------------------------------------------------------------------
   # §32 (Frontend) — atribuição a innerHTML

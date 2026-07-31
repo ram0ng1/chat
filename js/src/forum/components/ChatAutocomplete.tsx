@@ -1,9 +1,9 @@
-import Component from 'flarum/common/Component';
-import type { ComponentAttrs } from 'flarum/common/Component';
-import Avatar from 'flarum/common/components/Avatar';
-import classList from 'flarum/common/utils/classList';
-import type User from 'flarum/common/models/User';
-import type Mithril from 'mithril';
+import Component from "flarum/common/Component";
+import type { ComponentAttrs } from "flarum/common/Component";
+import Avatar from "flarum/common/components/Avatar";
+import classList from "flarum/common/utils/classList";
+import type User from "flarum/common/models/User";
+import type Mithril from "mithril";
 
 /**
  * One suggestion. `insert` is what replaces the typed fragment, `label` is what
@@ -43,9 +43,9 @@ export default class ChatAutocomplete extends Component<ChatAutocompleteAttrs> {
     if (!vnode.dom) return;
 
     // Keep the keyboard-selected row in view when arrowing past the fold.
-    const active = vnode.dom.querySelector('.ChatAutocomplete-item--active');
+    const active = vnode.dom.querySelector(".ChatAutocomplete-item--active");
 
-    (active as HTMLElement | null)?.scrollIntoView({ block: 'nearest' });
+    (active as HTMLElement | null)?.scrollIntoView({ block: "nearest" });
   }
 
   view(): Mithril.Children {
@@ -61,8 +61,8 @@ export default class ChatAutocomplete extends Component<ChatAutocompleteAttrs> {
             type="button"
             role="option"
             aria-selected={index === activeIndex}
-            className={classList('ChatAutocomplete-item', {
-              'ChatAutocomplete-item--active': index === activeIndex,
+            className={classList("ChatAutocomplete-item", {
+              "ChatAutocomplete-item--active": index === activeIndex,
             })}
             // mousedown, not click: the textarea loses focus on mousedown and a
             // blur handler would have closed the list before click ever fired.
@@ -72,13 +72,21 @@ export default class ChatAutocomplete extends Component<ChatAutocompleteAttrs> {
             }}
             onmouseenter={() => onHover(index)}
           >
-            {suggestion.user ? <Avatar user={suggestion.user} className="Avatar" /> : null}
+            {suggestion.user ? (
+              <Avatar user={suggestion.user} className="Avatar" />
+            ) : null}
             {suggestion.emoji ? <span>{suggestion.emoji}</span> : null}
-            {suggestion.icon ? <i className={suggestion.icon} aria-hidden="true" /> : null}
+            {suggestion.icon ? (
+              <i className={suggestion.icon} aria-hidden="true" />
+            ) : null}
 
             <span>{suggestion.label}</span>
 
-            {suggestion.hint ? <span className="ChatAutocomplete-item-hint">{suggestion.hint}</span> : null}
+            {suggestion.hint ? (
+              <span className="ChatAutocomplete-item-hint">
+                {suggestion.hint}
+              </span>
+            ) : null}
           </button>
         ))}
       </div>
