@@ -13,7 +13,7 @@ import type ChatState from "../state/ChatState";
 import ChatAutocomplete from "./ChatAutocomplete";
 import type { Suggestion } from "./ChatAutocomplete";
 import { searchEmoji } from "../utils/emoji";
-import { messagePreview } from "../utils/preview";
+import { messagePreview } from "../../common/utils/preview";
 import { humanDuration } from "../utils/duration";
 import { authorName } from "../utils/bot";
 import {

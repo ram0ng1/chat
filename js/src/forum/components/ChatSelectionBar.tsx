@@ -188,15 +188,21 @@ export default class ChatSelectionBar extends Component<ChatSelectionBarAttrs> {
       await import("flarum/forum/components/DiscussionComposer")
     ).default;
 
-    // load() resets composer.fields, so the content has to be seeded after it.
+    // Seeded through `originalContent`, not by writing `fields.content` after
+    // load(). ComposerBody.oninit runs when show() mounts the body, and its first
+    // act is `fields.content(attrs.originalContent || '')` — so anything written
+    // beforehand is overwritten with the empty string, which is why the composer
+    // opened blank. Passing it as an attr is the same route EditPostComposer takes
+    // to pre-fill a post's text, and it also means closing straight away does not
+    // ask to discard: nothing has been typed yet.
     await app.composer.load(
       () => Promise.resolve({ default: DiscussionComposer }),
       {
         user: app.session.user,
+        originalContent: rendered.content,
       },
     );
 
-    app.composer.fields.content(rendered.content);
     await app.composer.show();
 
     this.cancel();
