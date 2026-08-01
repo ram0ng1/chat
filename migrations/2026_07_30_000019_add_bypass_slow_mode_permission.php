@@ -22,6 +22,11 @@ use Illuminate\Database\Schema\Builder;
  *
  * Seeded to MODERATOR so nothing changes for the forums already running slow
  * mode; administrators hold every permission and are covered without a row.
+ *
+ * O seed só ocorre quando o grupo existe: um fórum pode tê-lo apagado, e
+ * `group_permission.group_id` é FK para `groups` — inserir às cegas aborta a
+ * ativação inteira da extensão com SQLSTATE[23000]. Mesmo guard que
+ * `Migration::addPermissions` aplica.
  */
 return [
     // Flarum's migrator passes a schema Builder, never a ConnectionInterface;
@@ -36,6 +41,10 @@ return [
             ->exists();
 
         if ($exists) {
+            return;
+        }
+
+        if ($db->table('groups')->where('id', Group::MODERATOR_ID)->doesntExist()) {
             return;
         }
 
