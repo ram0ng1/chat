@@ -25,6 +25,11 @@ use Illuminate\Database\Schema\Builder;
  * chat should be public is a decision about a particular forum, not a default an
  * extension gets to make on the admin's behalf. So this seeds MEMBER only, and
  * an admin who wants public reading ticks the Guest column themselves.
+ *
+ * O seed só ocorre quando o grupo existe: um fórum pode tê-lo apagado, e
+ * `group_permission.group_id` é FK para `groups` — inserir às cegas aborta a
+ * ativação inteira da extensão com SQLSTATE[23000]. Mesmo guard que
+ * `Migration::addPermissions` aplica.
  */
 return [
     // Flarum's migrator passes a schema Builder, never a ConnectionInterface. Typing
@@ -46,6 +51,10 @@ return [
             ->exists();
 
         if ($exists) {
+            return;
+        }
+
+        if ($db->table('groups')->where('id', Group::MEMBER_ID)->doesntExist()) {
             return;
         }
 
