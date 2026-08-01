@@ -21,6 +21,11 @@ use Illuminate\Database\Schema\Builder;
  * reactions). Moderators and administrators reach it through the groups they
  * already hold, so seeding them explicitly would only duplicate the badge in the
  * admin grid.
+ *
+ * O seed só ocorre quando o grupo existe: um fórum pode tê-lo apagado, e
+ * `group_permission.group_id` é FK para `groups` — inserir às cegas aborta a
+ * ativação inteira da extensão com SQLSTATE[23000]. Mesmo guard que
+ * `Migration::addPermissions` aplica.
  */
 return [
     // Flarum's migrator passes a schema Builder, never a ConnectionInterface;
@@ -35,6 +40,10 @@ return [
             ->exists();
 
         if ($exists) {
+            return;
+        }
+
+        if ($db->table('groups')->where('id', Group::MEMBER_ID)->doesntExist()) {
             return;
         }
 
