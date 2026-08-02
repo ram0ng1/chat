@@ -232,6 +232,9 @@ ramon-chat:
       placeholder_thread: Responder ao tópico
       placeholder_closed: Este canal está fechado
       send: Enviar
+      too_long_title: Sua mensagem é muito longa.
+      too_long_body: "Encurte sua mensagem em {over} caracteres. Este canal aceita até {max}."
+      too_long_dismiss: Ok
       attach: Anexar um arquivo
       sticker: Inserir um sticker
       sticker_search: Buscar stickers
@@ -259,18 +262,36 @@ ramon-chat:
       jump_to_latest: Ir para a mais recente
 
     new_channel:
+      subtitle: Dê um nome e decida para quem ele é. O resto pode mudar depois.
+      cancel: Cancelar
+      section_identity: Identidade
+      section_access: Acesso
+      section_behaviour: Comportamento
+      threading_help: As respostas podem virar um tópico próprio em vez de interromper o canal.
+      channel_wide_mentions_help: Permite que os membros usem @channel e @here para avisar todo mundo de uma vez.
+      message_length: Tamanho da mensagem
+      message_length_inherit: "Padrão do fórum ({count} caracteres)"
+      message_length_chars: "{count} caracteres"
+      message_length_custom: Personalizado…
+      message_length_help_inherit: "As mensagens aqui podem ter até {count} caracteres, igual ao resto do fórum. Se você mudar a configuração do fórum, este canal acompanha."
+      message_length_help_own: "As mensagens aqui podem ter até {count} caracteres, independente do que o resto do fórum permite."
+      message_length_help_empty: "Deixe vazio para seguir o padrão do fórum, de {count} caracteres."
+      message_length_help_clamped: "Fora da faixa — será salvo como {count} caracteres."
       slow_mode: Modo lento
       slow_mode_off: "Desligado"
-      slow_mode_help: Quanto tempo cada pessoa espera entre mensagens neste canal. Moderadores são isentos.
+      slow_mode_help_off: Os membros podem enviar mensagens uma atrás da outra, sem espera.
+      slow_mode_help_on: "Cada pessoa espera {duration} entre uma mensagem e outra. Moderadores são isentos."
       name: Nome do canal
       name_placeholder: "ex.: geral"
       description: Descrição
       emoji: Emoji
       image: Imagem
-      image_help: Substitui o emoji enquanto estiver definida. Imagens quadradas funcionam melhor.
+      icon_kind: Emoji ou imagem
+      image_help: Imagens quadradas funcionam melhor — ela é recortada e redimensionada para 128×128.
       image_upload: Enviar imagem
       image_remove: Remover imagem
       image_failed: Não foi possível enviar essa imagem.
+      image_failed_after_create: O canal foi criado, mas a imagem não pôde ser enviada. Adicione pelas configurações do canal.
       category: Categoria
       no_category: Sem categoria (todo o fórum)
       visibility: Quem pode ver este canal
@@ -281,19 +302,35 @@ ramon-chat:
       post_permission: Quem pode enviar mensagem
       post_all: Todos no canal
       post_moderators: Apenas moderadores
-      post_permission_help: Apenas moderadores transforma o canal em um mural de avisos — todos leem, só moderadores escrevem.
-      category_help: O canal herda as permissões desta categoria. Deixe vazio para valer em todo o fórum.
+      post_all_help: Todos os membros do canal podem enviar mensagens.
+      post_moderators_help: O canal é um mural de avisos — todos leem, só moderadores escrevem.
+      category_help_none: O canal vale para todo o fórum. Qualquer pessoa que use o chat pode vê-lo.
+      category_help_bound: "O canal herda as permissões de {category}: só quem enxerga essa categoria enxerga o canal."
       submit: Criar canal
       failed: Não foi possível criar o canal.
 
     edit_channel:
       title: Configurações do canal
+      subtitle: As mudanças valem para todo mundo no canal assim que você salvar.
       submit: Salvar alterações
       failed: Não foi possível salvar as alterações.
       saved: Canal atualizado.
       lifecycle: Estado do canal
       lifecycle_help: Fechar impede novas mensagens mas mantém o canal legível. Arquivar copia o histórico para uma discussão e congela o canal em definitivo.
       archive_confirm: Arquivar este canal? O histórico é copiado para uma discussão e o canal é congelado permanentemente.
+
+    add_members:
+      title: Adicionar membros
+      hint: Digite ao menos duas letras para encontrar alguém.
+      empty: Ninguém encontrado, ou quem corresponde já está aqui.
+      search_placeholder: Buscar pessoas pelo nome
+      searching: Buscando…
+      search_failed: Não foi possível buscar essas pessoas agora.
+      deselect: "Tirar {username} da seleção"
+      submit: Adicionar
+      submit_count: "Adicionar {count}"
+      added: "{count} adicionados ao canal."
+      failed: Não foi possível adicionar essas pessoas.
 
     emoji_picker:
       placeholder: Buscar emoji
@@ -312,7 +349,14 @@ ramon-chat:
       filter_archived: Arquivados
       filter_mine: Meus canais
       search_placeholder: Buscar canais
-      empty: Nenhum canal corresponde.
+      subtitle: Encontre um canal para participar, ou crie o seu.
+      empty: Ainda não há canais aqui.
+      empty_search: "Nenhum canal corresponde a “{query}”."
+      clear_search: Limpar busca
+      load_failed: Não foi possível carregar a lista de canais.
+      joined: Participando
+      no_description: Sem descrição.
+      open: Abrir
       new_channel: Novo canal
       messages: "{count} mensagens"
 
@@ -326,14 +370,19 @@ ramon-chat:
       level_always: Todas as mensagens
       level_mentions: Apenas menções
       level_never: Nada
+      level_always_help: Toda mensagem daqui gera uma notificação.
+      level_mentions_help: Só geram notificação as mensagens que citam você ou que usam @channel ou @here.
+      level_never_help: Este canal nunca notifica você. Ele continua marcando mensagens não lidas na barra lateral.
       mute: Silenciar este canal
       mute_help: Canais silenciados não exibem contadores de não lidas.
       auto_join: Adicionar todos os usuários automaticamente
       auto_join_help: Todos os usuários atuais e futuros serão adicionados a este canal.
       auto_join_on_reply: Adicionar quem responder nesta categoria
-      auto_join_on_reply_help: Requer uma categoria acima. O usuário entra na primeira vez que responde a uma discussão lá, e não é readicionado se sair depois.
+      auto_join_on_reply_help_none: Só tem efeito depois que o canal for ligado a uma categoria.
+      auto_join_on_reply_help_bound: "O usuário entra na primeira vez que responde a uma discussão em {category}, e não é readicionado se sair depois."
       post_discussions: Anunciar novas discussões desta categoria
-      post_discussions_help: Requer uma categoria acima. Cada nova discussão aberta lá é anunciada no canal.
+      post_discussions_help_none: Só tem efeito depois que o canal for ligado a uma categoria.
+      post_discussions_help_bound: "Cada nova discussão aberta em {category} é anunciada no canal."
       threading: Habilitar tópicos
       close_channel: Fechar canal
       reopen_channel: Reabrir canal
@@ -341,10 +390,6 @@ ramon-chat:
       delete_channel: Excluir canal
       delete_confirm: Excluir um canal não pode ser desfeito. Excluir mesmo assim?
       member_search: Filtrar membros
-      add_member: Adicionar alguém pelo nome
-      add_member_hint: Digite ao menos duas letras para encontrar alguém.
-      no_candidates: Ninguém encontrado, ou quem corresponde já está aqui.
-      member_added: "{username} foi adicionado ao canal."
       member_removed: "{username} foi removido do canal."
       remove_member: "Remover {username}"
       remove_member_confirm: "Remover {username} deste canal?"

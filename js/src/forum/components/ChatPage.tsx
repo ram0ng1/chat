@@ -29,6 +29,24 @@ export default class ChatPage<
 > extends Page<CustomAttrs> {
   private loading = true;
 
+  /**
+   * Marks `<body>` while this page is mounted, so the stylesheet can suppress
+   * whatever else the forum draws around it.
+   *
+   * Core's `Page.bodyClass` puts its class on `#app`, which is not enough: the
+   * things this page has to hide are appended to `document.body` as siblings of
+   * `#app` — `huseyinfiliz/modern-footer` mounts `<footer id="modern-footer">`
+   * there from an `app.mount` extender, and it is not the only extension that
+   * does. A class on `#app` cannot select an element outside `#app`.
+   */
+  protected static readonly BODY_CLASS = "ChatFullPage";
+
+  oncreate(vnode: Mithril.VnodeDOM<CustomAttrs, this>): void {
+    super.oncreate(vnode);
+
+    document.body.classList.add(ChatPage.BODY_CLASS);
+  }
+
   oninit(vnode: Mithril.Vnode<CustomAttrs>): void {
     super.oninit(vnode);
 
@@ -51,6 +69,9 @@ export default class ChatPage<
    */
   onremove(vnode: Mithril.VnodeDOM<CustomAttrs, this>): void {
     super.onremove(vnode);
+
+    // The rest of the forum gets its footer back.
+    document.body.classList.remove(ChatPage.BODY_CLASS);
 
     // Puts back a drawer that only stepped aside for this page. A drawer the user
     // closed with the X is not suspended, so it stays closed.

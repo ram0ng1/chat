@@ -12,7 +12,10 @@
 @chat-drawer-height:        560px;
 @chat-drawer-collapsed:     48px;
 @chat-header-height:        56px;
-@chat-composer-min-height:  44px;
+// One line of text plus its padding, no more. The controls used to share this
+// row and needed clearance; they now sit on their own row underneath, and the
+// extra height here was showing up as a permanently taller composer.
+@chat-composer-min-height:  34px;
 @chat-composer-max-height:  220px;
 
 // Breakpoint at which the drawer goes full-bleed and the thread panel stacks
@@ -44,6 +47,21 @@
 // help text up with a checkbox's label reads as "past the box" rather than as an
 // arbitrary number sitting among the spacing steps.
 @chat-checkbox-size:        16px;
+
+// ── Channel-form dialog geometry ─────────────────────────────────────────────
+// The form is long enough that it must scroll inside the dialog rather than run
+// off the screen, and a scroll cap is only correct if it agrees with the space
+// the dialog takes outside it. These three are that agreement, so none of them
+// can be changed without the others.
+@chat-modal-margin:         40px;                          // above and below the dialog
+@chat-modal-reserved:       (@chat-modal-margin * 2);      // what the margins cost
+@chat-modal-bands:          150px;                         // header + footer, neither scrolls
+
+// The gutter core's `.Checkbox--switch` reserves for the switch itself. Core
+// sets it as `--left-pad: 65px` on the element, which is generous for a form
+// laid out in two columns; this value overrides it, and the help text under a
+// switch is indented by the same amount so label and sentence share an edge.
+@chat-switch-indent:        58px;
 
 // The composer's round controls. One value, because attach and send sit side by
 // side on the same line: two different sizes put their centres at different
@@ -93,6 +111,13 @@
 
   // Thread indicator strip under a threaded message.
   --chat-thread-strip:       var(--avocado-border-subtle);
+
+  // The chat's own scrollbars. Translucent rather than a fixed grey, so the
+  // thumb tints with whatever surface it is drawn over — the stream, a modal
+  // and the emoji dropdown are three different backgrounds, and one opaque
+  // colour looks wrong on at least one of them.
+  --chat-scrollbar-thumb:       rgba(0, 0, 0, 0.18);
+  --chat-scrollbar-thumb-hover: rgba(0, 0, 0, 0.34);
 }
 
 [data-theme^="dark"] {
@@ -103,4 +128,9 @@
   --chat-reaction-bg-active: rgba(96, 165, 250, 0.18);
   --chat-pinned-bg:          rgba(129, 140, 248, 0.12);
   --chat-pinned-border:      rgba(129, 140, 248, 0.85);
+
+  // Light on dark, at slightly lower alpha: the same opacity that reads as a
+  // soft grey on white reads as a bright stripe on a dark surface.
+  --chat-scrollbar-thumb:       rgba(255, 255, 255, 0.16);
+  --chat-scrollbar-thumb-hover: rgba(255, 255, 255, 0.30);
 }

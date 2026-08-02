@@ -92,6 +92,56 @@
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
   -webkit-overflow-scrolling: touch;
+  .chat-scrollbar();
+}
+
+// The chat's scrollbar: a thin, translucent thumb on no track.
+//
+// Applied from `.chat-scroll-y()`, so every scrolling surface in the extension
+// — stream, sidebar, thread and pinned panels, modal bodies, the emoji grid,
+// the composer itself — gets the same one. The platform default is a wide,
+// opaque, square bar that belongs to the browser rather than to the panel it
+// sits in, and next to the chat's rounded surfaces it reads as a seam.
+//
+// Two declarations of the same thing, because no single syntax is supported
+// everywhere: `scrollbar-width`/`scrollbar-color` is the standard one (Firefox,
+// and Chromium 121+), the `::-webkit-scrollbar` pseudo-elements are what older
+// Chromium and Safari understand. A browser that supports both takes the
+// standard properties and ignores the pseudo-elements.
+.chat-scrollbar(@size: 10px) {
+  scrollbar-width: thin;
+  scrollbar-color: var(--chat-scrollbar-thumb) transparent;
+
+  &::-webkit-scrollbar {
+    width: @size;
+    height: @size;
+  }
+
+  // No track. A visible groove doubles the visual weight of a control whose
+  // whole job is to stay out of the way until it is needed.
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    // The border is transparent and clipped away from the background, which is
+    // what insets the thumb inside the gutter: it ends up ~4px wide with room
+    // on both sides, instead of a 10px slab flush against the content.
+    border: 3px solid transparent;
+    background-clip: padding-box;
+    border-radius: @chat-radius-pill;
+    background-color: var(--chat-scrollbar-thumb);
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background-color: var(--chat-scrollbar-thumb-hover);
+  }
+
+  // Chromium draws a small square where a vertical and a horizontal bar meet;
+  // left alone it is the one opaque part of the treatment.
+  &::-webkit-scrollbar-corner {
+    background: transparent;
+  }
 }
 
 // Visually hidden but reachable by screen readers and focusable. Used for the
@@ -106,6 +156,28 @@
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+// Everything the forum draws around a chat surface that fills the screen.
+//
+// Applied to `<body>`, because the elements involved are not all inside `#app`:
+// `huseyinfiliz/modern-footer` mounts `<footer id="modern-footer">` straight
+// onto the body from an `app.mount` extender, and it is not the only extension
+// that does. Core's `Page.bodyClass` puts its class on `#app` and so cannot
+// reach them.
+//
+// The page also stops scrolling. A chat surface is exactly as tall as the
+// viewport and scrolls internally; a document scrollbar beside it either does
+// nothing or, worse, drags the whole layout off-screen — which is what happened
+// when a pinned message was tapped on a phone.
+.chat-suppress-page-chrome() {
+  overflow: hidden;
+
+  #modern-footer,
+  > footer,
+  .App-footer {
+    display: none;
+  }
 }
 
 // Respect a user's reduced-motion preference for anything that animates on

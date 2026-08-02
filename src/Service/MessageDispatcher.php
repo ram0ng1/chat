@@ -64,7 +64,7 @@ class MessageDispatcher
     ): Message {
         $content = trim($content);
 
-        $this->assertValidContent($content, $uploadIds);
+        $this->assertValidContent($channel, $content, $uploadIds);
         $this->assertMaySendStickers($actor, $content);
         $this->rateLimiter->assertWithinLimit($actor);
 
@@ -303,10 +303,16 @@ class MessageDispatcher
      *
      * @throws ValidationException
      */
-    protected function assertValidContent(string $content, array $uploadIds): void
+    protected function assertValidContent(Channel $channel, string $content, array $uploadIds): void
     {
         $min = (int) $this->settings->get('ramon-chat.min_message_length', 1);
-        $max = (int) $this->settings->get('ramon-chat.max_message_length', 3000);
+
+        // The channel's own cap when it has one, the forum's otherwise. Read
+        // here rather than passed in, so every path into `send()` is held to the
+        // same limit as the composer shows.
+        $max = $channel->maxMessageLength(
+            (int) $this->settings->get('ramon-chat.max_message_length', 3000)
+        );
 
         // An attachment-only message is legitimate, so the minimum applies to
         // the text only when there is nothing else being sent.

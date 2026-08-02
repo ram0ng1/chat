@@ -36,6 +36,7 @@ use Illuminate\Support\Str;
  * @property string $post_permission
  * @property bool $threading_enabled
  * @property int $slow_mode_seconds
+ * @property int|null $max_message_length
  * @property bool $auto_join
  * @property bool $auto_join_on_reply
  * @property bool $post_discussions
@@ -95,6 +96,7 @@ class Channel extends AbstractModel
         'archived_by_id'              => 'integer',
         'deleted_by_id'               => 'integer',
         'slow_mode_seconds'           => 'integer',
+        'max_message_length'          => 'integer',
         'is_private'                  => 'boolean',
         'threading_enabled'           => 'boolean',
         'auto_join'                   => 'boolean',
@@ -215,6 +217,18 @@ class Channel extends AbstractModel
     public function acceptsMessages(): bool
     {
         return $this->isOpen() && ! $this->isDeleted();
+    }
+
+    /**
+     * How long a message may be here, given the forum-wide default.
+     *
+     * Null and zero both mean "follow the forum": a channel that never had an
+     * opinion and a channel whose own limit was cleared must behave the same,
+     * and zero as a literal cap would forbid every message.
+     */
+    public function maxMessageLength(int $forumDefault): int
+    {
+        return $this->max_message_length ?: $forumDefault;
     }
 
     public function creator(): BelongsTo

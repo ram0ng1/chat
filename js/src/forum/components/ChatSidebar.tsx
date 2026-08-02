@@ -88,33 +88,46 @@ export default class ChatSidebar extends Component<ChatSidebarAttrs> {
                   dead end: no channels to open and no visible way to make one. */}
               {state.channelsLoaded && state.channels.length === 0 ? (
                 <div className="ChatSidebar-empty">
+                  <div className="ChatSidebar-empty-icon" aria-hidden="true">
+                    <i className="fas fa-comments" />
+                  </div>
+
                   <p>
                     {app.translator.trans(
                       "ramon-chat.forum.sidebar.no_channels",
                     )}
                   </p>
 
-                  <Button
-                    className="Button Button--primary Button--block"
-                    icon="fas fa-compass"
-                    onclick={() => m.route.set(app.route("chat.browse"))}
-                  >
-                    {app.translator.trans(
-                      "ramon-chat.forum.sidebar.browse_channels",
-                    )}
-                  </Button>
-
-                  {app.forum.attribute<boolean>("canCreateChatChannel") ? (
+                  {/* The actions are their own element rather than loose
+                      children of the empty state: `Button--block` only sets a
+                      width, so two of them are separated by whatever margin the
+                      theme's button happens to carry — which on Avocado is
+                      none, and the two buttons touched. A flex column with an
+                      explicit gap owns the spacing here instead of inheriting
+                      it. */}
+                  <div className="ChatSidebar-empty-actions">
                     <Button
-                      className="Button Button--block"
-                      icon="fas fa-plus"
-                      onclick={() => this.createChannel()}
+                      className="Button Button--primary Button--block"
+                      icon="fas fa-compass"
+                      onclick={() => m.route.set(app.route("chat.browse"))}
                     >
                       {app.translator.trans(
-                        "ramon-chat.forum.sidebar.new_channel",
+                        "ramon-chat.forum.sidebar.browse_channels",
                       )}
                     </Button>
-                  ) : null}
+
+                    {app.forum.attribute<boolean>("canCreateChatChannel") ? (
+                      <Button
+                        className="Button Button--block"
+                        icon="fas fa-plus"
+                        onclick={() => this.createChannel()}
+                      >
+                        {app.translator.trans(
+                          "ramon-chat.forum.sidebar.new_channel",
+                        )}
+                      </Button>
+                    ) : null}
+                  </div>
                 </div>
               ) : null}
             </>
