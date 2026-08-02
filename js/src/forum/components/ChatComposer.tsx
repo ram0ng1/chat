@@ -901,6 +901,17 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
       return;
     }
 
+    // Captured before the box is disabled. Disabling a focused element blurs it,
+    // and re-enabling does not hand focus back — which is why sending a message
+    // meant clicking the box again before the next one could be typed. Restoring
+    // it unconditionally would be wrong: someone who tabbed away, or opened the
+    // emoji picker, while the request was in flight should keep the cursor where
+    // they put it. `contains` covers both ways in, the textarea for an Enter and
+    // the send button for a click.
+    const hadFocus = Boolean(
+      this.element && this.element.contains(document.activeElement),
+    );
+
     this.sending = true;
 
     // Clear before the request resolves so typing can continue immediately.
@@ -966,7 +977,12 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
       );
     } finally {
       this.sending = false;
-      m.redraw();
+
+      // Sync, so the textarea is enabled again by the time focus is asked for —
+      // calling focus() on a still-disabled element does nothing at all.
+      m.redraw.sync();
+
+      if (hadFocus) this.textarea?.focus();
     }
   }
 

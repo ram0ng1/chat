@@ -2553,6 +2553,17 @@ body.ChatFullPage {
     color: var(--avocado-muted-label);
   }
 
+  // The description box grows downwards only.
+  //
+  // A textarea defaults to `resize: both`, and dragging it wider pushed it past
+  // the card that holds it — the grid track is sized by the dialog, so the
+  // handle was offering a width the layout never agreed to. Height is the axis
+  // that is actually useful here: the field is two rows and a long description
+  // needs more of them.
+  textarea.FormControl {
+    resize: vertical;
+  }
+
   // Icon and name on one line. The emoji column is the picker's preview circle
   // plus its clear button; the name takes the rest.
   &-nameRow {

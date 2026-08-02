@@ -353,6 +353,7 @@ ramon-chat:
       filter_mine: Meus canais
       search_placeholder: Buscar canais
       subtitle: Encontre um canal para participar, ou crie o seu.
+      subtitle_join_only: Encontre um canal para participar.
       empty: Ainda não há canais aqui.
       empty_search: "Nenhum canal corresponde a “{query}”."
       clear_search: Limpar busca

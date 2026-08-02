@@ -44,7 +44,7 @@ class JoinChannelsOnReply
         }
 
         // Guests aside, a user with no chat access should not be silently opted in.
-        if (! $actor->can('ramon-chat.use')) {
+        if (! $actor->can('useChat')) {
             return;
         }
 

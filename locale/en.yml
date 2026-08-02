@@ -379,6 +379,7 @@ ramon-chat:
       filter_mine: My channels
       search_placeholder: Search channels
       subtitle: Find a channel to join, or start one of your own.
+      subtitle_join_only: Find a channel to join.
       empty: No channels here yet.
       empty_search: "No channels match “{query}”."
       clear_search: Clear search

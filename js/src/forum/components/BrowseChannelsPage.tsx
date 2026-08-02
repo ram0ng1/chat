@@ -74,8 +74,16 @@ export default class BrowseChannelsPage<
             <h1 className="ChatBrowse-title">
               {app.translator.trans("ramon-chat.forum.browse.title")}
             </h1>
+            {/* The half about starting your own is only true for someone who
+                may create a channel — the button beside it is drawn on the same
+                condition. Promising it to everyone else describes an action the
+                page does not offer and the server would refuse. */}
             <p className="ChatBrowse-subtitle">
-              {app.translator.trans("ramon-chat.forum.browse.subtitle")}
+              {app.translator.trans(
+                app.forum.attribute<boolean>("canCreateChatChannel")
+                  ? "ramon-chat.forum.browse.subtitle"
+                  : "ramon-chat.forum.browse.subtitle_join_only",
+              )}
             </p>
           </div>
 
