@@ -129,6 +129,7 @@ ramon-chat:
       archived: This channel has been archived.
       archived_link: View the archived transcript
       no_messages: No messages yet. Say something.
+      scroll_to_latest: Jump to the latest message
       members: "{count} members"
       view_info: Channel details
       search_in_channel: Search this channel
@@ -174,6 +175,7 @@ ramon-chat:
       quote_in_discussion: Quote in discussion
       select: Select
       replying_to: "Replying to {username}"
+      starting_thread: "Starting a thread on {username}'s message"
       delete_confirm: Delete this message?
       delete_failed: That message could not be deleted.
       system:
