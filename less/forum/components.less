@@ -3972,9 +3972,14 @@ body.ChatFullPage {
   max-width: ~"min(220px, calc(100vw - 32px))";
   font-size: @chat-font-meta;
 
-  // Aligned to the message body rather than centred on the badge, so it grows
-  // rightwards into the panel instead of leftwards out of it.
-  left: 0;
+  // Aligned near the badge rather than centred on it, so it grows rightwards
+  // into the panel instead of leftwards out of it.
+  //
+  // Not flush at 0. The arrow cannot sit closer than 16px to the panel's edge
+  // without meeting the rounded corner, so the panel is shifted left by the
+  // difference between that inset and the badge's midpoint — which puts the
+  // arrow back over the badge while keeping it on a straight run of border.
+  left: (@chat-verified-badge-size / 2) - @chat-verified-arrow-inset;
   transform: none;
 
   // The extension's entry animation hardcodes `translateX(-50%)`, which would
@@ -4002,20 +4007,20 @@ body.ChatFullPage {
   border-bottom: 0;
 }
 
-// Centred under the badge, which is where it points from now that the panel no
-// longer centres on it.
+// Over the badge, which is where it points from now that the panel no longer
+// centres on it.
 //
-// The panel is pinned to `left: 0` of the anchor, and the anchor is the badge —
-// so the badge's midpoint is half its width from the panel's left edge, and that
-// is the only place the arrow can sit without pointing at empty row. It was at a
-// flat 14px, which is wider than the whole badge: the arrow landed clear of the
-// mark it was supposed to come from, to the right of it.
+// The inset is the arrow's constraint, not the badge's — see the variable. The
+// panel is offset to suit it, so this stays on a straight run of border and
+// still lands over the mark. Aligning the arrow to the badge directly, at half
+// the badge's width, put it inside the panel's 8px corner radius and it read as
+// though it had come loose from the panel.
 //
-// `translateX(-50%)` is restored from the extension's base rule — dropping it
-// made `left` mean "the arrow's left edge" instead of "its centre", which is
-// half the reason the old number had to be so large.
+// `translateX(-50%)` is restored from the extension's base rule — dropped, it
+// made `left` mean "the arrow's left edge" instead of "its centre", so the two
+// numbers here would not compose.
 .ChatMessage .VerifiedPopover-arrow {
-  left: (@chat-verified-badge-size / 2);
+  left: @chat-verified-arrow-inset;
   transform: translateX(-50%) rotate(45deg);
 }
 
