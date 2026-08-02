@@ -382,6 +382,9 @@ return [
                 ->listen(Event\MessageWasSent::class, Realtime\BroadcastListener::class.'@whenMessageSent')
                 ->listen(Event\MessageWasEdited::class, Realtime\BroadcastListener::class.'@whenMessageChanged')
                 ->listen(Event\MessageWasDeleted::class, Realtime\BroadcastListener::class.'@whenMessageChanged')
+                // Its own event, not the changed one: a purge leaves no row to
+                // redraw, so the client removes it rather than restyling it.
+                ->listen(Event\MessageWasPurged::class, Realtime\BroadcastListener::class.'@whenMessagePurged')
                 ->listen(Event\MessageWasRestored::class, Realtime\BroadcastListener::class.'@whenMessageChanged')
                 ->listen(Event\MessagePinToggled::class, Realtime\BroadcastListener::class.'@whenMessageChanged')
                 ->listen(Event\ReactionToggled::class, Realtime\BroadcastListener::class.'@whenReactionToggled')

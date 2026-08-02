@@ -173,17 +173,24 @@ app.initializers.add("ramon-chat", () => {
     })
 
     // ── Permissions ───────────────────────────────────────────────────────────
-    // Priorities descend so the group reads in order of how much it grants:
-    // using chat, then starting DMs, then creating channels.
+    // Under "Read", not "Create": this one opens the chat rather than making
+    // anything in it, and it is the gate every other permission here sits
+    // behind — a group without it cannot see a channel, never mind start one.
+    // Grouped with `viewForum`, which is the same kind of answer.
+    //
+    // High priority within that section because it is the master switch: an
+    // admin closing the chat to a group looks for it first.
     .registerPermission(
       {
         icon: "fas fa-comments",
         label: app.translator.trans("ramon-chat.admin.permissions.use"),
         permission: "ramon-chat.use",
       },
-      "start",
+      "view",
       95,
     )
+    // The rest of this group does create something. Priorities descend so it
+    // reads in order of how much it grants: starting DMs, then channels.
     .registerPermission(
       {
         icon: "fas fa-envelope",
