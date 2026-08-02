@@ -105,7 +105,7 @@ return [
     (new Extend\ApiResource(ForumResource::class))
         ->fields(fn () => [
             Schema\Boolean::make('canUseChat')
-                ->get(fn ($forum, Context $context) => $context->getActor()->can('ramon-chat.use')),
+                ->get(fn ($forum, Context $context) => $context->getActor()->can('useChat')),
 
             Schema\Boolean::make('canCreateChatChannel')
                 ->get(fn ($forum, Context $context) => $context->getActor()->can('createChannel')),
@@ -176,6 +176,9 @@ return [
     (new Extend\ApiResource(UserResource::class))
         ->fields(fn () => [
             // Only ever exposed to the user themselves — unread state is private.
+            // Each counts through the channels the actor can currently see; see
+            // UnreadTracker::visibleMemberships() for why a stored counter is
+            // not enough on its own.
             Schema\Integer::make('chatUnreadChannelsCount')
                 ->visible(fn (User $user, Context $context) => $context->getActor()->is($user))
                 ->get(fn (User $user) => resolve(UnreadTracker::class)->totalUnreadFor($user)),

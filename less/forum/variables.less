@@ -48,6 +48,20 @@
 // arbitrary number sitting among the spacing steps.
 @chat-checkbox-size:        16px;
 
+// Also not spacing: the rendered width of ramon/verified's badge inside a message
+// row. Named because three rules depend on it agreeing — the badge's own box, and
+// the popover arrow that has to be centred under it.
+@chat-verified-badge-size:  13px;
+
+// How far the popover's arrow sits from the panel's left edge.
+//
+// Not a free choice. The panel is a 10px square rotated 45°, so it reaches
+// ~7.1px either side of its centre, and the panel's corner is rounded by 8px —
+// closer in than 15.1px and the arrow meets the curve instead of a straight run
+// of border, which is what makes it look detached from the panel. 16px is the
+// first whole pixel clear of that.
+@chat-verified-arrow-inset: 16px;
+
 // ── Channel-form dialog geometry ─────────────────────────────────────────────
 // The form is long enough that it must scroll inside the dialog rather than run
 // off the screen, and a scroll cap is only correct if it agrees with the space

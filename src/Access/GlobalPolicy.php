@@ -38,6 +38,26 @@ use Flarum\User\User;
 class GlobalPolicy extends AbstractPolicy
 {
     /**
+     * Opening the chat at all.
+     *
+     * The ability is `useChat` while the permission remains `ramon-chat.use`,
+     * the same split flarum/messages makes between `sendAnyMessage` and
+     * `dialog.sendMessage`. The two names have to differ because `checkAbility`
+     * dispatches on `method_exists($this, $ability)`, and `ramon-chat.use` is
+     * not a method name — asking the Gate for it therefore matched nothing here
+     * and fell through to the fallback described above, where any other
+     * extension's `can()` catch-all could answer for us.
+     *
+     * With a method to dispatch to, this returns an explicit DENY, and DENY
+     * outranks ALLOW in the Gate's priority order. A blanket-allowing catch-all
+     * elsewhere can no longer open the chat.
+     */
+    public function useChat(User $actor): bool
+    {
+        return $actor->hasPermission('ramon-chat.use');
+    }
+
+    /**
      * Starting a direct message also requires the base chat gate — a group granted
      * only `startDirect` must not be able to bypass the opt-in.
      */
