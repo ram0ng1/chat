@@ -34,6 +34,7 @@
         "mockery/mockery": "^1.6",
         "phpstan/phpstan": "^2.2",
         "phpunit/phpunit": "^11.5 || ^13.2.0",
+        "pusher/pusher-php-server": "^7.2",
         "vimeo/psalm": "^6.0"
     },
     "suggest": {

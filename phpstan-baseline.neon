@@ -451,36 +451,6 @@ parameters:
 			path: src/Realtime/BroadcastListener.php
 
 		-
-			message: '#^Call to method trigger\(\) on an unknown class Pusher\\Pusher\.$#'
-			identifier: class.notFound
-			count: 2
-			path: src/Realtime/ChatBroadcaster.php
-
-		-
-			message: '#^Method Ramon\\Chat\\Realtime\\ChatBroadcaster\:\:pusher\(\) has invalid return type Pusher\\Pusher\.$#'
-			identifier: class.notFound
-			count: 1
-			path: src/Realtime/ChatBroadcaster.php
-
-		-
-			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,stdClass\>\:\:filter\(\) expects \(callable\(stdClass, int\)\: bool\)\|null, Closure\(Flarum\\User\\User\)\: bool given\.$#'
-			identifier: argument.type
-			count: 1
-			path: src/Realtime/ChatBroadcaster.php
-
-		-
-			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,stdClass\>\:\:map\(\) expects callable\(stdClass, int\)\: int, Closure\(Flarum\\User\\User\)\: int given\.$#'
-			identifier: argument.type
-			count: 1
-			path: src/Realtime/ChatBroadcaster.php
-
-		-
-			message: '#^Parameter \$pusher of method Ramon\\Chat\\Realtime\\ChatBroadcaster\:\:recipients\(\) has invalid type Pusher\\Pusher\.$#'
-			identifier: class.notFound
-			count: 1
-			path: src/Realtime/ChatBroadcaster.php
-
-		-
 			message: '#^Method Ramon\\Chat\\Search\\ChannelSearcher\:\:getQuery\(\) should return Illuminate\\Database\\Eloquent\\Builder but returns Illuminate\\Database\\Query\\Builder\.$#'
 			identifier: return.type
 			count: 1
