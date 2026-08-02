@@ -103,6 +103,7 @@ ramon-chat:
       archived: Este canal foi arquivado.
       archived_link: Ver a transcrição arquivada
       no_messages: Nenhuma mensagem ainda. Diga algo.
+      scroll_to_latest: Ir para a mensagem mais recente
       members: "{count} membros"
       view_info: Detalhes do canal
       search_in_channel: Buscar neste canal
@@ -148,6 +149,7 @@ ramon-chat:
       quote_in_discussion: Citar em discussão
       select: Selecionar
       replying_to: "Respondendo a {username}"
+      starting_thread: "Criando um tópico na mensagem de {username}"
       delete_confirm: Excluir esta mensagem?
       delete_failed: Não foi possível excluir a mensagem.
       system:

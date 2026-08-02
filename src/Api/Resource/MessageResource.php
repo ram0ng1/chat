@@ -28,6 +28,7 @@ use Ramon\Chat\Channel;
 use Ramon\Chat\Event\MessagePinToggled;
 use Ramon\Chat\Event\MessageWasDeleted;
 use Ramon\Chat\Event\MessageWasEdited;
+use Ramon\Chat\Event\MessageWasPurged;
 use Ramon\Chat\Event\MessageWasRestored;
 use Ramon\Chat\Event\ReactionToggled;
 use Ramon\Chat\Mention\MentionResolver;
@@ -230,6 +231,10 @@ class MessageResource extends AbstractDatabaseResource
                     $channel = $message->channel;
                     $thread = $message->thread;
 
+                    // Held for the same reason, and read before the row goes.
+                    $messageId = (int) $message->id;
+                    $threadId = $message->thread_id;
+
                     // Reactions, mentions, revisions, bookmarks, reports and upload
                     // rows all cascade on the foreign key. The files themselves are
                     // already gone: they were removed when the message was deleted,
@@ -242,6 +247,16 @@ class MessageResource extends AbstractDatabaseResource
                     // pointing at a row that no longer exists.
                     $channel?->refreshMetadata()->save();
                     $thread?->refreshMetadata()->save();
+
+                    // Announced so the row leaves everyone's stream, not just the
+                    // moderator's. A purge is the one deletion with nothing left
+                    // behind to redraw — the others turn into a tombstone, which is
+                    // why they ride on the message-changed event and this cannot.
+                    if ($channel !== null) {
+                        $this->events->dispatch(
+                            new MessageWasPurged($messageId, $channel, $threadId, $actor)
+                        );
+                    }
                 })
                 ->response(fn () => new EmptyResponse(204)),
 

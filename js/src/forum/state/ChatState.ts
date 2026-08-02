@@ -117,6 +117,16 @@ export default class ChatState {
   private replyTargets: Record<string, Message> = {};
   private editTargets: Record<string, Message> = {};
 
+  /**
+   * Reply scopes whose next send should branch into a new thread.
+   *
+   * Replying and branching stage the same way — both put a target in
+   * `replyTargets` — so without recording which one was asked for, the composer
+   * had nothing to tell them apart and inferred it: any reply in a channel with
+   * threading on became a thread, and a plain reply was unreachable.
+   */
+  private branchTargets: Record<string, true> = {};
+
   /** Attachments staged in the composer but not yet sent. */
   pendingUploads: Upload[] = [];
 
@@ -650,8 +660,10 @@ export default class ChatState {
   }
 
   private isThreadRoot(message: Message): boolean {
-    // `false` here means the relationship was never loaded — as it is not on a
-    // realtime push — so a reply cannot be mistaken for a root.
+    // `false` here means the relationship is not loaded, and a message with no
+    // thread on it cannot be a root. That used to be the answer for every
+    // realtime push; the thread broadcast now links the root as it lands, so
+    // this is only reached for replies and for roots nobody has scrolled to.
     const thread = message.thread();
 
     if (!thread) return false;
@@ -682,6 +694,23 @@ export default class ChatState {
 
   removeMessage(channelId: number, messageId: number): void {
     const stream = this.streams[channelId];
+
+    if (!stream) return;
+
+    stream.messages = stream.messages.filter(
+      (msg) => Number(msg.id()) !== messageId,
+    );
+  }
+
+  /**
+   * The same, for the panel a thread renders in.
+   *
+   * Separate because thread streams live in their own map: passing a thread id
+   * to `removeMessage` would look it up among the channels, and on a forum where
+   * a channel happens to carry that id it would sweep the wrong conversation.
+   */
+  removeThreadMessage(threadId: number, messageId: number): void {
+    const stream = this.threadStreams[threadId];
 
     if (!stream) return;
 
@@ -831,18 +860,33 @@ export default class ChatState {
     return this.editTargets[this.draftKey(channelId, threadId)] ?? null;
   }
 
-  /** Replying and editing are mutually exclusive within a scope. */
+  /** Whether the staged reply was started as a branch rather than a reply. */
+  branchingFrom(channelId: number, threadId: number | null = null): boolean {
+    return this.branchTargets[this.draftKey(channelId, threadId)] === true;
+  }
+
+  /**
+   * Replying and editing are mutually exclusive within a scope.
+   *
+   * `branch` says the reply was staged by "reply in thread" rather than by
+   * "reply". Only the composer reads it, and only to decide whether the send
+   * should open a thread — see ChatComposer.submit().
+   */
   setReplyingTo(
     channelId: number,
     message: Message | null,
     threadId: number | null = null,
+    branch = false,
   ): void {
     const key = this.draftKey(channelId, threadId);
 
     delete this.editTargets[key];
+    delete this.branchTargets[key];
 
     if (message) {
       this.replyTargets[key] = message;
+
+      if (branch) this.branchTargets[key] = true;
     } else {
       delete this.replyTargets[key];
     }
@@ -856,6 +900,7 @@ export default class ChatState {
     const key = this.draftKey(channelId, threadId);
 
     delete this.replyTargets[key];
+    delete this.branchTargets[key];
 
     if (message) {
       this.editTargets[key] = message;
@@ -869,6 +914,7 @@ export default class ChatState {
 
     delete this.replyTargets[key];
     delete this.editTargets[key];
+    delete this.branchTargets[key];
   }
 
   draft(channelId: number, threadId: number | null = null): string {

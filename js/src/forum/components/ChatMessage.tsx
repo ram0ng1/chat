@@ -18,6 +18,7 @@ import RevisionsModal from "./RevisionsModal";
 import FlagMessageModal from "./FlagMessageModal";
 import ImageLightbox from "./ImageLightbox";
 import { messagePreview } from "../../common/utils/preview";
+import { refreshMessageCapabilities } from "../realtime";
 
 export interface ChatMessageAttrs extends ComponentAttrs {
   message: Message;
@@ -136,8 +137,13 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
 
           {this.replyPreview(message)}
           {deleted ? this.tombstone(message) : this.content(message)}
-          {deleted ? null : this.reactions(message)}
+          {/* Attachments before reactions. A reaction is *about* the message, so
+              it belongs after everything the message is made of — and an
+              image-only message put the pill above a 300px picture, which read as
+              a badge on the row rather than a response to the picture nobody had
+              scrolled to yet. Stickers render through the same block. */}
           {deleted ? null : this.uploads(message)}
+          {deleted ? null : this.reactions(message)}
           {deleted ? null : this.threadIndicator(message)}
         </div>
 
@@ -842,6 +848,17 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
           Number((message.user() || null)?.id() ?? 0) !==
           Number(app.session.user?.id() ?? 0),
       });
+
+      // What the optimistic push above cannot state: `canForceDelete` and its
+      // siblings are the server's answer for this actor, and deleting is what
+      // makes purging possible in the first place — the flag was false when the
+      // row was last read and nothing here can honestly flip it.
+      //
+      // Not covered by the realtime handler that does the same job: the
+      // message-changed broadcast excludes the actor, so the one person who just
+      // moderated is the one it never reaches. That is why the control appeared
+      // only after a reload.
+      refreshMessageCapabilities(Number(message.id()));
     } catch (e) {
       app.alerts.show(
         { type: "error" },

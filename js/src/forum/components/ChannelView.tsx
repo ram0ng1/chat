@@ -106,30 +106,38 @@ export default class ChannelView extends Component<ChannelViewAttrs> {
         {this.header()}
         {this.pinnedBar()}
 
-        <div
-          className="ChatChannel-stream"
-          onscroll={(e: Event) => this.onScroll(e)}
-        >
-          {stream.loading && stream.messages.length === 0
-            ? this.skeleton()
-            : null}
-          {/* Paging upwards. A skeleton row rather than a spinner: it occupies
-              roughly the height the arriving messages will, so the stream does not
-              lurch when they land — and it says "messages are coming" rather than
-              "something is happening". */}
-          {stream.hasMore && stream.messages.length > 0 ? (
-            <div className="ChatChannel-loadMore">
-              {stream.loading ? MessageStreamSkeleton(2) : null}
-            </div>
-          ) : null}
+        {/* The wrapper exists only to anchor the scroll-down button. Positioning
+            it against `.ChatChannel` would mean guessing the composer's height,
+            which grows with the text in it and with the typing indicator; against
+            the scroller itself it would scroll away with the content. */}
+        <div className="ChatChannel-streamWrap">
+          <div
+            className="ChatChannel-stream"
+            onscroll={(e: Event) => this.onScroll(e)}
+          >
+            {stream.loading && stream.messages.length === 0
+              ? this.skeleton()
+              : null}
+            {/* Paging upwards. A skeleton row rather than a spinner: it occupies
+                roughly the height the arriving messages will, so the stream does
+                not lurch when they land — and it says "messages are coming"
+                rather than "something is happening". */}
+            {stream.hasMore && stream.messages.length > 0 ? (
+              <div className="ChatChannel-loadMore">
+                {stream.loading ? MessageStreamSkeleton(2) : null}
+              </div>
+            ) : null}
 
-          {stream.loadedInitial && stream.messages.length === 0 ? (
-            <div className="ChatBrowse-empty">
-              {app.translator.trans("ramon-chat.forum.channel.no_messages")}
-            </div>
-          ) : null}
+            {stream.loadedInitial && stream.messages.length === 0 ? (
+              <div className="ChatBrowse-empty">
+                {app.translator.trans("ramon-chat.forum.channel.no_messages")}
+              </div>
+            ) : null}
 
-          {this.rows(stream.messages, stream.dividerAfterId)}
+            {this.rows(stream.messages, stream.dividerAfterId)}
+          </div>
+
+          {this.scrollDownButton()}
         </div>
 
         {this.typingIndicator()}
@@ -567,10 +575,22 @@ export default class ChannelView extends Component<ChannelViewAttrs> {
 
   protected onScroll(e: Event): void {
     const el = e.target as HTMLElement;
+    const wasPinned = this.pinned;
 
     // 40px of tolerance: "at the bottom" should survive sub-pixel rounding and a
     // partially visible last row.
     this.pinned = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+
+    // Scroll fires continuously and Mithril redraws after every handler bound
+    // this way, so a drag through the middle of a long stream repaints it dozens
+    // of times over. Suppressed only while staying *away* from the bottom, which
+    // is the one case with nothing to show for it: the button below is already
+    // visible, `markRead` is not reached, and `fetchPage` redraws itself when its
+    // request lands. Staying pinned still redraws — `markRead` mutates the unread
+    // badge and has no redraw of its own.
+    if (!this.pinned && !wasPinned) {
+      (e as Event & { redraw?: boolean }).redraw = false;
+    }
 
     if (el.scrollTop < 120) {
       const stream = this.attrs.state.stream(Number(this.attrs.channel.id()));
@@ -586,6 +606,55 @@ export default class ChannelView extends Component<ChannelViewAttrs> {
     }
   }
 
+  /**
+   * The way back down, for when the stream has been left somewhere above the
+   * newest message.
+   *
+   * Jumping to a pinned message is the case that makes this necessary: it can
+   * land you hours up the conversation with no affordance but a long scroll, and
+   * on a phone that is a lot of dragging. Same control WhatsApp draws in the same
+   * corner, for the same reason.
+   *
+   * Tied to `pinned` rather than to a scroll-offset threshold of its own —
+   * `pinned` is already what decides whether the stream follows new messages, so
+   * the button is visible exactly when it is not following, and never lingers
+   * over a stream that is already at the bottom.
+   */
+  protected scrollDownButton(): Mithril.Children {
+    if (this.pinned) return null;
+
+    const label = app.translator.trans(
+      "ramon-chat.forum.channel.scroll_to_latest",
+      {},
+      true,
+    );
+
+    return (
+      <button
+        type="button"
+        className="ChatChannel-scrollDown"
+        title={label}
+        aria-label={label}
+        onclick={() => {
+          this.pinned = true;
+          this.scrollToBottom();
+        }}
+      >
+        <i className="fas fa-chevron-down" aria-hidden="true" />
+      </button>
+    );
+  }
+
+  /**
+   * Jumps the stream to the newest message.
+   *
+   * Instant, including for the button — an animated version of this does not
+   * survive its surroundings. `onupdate` re-anchors to the bottom the moment a
+   * message arrives while pinned, which overrides an animation mid-flight; and a
+   * smooth `scrollTo` resolves its target once, so rows still laying out below
+   * (an image finishing, the reconcile filling a row in) leave it settling short
+   * of the bottom — on whichever row happened to be there.
+   */
   protected scrollToBottom(): void {
     if (!this.scroller) return;
 
@@ -635,9 +704,11 @@ export default class ChannelView extends Component<ChannelViewAttrs> {
       return;
     }
 
-    // No thread yet: replying with `createThread` makes one. Staging the reply
-    // here keeps thread creation on the same code path as a normal reply.
-    state.setReplyingTo(Number(channel.id()), message);
+    // No thread yet: the send makes one. Staged as a reply like any other, but
+    // flagged as a branch — the composer cannot otherwise tell this apart from
+    // the plain reply below, and inferring it turned every reply in a
+    // threading-enabled channel into a thread.
+    state.setReplyingTo(Number(channel.id()), message, null, true);
     m.redraw();
   }
 

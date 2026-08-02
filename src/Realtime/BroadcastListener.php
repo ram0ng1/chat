@@ -14,6 +14,7 @@ use Ramon\Chat\Event\ChannelWasEdited;
 use Ramon\Chat\Event\MessagePinToggled;
 use Ramon\Chat\Event\MessageWasDeleted;
 use Ramon\Chat\Event\MessageWasEdited;
+use Ramon\Chat\Event\MessageWasPurged;
 use Ramon\Chat\Event\MessageWasRestored;
 use Ramon\Chat\Event\MessageWasSent;
 use Ramon\Chat\Event\ReactionToggled;
@@ -36,6 +37,13 @@ class BroadcastListener
      */
     public const EVENT_MESSAGE = 'ramonChat.message';
     public const EVENT_MESSAGE_CHANGED = 'ramonChat.messageChanged';
+
+    /**
+     * Distinct from `messageChanged`, which carries a row that still exists. A
+     * purge leaves nothing to redraw — the client removes the row instead.
+     */
+    public const EVENT_MESSAGE_PURGED = 'ramonChat.messagePurged';
+
     public const EVENT_REACTION = 'ramonChat.reaction';
     public const EVENT_THREAD = 'ramonChat.thread';
     public const EVENT_CHANNEL = 'ramonChat.channel';
@@ -74,6 +82,31 @@ class BroadcastListener
             self::EVENT_MESSAGE_CHANGED,
             $this->messagePayload($event->message),
             $event->actor?->id
+        );
+    }
+
+    /**
+     * A message removed outright.
+     *
+     * Not excluded from the actor's own client, unlike the sends: the moderator
+     * has already dropped the row from their stream, and a second removal is a
+     * no-op — whereas excluding them leaves a moderator's other tab still
+     * showing a message that no longer exists anywhere.
+     */
+    public function whenMessagePurged(MessageWasPurged $event): void
+    {
+        $this->broadcaster->toChannelMembers(
+            $event->channel,
+            self::EVENT_MESSAGE_PURGED,
+            [
+                'id'        => $event->messageId,
+                'channelId' => (int) $event->channel->id,
+
+                // So a thread panel open on this message can drop it too, and
+                // the indicator under the root can be recounted.
+                'threadId'  => $event->threadId,
+            ],
+            null
         );
     }
 
@@ -116,6 +149,14 @@ class BroadcastListener
                 'originalMessageId' => $event->thread->original_message_id,
                 'title'             => $event->thread->title,
                 'repliesCount'      => (int) $event->thread->replies_count,
+
+                // How far the count above already reaches. Creating a thread
+                // broadcasts twice — this event and the message that opened it —
+                // and the recipient has no other way to tell that the two
+                // describe the same reply. Without it the client counted the
+                // message once from here and once again on arrival, and every
+                // new thread announced two replies to everyone but its author.
+                'lastMessageId'     => $event->thread->last_message_id,
             ],
             $event->actor?->id
         );
@@ -143,6 +184,14 @@ class BroadcastListener
                 'postPermission' => $event->channel->post_permission,
                 'isPrivate'      => (bool) $event->channel->is_private,
                 'threadingEnabled' => (bool) $event->channel->threading_enabled,
+
+                // Same reasoning as `postPermission`: turning slow mode on
+                // changes whether the composer accepts the next message, and a
+                // rule everyone is now bound by should not wait for each of them
+                // to reload. Its per-user half — `slowModeRemaining`, which
+                // holders of `bypassSlowMode` read as zero — is refetched by the
+                // client for the same reason `canPostMessage` is.
+                'slowModeSeconds' => (int) $event->channel->slow_mode_seconds,
                 'name'           => $event->channel->name,
                 'emoji'          => $event->channel->emoji,
                 'description'    => $event->channel->description,
@@ -192,6 +241,26 @@ class BroadcastListener
             'createdAt'   => $message->created_at?->toIso8601String(),
             'editedAt'    => $message->edited_at?->toIso8601String(),
             'isDeleted'   => $deleted,
+
+            // Who removed it. Without these the author of a message a moderator
+            // deleted was told only that it "was deleted" — the same wording
+            // their own deletion produces — and learned it had been moderated
+            // only by reloading, where the API supplies the field.
+            //
+            // Derived exactly as MessageResource does, from the column rather
+            // than from the relation: a deletion by the author is not a
+            // moderation, whoever is looking.
+            'isModeratorDeleted' => $deleted
+                && $message->deleted_by_id !== null
+                && (int) $message->deleted_by_id !== (int) $message->user_id,
+
+            // The id alone. The recipient names the moderator only if that user
+            // is already in their store — which they usually are, having been
+            // active in the channel — and falls back to the unnamed wording
+            // otherwise. Pushing a whole user record for a tombstone is not
+            // worth the payload on every edit and pin that shares this shape.
+            'deletedById' => $message->deleted_by_id,
+
             'isPinned'    => $message->isPinned(),
             'pinnedAt'    => $message->pinned_at?->toIso8601String(),
 

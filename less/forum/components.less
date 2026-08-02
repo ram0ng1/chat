@@ -560,6 +560,53 @@ body.ChatFullPage {
     }
   }
 
+  // Wraps the scroller so the scroll-down button has something to anchor to that
+  // is neither the composer (whose height moves with the text in it) nor the
+  // scroller (whose content moves under it). Takes the flex sizing the stream
+  // needs from its parent and passes it straight on.
+  &-streamWrap {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+
+  // The way back to the newest message, drawn only while the stream is not
+  // following it — see ChannelView.scrollDownButton(). Inset from the corner
+  // rather than flush to it, so it never sits on a message's own right edge.
+  &-scrollDown {
+    position: absolute;
+    right: 16px;
+    bottom: 16px;
+    z-index: 2;
+
+    .chat-icon-circle(38px);
+    border: 1px solid var(--avocado-border-soft);
+    background-color: var(--body-bg);
+    color: var(--avocado-text-dark);
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
+
+    // The tint is layered over the opaque base rather than replacing it.
+    // `--chat-row-hover-bg` is `rgba(0, 0, 0, 0.035)` — meant to darken a row it
+    // sits on top of — so assigning it to `background` left the button 3.5%
+    // black over the conversation behind it, which reads as the thing turning
+    // transparent under the cursor. A background-image composites over the
+    // background-color instead.
+    &:hover {
+      background-image: linear-gradient(
+        var(--chat-row-hover-bg),
+        var(--chat-row-hover-bg)
+      );
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--primary-color);
+      outline-offset: 2px;
+    }
+  }
+
   &-stream {
     .chat-scroll-y();
     flex: 1;

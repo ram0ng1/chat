@@ -10,6 +10,7 @@ import { NotificationLevel } from "../common/models/Channel";
  */
 const EVENT_MESSAGE = "ramonChat.message";
 const EVENT_MESSAGE_CHANGED = "ramonChat.messageChanged";
+const EVENT_MESSAGE_PURGED = "ramonChat.messagePurged";
 const EVENT_REACTION = "ramonChat.reaction";
 const EVENT_THREAD = "ramonChat.thread";
 const EVENT_CHANNEL = "ramonChat.channel";
@@ -50,6 +51,9 @@ interface MessagePayload {
   createdAt: string | null;
   editedAt: string | null;
   isDeleted: boolean;
+  /** Whether the deletion was somebody else's doing. See BroadcastListener. */
+  isModeratorDeleted?: boolean;
+  deletedById?: number | null;
   isPinned?: boolean;
   pinnedAt?: string | null;
   uploads?: UploadPayload[];
@@ -80,6 +84,7 @@ function bindTo(channel: any): void {
   channel.bind(EVENT_MESSAGE_CHANGED, (data: MessagePayload) =>
     onMessageChanged(data),
   );
+  channel.bind(EVENT_MESSAGE_PURGED, (data: any) => onMessagePurged(data));
   channel.bind(EVENT_REACTION, (data: any) => onReaction(data));
   channel.bind(EVENT_THREAD, (data: any) => onThread(data));
   channel.bind(EVENT_CHANNEL, (data: any) => onChannel(data));
@@ -195,8 +200,79 @@ function onMessage(data: MessagePayload): void {
   bumpChannel(data);
   bumpThread(data);
   announce(data, message);
+  queueReconcile(data.channelId, data.id);
 
   m.redraw();
+}
+
+/**
+ * Oldest realtime-delivered message id still awaiting an authoritative read,
+ * per channel.
+ */
+const reconcileFloor = new Map<number, number>();
+let reconcileTimer: number | null = null;
+
+/**
+ * Delay before reconciling. Long enough that a burst of messages costs one
+ * request rather than one each, short enough that the row's actions appear while
+ * the message is still the thing being looked at.
+ */
+const RECONCILE_DELAY = 500;
+
+/**
+ * Re-reads recently pushed messages from the API.
+ *
+ * The wire payload is a lossy projection of the resource: it is built once and
+ * sent to every member of the channel, so it cannot carry anything that depends
+ * on who is receiving it. `canDelete`, `canEdit`, `canPin` and the rest are
+ * therefore pushed closed — offering an action the server would refuse is worse
+ * than withholding one — and a moderator watching a live channel saw no controls
+ * on anything until the next page load.
+ *
+ * Reading the rows back is what fills those in, and it is the same fetch the
+ * polling fallback already makes, so the Index endpoint's `defaultInclude` also
+ * supplies the relations the payload can only reference by id. Batched by
+ * channel: a run of twenty messages resolves in one request for the tail.
+ */
+function queueReconcile(channelId: number, messageId: number): void {
+  const floor = reconcileFloor.get(channelId);
+
+  if (floor === undefined || messageId < floor) {
+    reconcileFloor.set(channelId, messageId);
+  }
+
+  if (reconcileTimer !== null) return;
+
+  reconcileTimer = window.setTimeout(() => {
+    reconcileTimer = null;
+
+    const pending = [...reconcileFloor.entries()];
+    reconcileFloor.clear();
+
+    for (const [channel, oldest] of pending) {
+      app.store
+        .find<Message[]>("chat-messages", {
+          // `greaterThan` is exclusive, so step back one to include the oldest
+          // message of the burst itself.
+          filter: { channel, greaterThan: oldest - 1 },
+          sort: "id",
+          page: { limit: 50 },
+        })
+        .then((results) => {
+          for (const message of (Array.isArray(results)
+            ? results
+            : []) as Message[]) {
+            chatState.upsertMessage(message);
+          }
+
+          m.redraw();
+        })
+        // A failed reconcile leaves the row as the push built it: visible, with
+        // its actions withheld. That is the state before this existed, and it
+        // resolves on the next load — not worth an alert.
+        .catch(() => {});
+    }
+  }, RECONCILE_DELAY);
 }
 
 /**
@@ -264,6 +340,12 @@ function bumpThread(data: MessagePayload): void {
   // Not counted for the root itself, which is the thread, not a reply to it.
   if (thread.attribute<number | null>("originalMessageId") === data.id) return;
 
+  // Nor for anything the thread's own count already reaches. Creating a thread
+  // produces two broadcasts describing one reply — the thread event, whose
+  // `repliesCount` includes the message that opened it, and the message event
+  // itself — and counting both made every new thread arrive claiming two.
+  if (data.id <= Number(thread.attribute<number>("lastMessageId") ?? 0)) return;
+
   thread.pushAttributes({
     repliesCount: Number(thread.attribute<number>("repliesCount") ?? 0) + 1,
     lastMessageId: data.id,
@@ -278,17 +360,113 @@ function onMessageChanged(data: MessagePayload): void {
   // loaded is not worth materialising.
   if (!existing) return;
 
+  const wasDeleted = Boolean(existing.isDeleted());
+
   existing.pushAttributes({
     contentHtml: data.contentHtml,
     editedAt: data.editedAt,
     isDeleted: data.isDeleted,
     isEdited: Boolean(data.editedAt),
+    // The tombstone's wording turns on this. Left unset, a moderator's deletion
+    // read to its author exactly like their own — "this message was deleted" —
+    // and the fact that it had been moderated surfaced only on reload.
+    isModeratorDeleted: Boolean(data.isModeratorDeleted),
     // Carried on the same event as edits and deletions: a pin changes what
     // everyone in the channel sees first, so it has to land without a refresh.
     isPinned: Boolean(data.isPinned),
     pinnedAt: data.pinnedAt ?? null,
     ...(data.isDeleted ? { content: null } : {}),
   });
+
+  // Names the moderator, when the recipient already holds that user. The
+  // tombstone falls back to the unnamed wording when it does not, so this is an
+  // upgrade rather than a requirement — and it costs no request.
+  if (data.isModeratorDeleted && data.deletedById) {
+    const moderator = app.store.getById("users", String(data.deletedById));
+
+    if (moderator) {
+      existing.pushData({ relationships: { deletedBy: moderator } } as any);
+    }
+  }
+
+  // Deleting or restoring moves what this actor may do *to* the row, and those
+  // answers differ per recipient so they cannot ride on the broadcast. Purging
+  // in particular only becomes possible once the message is already deleted, so
+  // the control for it appeared only on the next page load — the flag it is
+  // drawn from was false when the row was pushed and nothing had refreshed it.
+  //
+  // Only on a flip: an edit or a pin shares this event and moves none of them.
+  if (Boolean(data.isDeleted) !== wasDeleted) {
+    refreshMessageCapabilities(data.id);
+  }
+
+  m.redraw();
+}
+
+/** Messages with a capability refetch already in flight. */
+const refetchingMessages = new Set<number>();
+
+/**
+ * Re-reads one message so the actor's own capability flags are the server's.
+ *
+ * The Show endpoint carries the same `defaultInclude` the listing does, so this
+ * also lands `deletedBy` — which is what lets a tombstone name the moderator
+ * rather than falling back to the unnamed wording.
+ *
+ * Exported because the moderator who performs the deletion needs it too, and
+ * cannot get it from here: `whenMessageChanged` excludes the actor, so their own
+ * client never sees the event. See ChatMessage.delete().
+ */
+export function refreshMessageCapabilities(id: number): void {
+  if (refetchingMessages.has(id)) return;
+
+  refetchingMessages.add(id);
+
+  app.store
+    .find("chat-messages", String(id))
+    // A purge racing the refetch leaves nothing to read. The row is being
+    // removed anyway, so there is nothing to report.
+    .catch(() => {})
+    .then(() => {
+      refetchingMessages.delete(id);
+      m.redraw();
+    });
+}
+
+/**
+ * Drops a message that was removed outright.
+ *
+ * Its own handler rather than a branch of `onMessageChanged`, because there is
+ * no row left to restyle: an ordinary deletion becomes a tombstone and keeps its
+ * place in the stream, and a purge is what clears the tombstone away. Without
+ * this, "delete for everyone" cleared it for the moderator alone and everyone
+ * else kept the tombstone until they reloaded.
+ */
+function onMessagePurged(data: {
+  id: number;
+  channelId: number;
+  threadId: number | null;
+}): void {
+  chatState.removeMessage(data.channelId, data.id);
+
+  // The thread's own panel renders from a separate stream keyed by thread id, so
+  // a purge inside one has to be dropped there as well.
+  if (data.threadId) {
+    chatState.removeThreadMessage(data.threadId, data.id);
+
+    // The count under the root now overstates the thread by one. Never below
+    // zero: the reply may have arrived before this client ever counted it.
+    const thread = app.store.getById("chat-threads", String(data.threadId));
+
+    if (thread) {
+      thread.pushAttributes({
+        repliesCount: Math.max(
+          0,
+          Number(thread.attribute<number>("repliesCount") ?? 0) - 1,
+        ),
+      });
+    }
+  }
 
   m.redraw();
 }
@@ -321,21 +499,62 @@ function onReaction(data: {
   m.redraw();
 }
 
+/**
+ * Lands a thread that was just created, or refreshes one already known.
+ *
+ * This used to `getById` and give up when the lookup missed — which is every
+ * `ThreadWasCreated` broadcast, because a thread that has just come into
+ * existence is by definition not in anyone else's store yet. The recipient
+ * therefore never learned the thread existed and the root message kept drawing
+ * without its "N replies" strip until the next page load, where the Index
+ * endpoint's `defaultInclude` supplies both the record and the link to it.
+ *
+ * `originalMessageId` is read from the payload rather than ignored: the strip is
+ * drawn from the *message's* `thread` relationship, and the message's own wire
+ * payload carries only a `threadId`. Nothing else connects the two.
+ */
 function onThread(data: {
   threadId: number;
   channelId: number;
+  originalMessageId: number | null;
   repliesCount: number;
+  lastMessageId: number | null;
   title: string | null;
 }): void {
-  const thread = app.store.getById("chat-threads", String(data.threadId));
+  const thread = app.store.pushPayload({
+    data: {
+      type: "chat-threads",
+      id: String(data.threadId),
+      attributes: {
+        channelId: data.channelId,
+        originalMessageId: data.originalMessageId,
+        repliesCount: data.repliesCount,
+        // How far `repliesCount` reaches, so bumpThread() does not count the
+        // opening reply a second time when its own event lands.
+        lastMessageId: data.lastMessageId,
+        title: data.title,
+      },
+    },
+  } as any);
 
-  if (thread) {
-    thread.pushAttributes({
-      repliesCount: data.repliesCount,
-      title: data.title,
-    });
-    m.redraw();
+  // Only when the root is already loaded. Pushing a relationship onto an absent
+  // message would mint a stub record carrying nothing but a thread id, and
+  // `getById` elsewhere would then hand that stub out as though it were the
+  // message. A root nobody has scrolled to has no strip to draw anyway.
+  const root =
+    data.originalMessageId !== null
+      ? app.store.getById("chat-messages", String(data.originalMessageId))
+      : null;
+
+  if (root && thread) {
+    // Attributes merge, so this leaves the rest of the row alone.
+    root.pushData({
+      attributes: { threadId: data.threadId },
+      relationships: { thread },
+    } as any);
   }
+
+  m.redraw();
 }
 
 interface ChannelPayload {
@@ -344,6 +563,7 @@ interface ChannelPayload {
   postPermission?: string;
   isPrivate?: boolean;
   threadingEnabled?: boolean;
+  slowModeSeconds?: number;
   name?: string | null;
   emoji?: string | null;
   description?: string | null;
@@ -358,6 +578,7 @@ function onChannel(data: ChannelPayload): void {
   if (!channel) return;
 
   const before = channel.postPermission();
+  const slowModeBefore = channel.slowModeSeconds();
 
   channel.pushAttributes({
     status: data.status,
@@ -368,6 +589,9 @@ function onChannel(data: ChannelPayload): void {
     ...(data.threadingEnabled !== undefined
       ? { threadingEnabled: data.threadingEnabled }
       : {}),
+    ...(data.slowModeSeconds !== undefined
+      ? { slowModeSeconds: data.slowModeSeconds }
+      : {}),
     ...(data.name !== undefined ? { name: data.name } : {}),
     ...(data.emoji !== undefined ? { emoji: data.emoji } : {}),
     ...(data.description !== undefined
@@ -375,11 +599,22 @@ function onChannel(data: ChannelPayload): void {
       : {}),
   });
 
-  // `canPostMessage` is decided per user, so it cannot ride on a broadcast — a
-  // moderator and a member get different answers from the same change. Refetch
-  // this client's own record and let the server say. Only when the rule actually
-  // moved, so an ordinary rename does not cost every member a request.
-  if (data.postPermission !== undefined && data.postPermission !== before) {
+  // Some of what these settings decide is answered per user, so it cannot ride
+  // on a broadcast — a moderator and a member get different answers from the
+  // same change. `canPostMessage` follows `postPermission`, and
+  // `slowModeRemaining` follows the slow-mode window, since a holder of
+  // `bypassSlowMode` reads it as zero whatever the channel says. Refetch this
+  // client's own record and let the server say.
+  //
+  // Only when a rule actually moved, so an ordinary rename does not cost every
+  // member in the channel a request.
+  const permissionMoved =
+    data.postPermission !== undefined && data.postPermission !== before;
+
+  const slowModeMoved =
+    data.slowModeSeconds !== undefined && data.slowModeSeconds !== slowModeBefore;
+
+  if (permissionMoved || slowModeMoved) {
     refreshCapabilities(data.channelId);
   }
 
@@ -498,6 +733,7 @@ function pushMessage(data: MessagePayload): Message | null {
           createdAt: data.createdAt,
           editedAt: data.editedAt,
           isDeleted: data.isDeleted,
+          isModeratorDeleted: Boolean(data.isModeratorDeleted),
           isEdited: Boolean(data.editedAt),
           isPinned: Boolean(data.isPinned),
           pinnedAt: data.pinnedAt ?? null,
@@ -525,6 +761,27 @@ function pushMessage(data: MessagePayload): Message | null {
         relationships: {
           ...(data.userId
             ? { user: { data: { type: "users", id: String(data.userId) } } }
+            : {}),
+          // The quoted line above a reply is drawn from this relationship, not
+          // from `replyToId` — and only the attribute was being set, so a reply
+          // arriving live rendered as an ordinary message and only grew its
+          // quote on the next page load, where the Index endpoint's
+          // `defaultInclude` supplies the relation.
+          //
+          // A linkage is enough: you reply to something you can see, so the
+          // target is already a record in the store and `hasOne` resolves it.
+          // When it is not — the target scrolled out of the loaded window —
+          // `hasOne` yields undefined and `replyPreview` renders nothing, which
+          // is what happens today anyway.
+          ...(data.replyToId
+            ? {
+                replyTo: {
+                  data: {
+                    type: "chat-messages",
+                    id: String(data.replyToId),
+                  },
+                },
+              }
             : {}),
           // Always sent, even empty: `hasMany` returns false for an absent
           // relationship, and the message row cannot distinguish "no
