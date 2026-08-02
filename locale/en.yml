@@ -147,6 +147,7 @@ ramon-chat:
 
     message:
       edited: edited
+      edited_at: "edited {ago}"
       deleted: This message was deleted.
       deleted_by_moderator: This message was removed by a moderator.
       deleted_by_named: "This message was removed by {username}."
@@ -260,6 +261,8 @@ ramon-chat:
       placeholder_thread: Reply to thread
       placeholder_closed: This channel is closed
       send: Send
+      send_enter: Send (Enter)
+      send_ctrl_enter: Send (Ctrl+Enter)
       too_long_title: Your message is too long.
       too_long_body: "Shorten your message by {over} characters. This channel accepts up to {max}."
       too_long_dismiss: Ok
@@ -511,6 +514,8 @@ ramon-chat:
 
       threading_default: Enable threads on new channels by default
       allow_archiving_channels: Allow archiving channels
+      send_with_ctrl_enter: Send messages with Ctrl+Enter
+      send_with_ctrl_enter_help: When enabled, Enter inserts a line break and only Ctrl+Enter (Cmd+Enter on macOS) sends the message. When disabled, Enter sends and Shift+Enter inserts a line break.
       sound: Notification sound
       sound_help: Played when a message arrives in a channel you are not looking at.
       sound_none: "Off"

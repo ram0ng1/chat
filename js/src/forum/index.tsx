@@ -38,7 +38,12 @@ import ChatAutocomplete from "./components/ChatAutocomplete";
 import RevisionsModal from "./components/RevisionsModal";
 import FlagMessageModal from "./components/FlagMessageModal";
 import FlaggedMessagesList from "./components/FlaggedMessagesList";
-import { bindRealtime, setPollingFallback, realtimeBound } from "./realtime";
+import {
+  bindRealtime,
+  setPollingFallback,
+  realtimeBound,
+  realtimeDelivered,
+} from "./realtime";
 import { bindShortcuts } from "./utils/shortcuts";
 import { shouldUseChatDrawer } from "./utils/surface";
 import ChatPageResolver from "./resolvers/ChatPageResolver";
@@ -79,6 +84,10 @@ export {
   //   flarum.reg.get('ramon-chat', 'forum/index').realtimeBound()
   // tells you whether the chat is on the websocket or on the polling fallback.
   realtimeBound,
+  // And whether anything has ever arrived over it. `realtimeBound() === true`
+  // with `realtimeDelivered() === false` after some traffic is the signature of a
+  // forum whose PHP process cannot reach the websocket daemon.
+  realtimeDelivered,
 };
 
 /**
@@ -93,6 +102,26 @@ export {
  * it only ever asks for messages newer than the newest one already held.
  */
 const POLL_INTERVAL = 3000;
+
+/**
+ * Polling interval while the websocket is subscribed but has never delivered.
+ *
+ * Subscribing proves only that the *client* reached the daemon. Whether the
+ * *server* can reach it is a separate question, and on a forum where it cannot,
+ * the old code polled never: binding succeeded, so the fallback was never
+ * started, and the chat updated only on reload. Polling slowly here bounds that
+ * failure at a few seconds instead of forever.
+ */
+const POLL_INTERVAL_UNPROVEN = 15000;
+
+/**
+ * Polling interval once the socket has actually delivered something.
+ *
+ * At that point pushes demonstrably work end to end and this is a backstop for a
+ * daemon that dies mid-session, so it is deliberately slow enough to be
+ * negligible: one conditional request a minute per open chat tab.
+ */
+const POLL_INTERVAL_PROVEN = 60000;
 
 app.initializers.add("ramon-chat", () => {
   // Register JSON:API types before anything can request them — the store drops
@@ -233,13 +262,18 @@ app.initializers.add("ramon-chat", () => {
       if (!canUseChat()) return;
 
       // ── Live updates ──────────────────────────────────────────────────────
-      // bindRealtime() retries for a few seconds before conceding, so it is given
-      // the poller to start itself rather than being asked for a verdict now.
+      // Both, always. The websocket carries the messages; the poller is a
+      // backstop that rate-limits itself against what the socket has proven it
+      // can do, and it is idempotent — it asks only for messages newer than the
+      // newest one held, so a healthy socket costs it one request a minute.
+      //
+      // It used to start only when binding failed. That covered the case where
+      // realtime is absent and missed the one that actually strands a forum: the
+      // client subscribes fine while the server cannot reach the daemon, so
+      // nothing is ever pushed and nothing ever notices.
       setPollingFallback(startPolling);
-
-      if (!bindRealtime()) {
-        startPolling();
-      }
+      bindRealtime();
+      startPolling();
 
       // ── Drawer ────────────────────────────────────────────────────────────
       // Its own root outside the page tree, so navigating the forum never tears
@@ -350,48 +384,83 @@ function canUseChat(): boolean {
   return app.session.user.preferences()?.["ramon-chat.enabled"] !== false;
 }
 
+/** Guards against a second loop when both callers ask for one. */
+let polling = false;
+
 /**
  * Refreshes the channel list and the open channel's tail on an interval.
+ *
+ * Runs unconditionally, at a rate set by how much the websocket has proven it can
+ * do — see the three POLL_INTERVAL_* constants. It used to start only when
+ * binding failed, which covered the wrong failure: a socket that binds and then
+ * never carries anything looks identical to a healthy one from here, and the
+ * chat simply stopped updating.
+ *
+ * Scheduled with a chained timeout rather than setInterval so the rate can change
+ * mid-session — the first delivered event drops it from seconds to a minute.
  *
  * Only runs while the document is visible: a backgrounded tab polling every 15s
  * for hours is exactly the behaviour that gets an extension blamed for load.
  */
 function startPolling(): void {
-  window.setInterval(() => {
-    if (document.hidden) return;
-    if (!chatState.channelsLoaded) return;
+  if (polling) return;
 
-    chatState.loadChannels().catch(() => {});
+  polling = true;
 
-    const activeId = chatState.activeChannelId;
+  const schedule = () => {
+    window.setTimeout(() => {
+      poll();
+      schedule();
+    }, pollInterval());
+  };
 
-    if (activeId === null) return;
+  schedule();
+}
 
-    const stream = chatState.streams[activeId];
+/**
+ * How long until the next poll. Read per tick, so a socket that starts or stops
+ * delivering changes the rate without restarting anything.
+ */
+function pollInterval(): number {
+  if (!realtimeBound()) return POLL_INTERVAL;
 
-    if (!stream || stream.loading) return;
+  return realtimeDelivered() ? POLL_INTERVAL_PROVEN : POLL_INTERVAL_UNPROVEN;
+}
 
-    // Only what is newer than the newest known message.
-    const newest = stream.messages[stream.messages.length - 1];
+function poll(): void {
+  if (document.hidden) return;
+  if (!chatState.channelsLoaded) return;
 
-    app.store
-      .find<Message[]>("chat-messages", {
-        filter: {
-          channel: activeId,
-          ...(newest ? { greaterThan: Number(newest.id()) } : {}),
-        },
-        sort: "id",
-        page: { limit: 50 },
-      })
-      .then((results) => {
-        for (const message of (Array.isArray(results)
-          ? results
-          : []) as Message[]) {
-          chatState.upsertMessage(message);
-        }
+  chatState.loadChannels().catch(() => {});
 
-        m.redraw();
-      })
-      .catch(() => {});
-  }, POLL_INTERVAL);
+  const activeId = chatState.activeChannelId;
+
+  if (activeId === null) return;
+
+  const stream = chatState.streams[activeId];
+
+  if (!stream || stream.loading) return;
+
+  // Only what is newer than the newest known message.
+  const newest = stream.messages[stream.messages.length - 1];
+
+  app.store
+    .find<Message[]>("chat-messages", {
+      filter: {
+        channel: activeId,
+        ...(newest ? { greaterThan: Number(newest.id()) } : {}),
+      },
+      sort: "id",
+      page: { limit: 50 },
+    })
+    .then((results) => {
+      for (const message of (Array.isArray(results)
+        ? results
+        : []) as Message[]) {
+        chatState.upsertMessage(message);
+      }
+
+      m.redraw();
+    })
+    .catch(() => {});
 }

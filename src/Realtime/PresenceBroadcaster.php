@@ -17,8 +17,8 @@ use Ramon\Chat\Channel;
  *
  * Kept separate from BroadcastListener because it is wired unconditionally —
  * TypingController is always routable — and therefore has to be a safe no-op when
- * flarum/realtime is absent. ChatBroadcaster already returns early without a
- * Pusher binding, so no extension check is needed here.
+ * flarum/realtime is absent. ChatBroadcaster queues nothing without a Pusher
+ * binding, so no extension check is needed here.
  */
 class PresenceBroadcaster
 {
