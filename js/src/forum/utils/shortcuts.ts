@@ -112,3 +112,14 @@ function handleEscape(): boolean {
 
   return false;
 }
+
+/**
+ * Whether the composer sends on Ctrl/Cmd+Enter instead of on a bare Enter.
+ *
+ * Read per call rather than cached: the value is a forum attribute, and a cached
+ * copy would keep the old behaviour for the rest of the session after an admin
+ * flips it.
+ */
+export function sendsOnCtrlEnter(): boolean {
+  return Boolean(app.forum.attribute<boolean>("ramon-chat.sendWithCtrlEnter"));
+}

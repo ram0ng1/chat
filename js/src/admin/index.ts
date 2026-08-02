@@ -143,6 +143,16 @@ app.initializers.add("ramon-chat", () => {
         "ramon-chat.admin.settings.allow_archiving_channels",
       ),
     })
+    .registerSetting({
+      setting: "ramon-chat.send_with_ctrl_enter",
+      type: "boolean",
+      label: app.translator.trans(
+        "ramon-chat.admin.settings.send_with_ctrl_enter",
+      ),
+      help: app.translator.trans(
+        "ramon-chat.admin.settings.send_with_ctrl_enter_help",
+      ),
+    })
 
     // A select rather than a boolean plus a file field: the choice is between two
     // shipped sounds and silence, and 'none' is a value of the same setting rather

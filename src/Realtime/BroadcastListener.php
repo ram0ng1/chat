@@ -9,6 +9,7 @@
 
 namespace Ramon\Chat\Realtime;
 
+use Flarum\User\User;
 use Ramon\Chat\Event\ChannelStatusChanged;
 use Ramon\Chat\Event\ChannelWasEdited;
 use Ramon\Chat\Event\MessagePinToggled;
@@ -208,8 +209,8 @@ class BroadcastListener
      *
      * Content is included rather than sent as a bare id: chat is high-volume and
      * a fetch per message would multiply request count by the message rate. It is
-     * safe to inline because ChatBroadcaster has already filtered recipients
-     * through the same visibility scope the API would apply.
+     * safe to inline because SendChatEventJob filters recipients through the same
+     * visibility scope the API would apply before it triggers anything.
      *
      * `contentHtml` is deliberately omitted for deleted messages so a tombstone
      * cannot be reconstructed from a push payload.
@@ -306,7 +307,10 @@ class BroadcastListener
     {
         $user = $message->relationLoaded('user') ? $message->user : $message->user()->first();
 
-        if ($user === null) {
+        // `instanceof` rather than a null check: the relation is typed as a bare
+        // Model on the way out, and a bot message has no author at all, so this
+        // is both the null guard and the narrowing the rest of the method needs.
+        if (! $user instanceof User) {
             return null;
         }
 
@@ -316,7 +320,37 @@ class BroadcastListener
             'displayName' => $user->display_name,
             'avatarUrl'   => $user->avatar_url,
             'slug'        => (string) ($user->slug ?? $user->id),
+            'groups'      => $this->groupsPayload($user),
         ];
+    }
+
+    /**
+     * The author's groups, for the badges drawn on their avatar.
+     *
+     * Hidden groups are dropped rather than filtered per recipient: one payload
+     * goes to every member of the channel, so anything in it is readable by all of
+     * them, and core only shows a hidden group to an actor holding
+     * `viewHiddenGroups`. A moderator who does hold it therefore sees the hidden
+     * badge appear on the next load rather than the instant the message lands —
+     * the alternative is broadcasting group membership the recipient may not see.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function groupsPayload(User $user): array
+    {
+        $groups = $user->relationLoaded('groups') ? $user->groups : $user->groups()->get();
+
+        return $groups
+            ->filter(fn ($group) => ! $group->is_hidden)
+            ->map(fn ($group) => [
+                'id'           => (int) $group->id,
+                'nameSingular' => $group->name_singular,
+                'namePlural'   => $group->name_plural,
+                'color'        => $group->color,
+                'icon'         => $group->icon,
+            ])
+            ->values()
+            ->all();
     }
 
     /**

@@ -4,6 +4,8 @@ import type { ComponentAttrs } from "flarum/common/Component";
 import Button from "flarum/common/components/Button";
 import username from "flarum/common/helpers/username";
 import humanTime from "flarum/common/helpers/humanTime";
+import humanTimeUtil from "flarum/common/utils/humanTime";
+import listItems from "flarum/common/helpers/listItems";
 import classList from "flarum/common/utils/classList";
 import type Mithril from "mithril";
 
@@ -14,7 +16,6 @@ import { isOnline } from "../utils/presence";
 import { authorAvatar, authorLink } from "../utils/bot";
 import { safeFileUrl } from "../utils/url";
 import { verifiedBadge } from "../utils/integrations";
-import RevisionsModal from "./RevisionsModal";
 import FlagMessageModal from "./FlagMessageModal";
 import ImageLightbox from "./ImageLightbox";
 import { messagePreview } from "../../common/utils/preview";
@@ -93,7 +94,7 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
         }
       >
         <div className="ChatMessage-gutter">
-          {grouped ? this.shortTime(message) : authorAvatar(message)}
+          {grouped ? this.shortTime(message) : this.avatar(message)}
         </div>
 
         <div className="ChatMessage-body">
@@ -303,27 +304,44 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
             rendered as a text node on the branch below. */}
         {/* nosemgrep: github.semgrep.flarum-v2-m-trust */}
         {html ? m.trust(html) : message.content()}
-        {/* The "edited" marker is the affordance for the history — the same place
-            core puts it on a post. A button, not a span, so it is reachable by
-            keyboard and reads as interactive. */}
-        {message.isEdited() ? (
-          <button
-            type="button"
-            className="ChatMessage-editedMark"
-            title={app.translator.trans(
-              "ramon-chat.forum.revisions.title",
-              {},
-              true,
-            )}
-            onclick={(e: Event) => {
-              e.stopPropagation();
-              app.modal.show(RevisionsModal, { message });
-            }}
-          >
-            ({app.translator.trans("ramon-chat.forum.message.edited")})
-          </button>
-        ) : null}
+        {/* The "edited" marker states a fact, it is not a control: it says the row
+            was changed and when, the same thing core's post marker says. Rendered
+            as <time> so the exact timestamp is carried in `datetime` for anything
+            reading the markup, with the relative form as the visible text — the
+            absolute one on its own tells a reader nothing at a glance. */}
+        {message.isEdited() ? this.editedMark(message) : null}
       </div>
+    );
+  }
+
+  /**
+   * Renders the "edited" marker. `editedAt` can be absent on a row the socket
+   * patched before the API answered, so the bare word is the fallback rather
+   * than a marker that says "edited Invalid Date".
+   */
+  protected editedMark(message: Message): Mithril.Children {
+    const at = message.editedAt();
+
+    if (!at) {
+      return (
+        <span className="ChatMessage-editedMark">
+          ({app.translator.trans("ramon-chat.forum.message.edited")})
+        </span>
+      );
+    }
+
+    return (
+      <time
+        className="ChatMessage-editedMark"
+        datetime={at.toISOString()}
+        title={at.toLocaleString()}
+      >
+        (
+        {app.translator.trans("ramon-chat.forum.message.edited_at", {
+          ago: humanTimeUtil(at),
+        })}
+        )
+      </time>
     );
   }
 
@@ -372,6 +390,35 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
           onClose: close,
         }),
     });
+  }
+
+  /**
+   * The author's avatar with their group badges on it.
+   *
+   * `user.badges()` is core's own list — the same call `PostUser` makes — so a
+   * group's icon, colour and tooltip come from wherever the admin set them, and
+   * an extension that adds to `User.prototype.badges` shows up here for free
+   * rather than having to know the chat exists.
+   *
+   * The wrapper is only added when there is something to draw: it exists to
+   * position the badges over the avatar, and an empty one on every row would put
+   * a positioning context in the gutter for nothing.
+   */
+  protected avatar(message: Message): Mithril.Children {
+    // The bot has no account and therefore no groups, so it never has badges.
+    const user = message.isBot() ? null : message.user() || null;
+    const badges = user ? user.badges().toArray() : [];
+
+    if (!badges.length) return authorAvatar(message);
+
+    return (
+      <span className="ChatMessage-avatar">
+        {authorAvatar(message)}
+        <ul className="ChatMessage-badges badges badges--packed">
+          {listItems(badges)}
+        </ul>
+      </span>
+    );
   }
 
   protected shortTime(message: Message): Mithril.Children {

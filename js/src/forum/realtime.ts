@@ -28,6 +28,14 @@ interface UploadPayload {
   createdAt: string | null;
 }
 
+interface GroupPayload {
+  id: number;
+  nameSingular: string;
+  namePlural: string;
+  color: string | null;
+  icon: string | null;
+}
+
 interface MessagePayload {
   id: number;
   channelId: number;
@@ -46,6 +54,8 @@ interface MessagePayload {
     displayName: string;
     avatarUrl: string | null;
     slug: string;
+    /** Non-hidden groups only — see BroadcastListener::groupsPayload. */
+    groups?: GroupPayload[];
   } | null;
   contentHtml: string | null;
   createdAt: string | null;
@@ -80,15 +90,22 @@ let bound = false;
 function bindTo(channel: any): void {
   if (bound || !channel?.bind) return;
 
-  channel.bind(EVENT_MESSAGE, (data: MessagePayload) => onMessage(data));
-  channel.bind(EVENT_MESSAGE_CHANGED, (data: MessagePayload) =>
-    onMessageChanged(data),
-  );
-  channel.bind(EVENT_MESSAGE_PURGED, (data: any) => onMessagePurged(data));
-  channel.bind(EVENT_REACTION, (data: any) => onReaction(data));
-  channel.bind(EVENT_THREAD, (data: any) => onThread(data));
-  channel.bind(EVENT_CHANNEL, (data: any) => onChannel(data));
-  channel.bind(EVENT_TYPING, (data: any) => onTyping(data));
+  // Wrapped rather than each handler setting the flag itself: `delivered` has to
+  // be true for *any* chat event, and a handler added later would otherwise be a
+  // silent hole in the proof.
+  const on = (event: string, handler: (data: any) => void) =>
+    channel.bind(event, (data: any) => {
+      delivered = true;
+      handler(data);
+    });
+
+  on(EVENT_MESSAGE, (data: MessagePayload) => onMessage(data));
+  on(EVENT_MESSAGE_CHANGED, (data: MessagePayload) => onMessageChanged(data));
+  on(EVENT_MESSAGE_PURGED, (data: any) => onMessagePurged(data));
+  on(EVENT_REACTION, (data: any) => onReaction(data));
+  on(EVENT_THREAD, (data: any) => onThread(data));
+  on(EVENT_CHANNEL, (data: any) => onChannel(data));
+  on(EVENT_TYPING, (data: any) => onTyping(data));
 
   bound = true;
 }
@@ -182,6 +199,25 @@ export function setPollingFallback(fn: () => void): void {
 export function realtimeBound(): boolean {
   return bound;
 }
+
+/**
+ * Whether anything has ever actually arrived over the socket.
+ *
+ * Distinct from `bound`, and the distinction is the whole point: subscribing
+ * succeeds on the client whatever the server can or cannot do. If the forum's PHP
+ * process cannot reach the websocket daemon — a common enough split, since the
+ * queue worker and the web process are not always on the same side of a
+ * firewall — every client sits on a healthy-looking socket that will never carry
+ * a chat event, and the chat quietly stops updating until the page is reloaded.
+ *
+ * A delivered event is the only proof the whole round-trip works, so the poller
+ * uses this to decide how hard it has to work. See startPolling() in index.tsx.
+ */
+export function realtimeDelivered(): boolean {
+  return delivered;
+}
+
+let delivered = false;
 
 /**
  * Pushes an incoming message into the store and the channel's stream.
@@ -620,7 +656,8 @@ function onChannel(data: ChannelPayload): void {
     data.postPermission !== undefined && data.postPermission !== before;
 
   const slowModeMoved =
-    data.slowModeSeconds !== undefined && data.slowModeSeconds !== slowModeBefore;
+    data.slowModeSeconds !== undefined &&
+    data.slowModeSeconds !== slowModeBefore;
 
   if (permissionMoved || slowModeMoved) {
     refreshCapabilities(data.channelId);
@@ -685,6 +722,28 @@ function pushMessage(data: MessagePayload): Message | null {
   // below resolves to a record instead of a dangling reference. Without it, a
   // recipient who has never seen this person renders the row as "[deleted]" —
   // which is what happens on a fresh page for every author but yourself.
+
+  // The author's groups ride along so the badges on their avatar are drawn on the
+  // pushed row, not only after the next load. They go in as their own `groups`
+  // records with the relationship pointing at them, which is the shape the API
+  // sends for `include=user.groups` — anything else and `user.badges()` reads an
+  // unresolved reference and renders nothing.
+  const groups = data.user?.groups ?? [];
+  const groupRecords = groups.map((group) => ({
+    type: "groups",
+    id: String(group.id),
+    attributes: {
+      nameSingular: group.nameSingular,
+      namePlural: group.namePlural,
+      color: group.color,
+      icon: group.icon,
+      // Stated rather than left undefined: the broadcast carries only non-hidden
+      // groups (BroadcastListener::groupsPayload), so this is the true value and
+      // anything reading `isHidden()` off a pushed record gets an answer.
+      isHidden: false,
+    },
+  }));
+
   const author = data.user
     ? [
         {
@@ -696,6 +755,18 @@ function pushMessage(data: MessagePayload): Message | null {
             avatarUrl: data.user.avatarUrl,
             slug: data.user.slug,
           },
+          // Omitted rather than sent empty when the payload carries no groups:
+          // pushing `[]` would clear the groups an earlier load had already put
+          // on this user, blanking badges that were rendering a moment ago.
+          ...(groupRecords.length
+            ? {
+                relationships: {
+                  groups: {
+                    data: groupRecords.map(({ type, id }) => ({ type, id })),
+                  },
+                },
+              }
+            : {}),
         },
       ]
     : [];
@@ -704,6 +775,7 @@ function pushMessage(data: MessagePayload): Message | null {
     return app.store.pushPayload<Message>({
       included: [
         ...author,
+        ...groupRecords,
         ...uploads.map((upload) => ({
           type: "chat-uploads",
           id: String(upload.id),
