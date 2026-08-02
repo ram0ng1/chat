@@ -524,6 +524,11 @@ class ChannelResource extends AbstractDatabaseResource
             // Public or invitation-only. Guarded by mayWriteCategoryField for the
             // same reason tagId is: both decide who can see the channel, and neither
             // is something a direct channel's creator may set.
+            //
+            // Public and private are one right, not two: whoever may create a
+            // channel chooses which kind. A separate permission was tried and
+            // withdrawn — it split a single decision across two checkboxes for no
+            // gain an operator asked for.
             Schema\Boolean::make('isPrivate')
                 ->get(fn (Channel $c) => $c->isPrivate())
                 ->writable(fn (Channel $c, Context $context) => $this->mayWriteCategoryField($c, $context)),
@@ -585,9 +590,23 @@ class ChannelResource extends AbstractDatabaseResource
                     ? resolve(SlowMode::class)->remainingFor($c, $context->getActor())
                     : 0),
 
+            // Same gate as every other field on the form, deliberately: whoever may
+            // create a channel fills in the whole form, and auto-join is part of it.
+            //
+            // It used to be administrator-only, and that was the cause of "I have
+            // the permission and still cannot create a channel". json-api-server
+            // answers 403 "Field [autoJoin] is not writable" for a field merely
+            // *present* in the body while not writable for the actor, and
+            // ChannelFormModal sends `autoJoin` on every save — `false` included.
+            // So one admin-only attribute refused every channel creation by a
+            // non-administrator, whatever the forum had granted. Administrators
+            // never saw it, because they pass the gate.
+            //
+            // The cost is real and accepted: creating a channel with this on adds
+            // every eligible account at once (AutoJoinUsers, chunked at 500), so a
+            // large forum pays for it in membership rows.
             Schema\Boolean::make('autoJoin')
-                ->writable(fn (Channel $c, Context $context) => $context->getActor()->isAdmin()
-                    && ! ($c->exists && $c->isDirect())),
+                ->writable(fn (Channel $c, Context $context) => $this->mayWriteCategoryField($c, $context)),
 
             // Grows the channel from participation in its bound category, rather
             // than adding every account up front like autoJoin does.
