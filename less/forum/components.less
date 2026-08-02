@@ -2524,7 +2524,13 @@ body.ChatFullPage {
 
   // The picture preview shares the card's tint, so it needs an edge of its own
   // to read as a slot rather than as a hole.
+  //
+  // Sized to match the emoji picker's preview circle, not the 44px it uses
+  // elsewhere: the two take turns in the same slot, and the difference showed
+  // up as the section changing height when the switch was flipped.
   .ChatChannelForm-imagePreview {
+    width: 36px;
+    height: 36px;
     border: 1px solid var(--avocado-border-subtle);
   }
 
@@ -2579,6 +2585,20 @@ body.ChatFullPage {
   &-iconField {
     min-width: 0;
 
+    // Both sides reserve the same room for their help line, so flipping the
+    // switch cannot change the height of the section — the fields below it
+    // were jumping up and down as the picture help appeared and vanished.
+    .helpText {
+      min-height: 2.8em;
+    }
+
+    // And the same room overall. The two sides are not the same shape — a
+    // picker row against a preview plus an upload button — so equal help text
+    // alone still left them a few pixels apart.
+    &-body {
+      min-height: 84px;
+    }
+
     &-head {
       .chat-flex-row(@chat-space-sm);
       justify-content: space-between;
@@ -2602,6 +2622,8 @@ body.ChatFullPage {
   //
   // Roughly 70px, against the ~200px a `Switch` plus its written label took on
   // a row whose whole job is to introduce one field.
+  // The control is one button; the two halves inside it are spans, so a click
+  // anywhere flips to the other side.
   &-iconKind {
     display: flex;
     flex-shrink: 0;
@@ -2609,37 +2631,36 @@ body.ChatFullPage {
     border: 1px solid var(--avocado-border-subtle);
     border-radius: @chat-radius-pill;
     background: var(--body-bg);
+    cursor: pointer;
+
+    &:focus-visible {
+      outline: 2px solid var(--primary-color);
+      outline-offset: 1px;
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+
+    // Hovering the control lifts the side that is *not* on — the one the click
+    // would move to — so the button previews what it does.
+    &:hover:not(:disabled) &-option:not(&-option--active) {
+      background: var(--chat-row-hover-bg);
+      color: var(--avocado-text-dark);
+    }
 
     &-option {
       .chat-flex-center();
       width: 34px;
       height: 24px;
-      padding: 0;
-      border: 0;
       border-radius: @chat-radius-pill;
-      background: none;
       font-size: 12px;
       line-height: 1;
       color: var(--avocado-muted-icon);
-      cursor: pointer;
       transition:
         background var(--avocado-t-fast),
         color var(--avocado-t-fast);
-
-      &:hover:not(:disabled):not(.ChannelFormModal-iconKind-option--active) {
-        background: var(--chat-row-hover-bg);
-        color: var(--avocado-text-dark);
-      }
-
-      &:focus-visible {
-        outline: 2px solid var(--primary-color);
-        outline-offset: 1px;
-      }
-
-      &:disabled {
-        cursor: not-allowed;
-        opacity: 0.5;
-      }
 
       // The side that is on. Filled like a switch's track rather than tinted,
       // so which half is active survives a glance.

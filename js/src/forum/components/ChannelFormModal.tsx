@@ -339,63 +339,81 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
             )}
           </label>
 
-          {/* Two icons in a track, not a switch. A `Switch` reserves 50px for
-              its own body plus room for a written label, which on this row is
-              more furniture than the field it introduces — and "Use a picture"
-              as an on/off statement says nothing about what off means. */}
-          <div
+          {/* One button carrying both sides, not two buttons — a click
+              anywhere on it flips to the other, the way a switch behaves.
+              As two radios, pressing the lit half did nothing, which is
+              correct for radios and wrong for something shaped like this.
+
+              `role="switch"` with an explicit "true"/"false": Mithril renders
+              a boolean attribute as an empty string, and `aria-checked=""` is
+              not a value a screen reader can read. */}
+          <button
+            type="button"
             className="ChannelFormModal-iconKind"
-            role="radiogroup"
+            role="switch"
+            aria-checked={picture ? "true" : "false"}
             aria-label={app.translator.trans(
               "ramon-chat.forum.new_channel.icon_kind",
               {},
               true,
             )}
+            title={app.translator.trans(
+              picture
+                ? "ramon-chat.forum.new_channel.icon_kind_to_emoji"
+                : "ramon-chat.forum.new_channel.icon_kind_to_image",
+              {},
+              true,
+            )}
+            disabled={this.loading || this.uploadingImage}
+            onclick={() => this.chooseIconKind(!picture)}
           >
-            {this.iconKindOption(false, "far fa-face-smile", "emoji")}
-            {this.iconKindOption(true, "fas fa-image", "image")}
-          </div>
+            {this.iconKindSide(false, "far fa-face-smile")}
+            {this.iconKindSide(true, "fas fa-image")}
+          </button>
         </div>
 
-        {picture ? (
-          this.image()
-        ) : (
-          <EmojiPicker
-            value={this.emoji()}
-            onchange={(value: string | null) => this.emoji(value ?? "")}
-            disabled={this.loading}
-          />
-        )}
+        {/* One wrapper for either side, so the two can be held to the same
+            height. Both also carry a line of help: without it the emoji side
+            was shorter, and flipping the switch shoved everything below the
+            section up or down. */}
+        <div className="ChannelFormModal-iconField-body">
+          {picture ? (
+            this.image()
+          ) : (
+            <>
+              <EmojiPicker
+                value={this.emoji()}
+                onchange={(value: string | null) => this.emoji(value ?? "")}
+                disabled={this.loading}
+              />
+
+              <div className="helpText">
+                {app.translator.trans(
+                  "ramon-chat.forum.new_channel.emoji_help",
+                )}
+              </div>
+            </>
+          )}
+        </div>
       </div>
     );
   }
 
-  /** One of the two icon-kind buttons. Icon-only: the label below names the field it selects. */
-  protected iconKindOption(
-    picture: boolean,
-    icon: string,
-    labelKey: "emoji" | "image",
-  ): Mithril.Children {
-    const active = this.useImage() === picture;
-
+  /**
+   * One half of the switch. A span, not a button: the whole control is the
+   * button, so a click on either side flips it.
+   */
+  protected iconKindSide(picture: boolean, icon: string): Mithril.Children {
     return (
-      <button
-        type="button"
+      <span
         className={classList("ChannelFormModal-iconKind-option", {
-          "ChannelFormModal-iconKind-option--active": active,
+          "ChannelFormModal-iconKind-option--active":
+            this.useImage() === picture,
         })}
-        role="radio"
-        aria-checked={active}
-        disabled={this.loading || this.uploadingImage}
-        title={app.translator.trans(
-          `ramon-chat.forum.new_channel.${labelKey}`,
-          {},
-          true,
-        )}
-        onclick={() => this.chooseIconKind(picture)}
+        aria-hidden="true"
       >
-        <i className={icon} aria-hidden="true" />
-      </button>
+        <i className={icon} />
+      </span>
     );
   }
 

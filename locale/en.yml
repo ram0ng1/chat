@@ -313,7 +313,10 @@ ramon-chat:
       emoji: Emoji
       image: Picture
       icon_kind: Emoji or picture
-      image_help: Square pictures work best — it is cropped and resized to 128×128.
+      icon_kind_to_image: Use a picture instead
+      icon_kind_to_emoji: Use an emoji instead
+      emoji_help: Shown beside the channel's name, in the sidebar and in Browse.
+      image_help: Square works best — it is cropped and resized to 128×128.
       image_upload: Upload picture
       image_remove: Remove picture
       image_failed: That picture could not be uploaded.
