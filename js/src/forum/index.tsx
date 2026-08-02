@@ -31,6 +31,8 @@ import ChannelFormModal from "./components/ChannelFormModal";
 import ChannelInviteNotification from "./components/ChannelInviteNotification";
 import MessageFlaggedNotification from "./components/MessageFlaggedNotification";
 import ChannelInfoModal from "./components/ChannelInfoModal";
+import AddMembersModal from "./components/AddMembersModal";
+import MessageTooLongModal from "./components/MessageTooLongModal";
 import ChatSelectionBar from "./components/ChatSelectionBar";
 import ChatAutocomplete from "./components/ChatAutocomplete";
 import RevisionsModal from "./components/RevisionsModal";
@@ -66,6 +68,8 @@ export {
   ChannelInviteNotification,
   MessageFlaggedNotification,
   ChannelInfoModal,
+  AddMembersModal,
+  MessageTooLongModal,
   ChatSelectionBar,
   ChatAutocomplete,
   RevisionsModal,

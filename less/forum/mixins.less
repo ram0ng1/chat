@@ -108,6 +108,28 @@
   border: 0;
 }
 
+// Everything the forum draws around a chat surface that fills the screen.
+//
+// Applied to `<body>`, because the elements involved are not all inside `#app`:
+// `huseyinfiliz/modern-footer` mounts `<footer id="modern-footer">` straight
+// onto the body from an `app.mount` extender, and it is not the only extension
+// that does. Core's `Page.bodyClass` puts its class on `#app` and so cannot
+// reach them.
+//
+// The page also stops scrolling. A chat surface is exactly as tall as the
+// viewport and scrolls internally; a document scrollbar beside it either does
+// nothing or, worse, drags the whole layout off-screen — which is what happened
+// when a pinned message was tapped on a phone.
+.chat-suppress-page-chrome() {
+  overflow: hidden;
+
+  #modern-footer,
+  > footer,
+  .App-footer {
+    display: none;
+  }
+}
+
 // Respect a user's reduced-motion preference for anything that animates on
 // message arrival — a chat that animates every row is punishing at volume.
 .chat-motion-safe(@rules) {

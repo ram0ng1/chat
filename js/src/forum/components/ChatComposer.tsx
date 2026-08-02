@@ -15,6 +15,8 @@ import type { Suggestion } from "./ChatAutocomplete";
 import { searchEmoji } from "../utils/emoji";
 import { messagePreview } from "../../common/utils/preview";
 import { humanDuration } from "../utils/duration";
+import { resolveMaxMessageLength } from "../utils/messageLimit";
+import MessageTooLongModal from "./MessageTooLongModal";
 import { authorName } from "../utils/bot";
 import {
   stickersAvailable,
@@ -146,9 +148,7 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
     }
 
     const value = state.draft(Number(channel.id()), threadId ?? null);
-    const max = Number(
-      app.forum.attribute("ramon-chat.maxMessageLength") ?? 3000,
-    );
+    const max = resolveMaxMessageLength(channel);
     const remaining = max - value.length;
 
     return (
@@ -173,93 +173,110 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
             placeholder={this.placeholder(channel)}
             value={value}
             rows={1}
-            maxlength={max}
+            // Deliberately no `maxlength`: the browser enforces it by silently
+            // dropping the tail of a paste, so a long quote arrives cut with no
+            // sign that anything went missing. Over-length text is allowed into
+            // the box, the counter goes negative, and `submit()` explains.
             oninput={(e: Event) => this.onInput(e)}
             onkeydown={(e: KeyboardEvent) => this.onKeyDown(e)}
             disabled={this.sending}
             aria-label={this.placeholder(channel)}
           />
 
-          <div className="ChatComposer-tools">
-            {/* Both have to hold: the forum-wide setting, and this actor's
+          {/* Controls on their own row under the text, not in a column beside
+              it. Beside it they took a strip the full height of the composer —
+              so a long message wrapped early and left a tall empty band down
+              the right-hand side, and the text never used the box it was
+              typed into. Below, the textarea spans the whole width. */}
+          <div className="ChatComposer-bar">
+            {/* Only surfaced near the limit — a permanent counter is noise.
+                Past it the number goes negative and takes the error colour:
+                that is the state in which the send button refuses, so it has
+                to look different from "nearly there" rather than just
+                smaller. */}
+            {remaining <= 200 ? (
+              <div
+                className={classList("ChatComposer-counter", {
+                  "ChatComposer-counter--warning":
+                    remaining <= 20 && remaining >= 0,
+                  "ChatComposer-counter--over": remaining < 0,
+                })}
+                aria-live="polite"
+              >
+                {remaining}
+              </div>
+            ) : null}
+
+            <div className="ChatComposer-tools">
+              {/* Both have to hold: the forum-wide setting, and this actor's
                 permission. Checking only the setting drew a paperclip for people
                 the upload endpoint would refuse. */}
-            {app.forum.attribute("ramon-chat.allowUploads") &&
-            app.forum.attribute("canUploadChatFiles") ? (
-              <>
-                <input
-                  type="file"
-                  className="ChatComposer-fileInput"
-                  style={{ display: "none" }}
-                  multiple
-                  onchange={(e: Event) => this.onFilesPicked(e)}
-                />
-                <Button
-                  className="ChatComposer-tool"
-                  icon="fas fa-paperclip"
-                  title={app.translator.trans(
-                    "ramon-chat.forum.composer.attach",
-                    {},
-                    true,
-                  )}
-                  disabled={this.uploading || this.sending}
-                  onclick={() => this.pickFiles()}
-                />
-              </>
-            ) : null}
+              {app.forum.attribute("ramon-chat.allowUploads") &&
+              app.forum.attribute("canUploadChatFiles") ? (
+                <>
+                  <input
+                    type="file"
+                    className="ChatComposer-fileInput"
+                    style={{ display: "none" }}
+                    multiple
+                    onchange={(e: Event) => this.onFilesPicked(e)}
+                  />
+                  <Button
+                    className="ChatComposer-tool"
+                    icon="fas fa-paperclip"
+                    title={app.translator.trans(
+                      "ramon-chat.forum.composer.attach",
+                      {},
+                      true,
+                    )}
+                    disabled={this.uploading || this.sending}
+                    onclick={() => this.pickFiles()}
+                  />
+                </>
+              ) : null}
 
-            {/* Only when ramon/stickers is actually installed. The component is
+              {/* Only when ramon/stickers is actually installed. The component is
                 resolved from Flarum's export registry at runtime, so this is a
                 button that appears rather than a dependency that must be met. */}
-            {stickersAvailable() ? (
-              // A plain button, not `Button` with an `icon` attr: that attr takes a
-              // Font Awesome class name, and this icon is an inline SVG so it
-              // matches the one on the discussion composer exactly.
-              <button
-                type="button"
-                className="ChatComposer-tool"
-                title={stickerLabel()}
-                aria-label={stickerLabel()}
-                disabled={this.sending}
-                onclick={(e: Event) => this.toggleStickers(e)}
-              >
-                {stickerIcon()}
-              </button>
-            ) : null}
-          </div>
+              {stickersAvailable() ? (
+                // A plain button, not `Button` with an `icon` attr: that attr takes a
+                // Font Awesome class name, and this icon is an inline SVG so it
+                // matches the one on the discussion composer exactly.
+                <button
+                  type="button"
+                  className="ChatComposer-tool"
+                  title={stickerLabel()}
+                  aria-label={stickerLabel()}
+                  disabled={this.sending}
+                  onclick={(e: Event) => this.toggleStickers(e)}
+                >
+                  {stickerIcon()}
+                </button>
+              ) : null}
+            </div>
 
-          <button
-            type="button"
-            className="ChatComposer-send"
-            title={app.translator.trans(
-              "ramon-chat.forum.composer.send",
-              {},
-              true,
-            )}
-            disabled={
-              this.sending ||
-              (!value.trim() && state.pendingUploads.length === 0)
-            }
-            onclick={() => this.submit()}
-          >
-            {this.sending ? (
-              <LoadingIndicator display="inline" size="small" />
-            ) : (
-              <i className="fas fa-paper-plane" />
-            )}
-          </button>
+            <button
+              type="button"
+              className="ChatComposer-send"
+              title={app.translator.trans(
+                "ramon-chat.forum.composer.send",
+                {},
+                true,
+              )}
+              disabled={
+                this.sending ||
+                (!value.trim() && state.pendingUploads.length === 0)
+              }
+              onclick={() => this.submit()}
+            >
+              {this.sending ? (
+                <LoadingIndicator display="inline" size="small" />
+              ) : (
+                <i className="fas fa-paper-plane" />
+              )}
+            </button>
+          </div>
         </div>
-
-        {/* Only surfaced near the limit — a permanent counter is noise. */}
-        {remaining <= 200 ? (
-          <div
-            className={classList("ChatComposer-counter", {
-              "ChatComposer-counter--warning": remaining <= 20,
-            })}
-          >
-            {remaining}
-          </div>
-        ) : null}
       </div>
     );
   }
@@ -871,6 +888,18 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
     const content = state.draft(channelId, threadId ?? null);
 
     if (!content.trim() && state.pendingUploads.length === 0) return;
+
+    // Refused here rather than by the server, and without touching the draft:
+    // the text stays in the box so it can be shortened instead of retyped. The
+    // server checks the same limit — this only saves the round trip and gives a
+    // count the API error cannot (it says "too long", not "by how much").
+    const max = resolveMaxMessageLength(channel);
+
+    if (content.length > max) {
+      app.modal.show(MessageTooLongModal, { length: content.length, max });
+
+      return;
+    }
 
     this.sending = true;
 
