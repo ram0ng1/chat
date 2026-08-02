@@ -557,6 +557,24 @@ class ChannelResource extends AbstractDatabaseResource
                     $channel->slow_mode_seconds = max(0, min(21600, (int) $value));
                 }),
 
+            // How long a message may be here. Null means the channel follows
+            // the forum-wide setting rather than "no limit" — see
+            // Channel::maxMessageLength().
+            //
+            // Clamped like slow mode, and for the same reason: the form offers a
+            // fixed set of steps, so a value outside the range means a client got
+            // it wrong. The floor is 100 because a cap below that is a channel
+            // nobody can write a sentence in; the ceiling matches the widest the
+            // forum setting itself accepts.
+            Schema\Integer::make('maxMessageLength')
+                ->nullable()
+                ->writable(fn (Channel $c, Context $context) => $this->mayWriteCategoryField($c, $context))
+                ->set(function (Channel $channel, $value) {
+                    $channel->max_message_length = ($value === null || (int) $value <= 0)
+                        ? null
+                        : max(100, min(50000, (int) $value));
+                }),
+
             // What the composer counts down from. Per-actor and answered by the
             // server: a reload would otherwise forget the cooldown and offer a
             // send that is then refused.

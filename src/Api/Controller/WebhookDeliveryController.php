@@ -66,7 +66,13 @@ class WebhookDeliveryController implements RequestHandlerInterface
 
         $text = $this->extractText($request);
 
-        $max = (int) $this->settings->get('ramon-chat.max_message_length', 3000);
+        // The channel's own cap when it has one. A webhook posting into a room
+        // that allows longer messages than the forum default was being trimmed
+        // to the default; one posting into a room with a tighter cap was not
+        // being trimmed at all.
+        $max = $channel->maxMessageLength(
+            (int) $this->settings->get('ramon-chat.max_message_length', 3000)
+        );
 
         if (mb_strlen($text) > $max) {
             $text = mb_substr($text, 0, $max);

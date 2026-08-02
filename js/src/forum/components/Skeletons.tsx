@@ -119,30 +119,48 @@ export function SidebarSkeleton(): Mithril.Children {
 
 // ── Browse channels ──────────────────────────────────────────────────────────
 
-/** Cards with the icon, title, description, meta row and action button. */
-export function BrowseSkeleton(cards = 4): Mithril.Children {
+/**
+ * Cards with the icon, title, description and footer.
+ *
+ * Mirrors the real card's three bands rather than approximating them: the card
+ * is a column, and a skeleton laid out as a row makes the list visibly jump into
+ * place when the data arrives.
+ */
+export function BrowseSkeleton(cards = 6): Mithril.Children {
   return (
     <div className="ChatBrowse-list" aria-hidden="true">
       {repeat(cards, (i) => (
         <div className="ChatBrowseCard ChatSkeleton" key={i}>
-          <div className="ChatSkeleton-avatar ChatSkeleton-avatar--large" />
+          <div className="ChatBrowseCard-head">
+            <div className="ChatSkeleton-avatar ChatSkeleton-avatar--large" />
+
+            <div className="ChatSkeleton-lines">
+              <div
+                className="ChatSkeleton-line ChatSkeleton-line--title"
+                style={{ width: width(i, [55, 40, 65, 45, 60, 35]) }}
+              />
+              <div
+                className="ChatSkeleton-line ChatSkeleton-line--meta"
+                style={{ width: width(i, [30, 22, 38, 26, 34, 20]) }}
+              />
+            </div>
+          </div>
 
           <div className="ChatSkeleton-lines">
-            <div
-              className="ChatSkeleton-line ChatSkeleton-line--title"
-              style={{ width: width(i, [30, 22, 38, 26]) }}
-            />
+            <div className="ChatSkeleton-line" style={{ width: "92%" }} />
             <div
               className="ChatSkeleton-line"
-              style={{ width: width(i, [70, 55, 80, 45]) }}
-            />
-            <div
-              className="ChatSkeleton-line ChatSkeleton-line--meta"
-              style={{ width: "35%" }}
+              style={{ width: width(i, [70, 55, 80, 45, 65, 50]) }}
             />
           </div>
 
-          <div className="ChatSkeleton-button" />
+          <div className="ChatBrowseCard-footer">
+            <div
+              className="ChatSkeleton-line ChatSkeleton-line--meta"
+              style={{ width: "45%" }}
+            />
+            <div className="ChatSkeleton-button" />
+          </div>
         </div>
       ))}
     </div>

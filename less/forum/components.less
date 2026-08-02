@@ -138,6 +138,24 @@
 }
 
 // ── Full-screen page ─────────────────────────────────────────────────────────
+// ── Chat surfaces that fill the screen ───────────────────────────────────────
+// The full-screen page always, and the drawer on a phone — where it is
+// edge-to-edge and 100dvh tall, so the page behind it is not something the
+// reader can see or use, only something they can accidentally scroll.
+//
+// Both classes are set on `<body>` from the components (see the notes there).
+// The rules themselves live in `.chat-suppress-page-chrome()`, which explains
+// what is being suppressed and why.
+body.ChatFullPage {
+  .chat-suppress-page-chrome();
+}
+
+@media (max-width: @chat-mobile-breakpoint) {
+  body.ChatDrawerFullscreen {
+    .chat-suppress-page-chrome();
+  }
+}
+
 .ChatPage {
   display: flex;
   height: ~"calc(100vh - var(--header-height, 60px))";
@@ -998,11 +1016,18 @@
   // the bottom of the panel.
   position: relative;
 
+  // A column: the text on top, its controls on a row underneath.
+  //
+  // It used to be a row — textarea, then counter, then buttons — which gave the
+  // controls a strip the full height of the composer. The text wrapped at ~75%
+  // of the width and the remaining quarter stood empty all the way up, so a
+  // long message never used the box it was typed into. Stacking them costs one
+  // short row of height and gives the text the entire width.
   &-shell {
     display: flex;
-    align-items: flex-end;
-    gap: 6px;
-    padding: 6px 6px 6px 12px;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px 8px 4px 12px;
     border: 1px solid var(--avocado-border-subtle);
     border-radius: @chat-radius-md;
     background: var(--avocado-surface-2);
@@ -1013,12 +1038,31 @@
     }
   }
 
+  // Counter and buttons, right-aligned under the text.
+  &-bar {
+    .chat-flex-row(@chat-space-xs);
+    justify-content: flex-end;
+    flex-shrink: 0;
+  }
+
   // Auto-growing textarea, capped so the composer cannot eat the stream.
+  //
+  // The cap is a share of the viewport as well as a pixel count, whichever is
+  // smaller. `resize()` sets an inline height of the full content — 16820px for
+  // a long paste — and only this keeps it down; on a short window 220px of that
+  // is most of the panel, and the conversation the composer belongs to gets a
+  // couple of lines. Escaped, because LESS reads `min(220px, 30vh)` as its own
+  // function and errors on the mixed units.
   &-input {
-    flex: 1;
+    // Full width of the shell, now that nothing sits beside it.
+    width: 100%;
     min-height: @chat-composer-min-height;
     max-height: @chat-composer-max-height;
-    padding: 10px 0;
+    max-height: ~"min(@{chat-composer-max-height}, 30vh)";
+    // Tighter than the 10px it carried as a row child: the controls no longer
+    // sit beside the text needing to be cleared, and the row below adds its own
+    // height. Enough for one 21px line without clipping (21 + 12 < min-height).
+    padding: 6px 0;
     border: 0;
     background: none;
     resize: none;
@@ -1049,15 +1093,12 @@
     flex-shrink: 0;
   }
 
-  // Both controls sit on the last line of text. The shell is `align-items:
-  // flex-end`, so anything without this offset lands flush on the bottom edge.
-  //
-  // Declared here, together, because the value has to match: it lived only on
-  // `-send` before, which left the paperclip sitting 6px lower than the plane. A
-  // shared declaration is the only version of this that cannot drift.
+  // No bottom offset any more: both used to be flex-end children of a row shell
+  // and needed 6px to sit on the last line of text. They are now on their own
+  // row, where that margin is just a gap under the composer.
   &-tools,
   &-send {
-    margin-bottom: 6px;
+    margin-bottom: 0;
   }
 
   &-tool {
@@ -1132,15 +1173,36 @@
     margin-bottom: 6px;
   }
 
-  // Character counter, only rendered as the limit approaches.
+  // Character counter, only rendered as the limit approaches. Lives inside the
+  // shell, immediately left of the tools, so it is bounded by the field it
+  // counts — outside it, the drawer's edge clipped it.
+  //
+  // `flex-end` on the shell puts it on the tools' baseline, which is where the
+  // eye already is when reaching for send.
   &-counter {
-    margin-top: 4px;
-    text-align: right;
+    flex-shrink: 0;
+    // On the controls row, so it lines up with the buttons by default and
+    // needs no offset of its own. `margin-right: auto` keeps it at the left
+    // end of that row, away from the send button it is warning about.
+    margin-right: auto;
     font-size: 11px;
+    font-variant-numeric: tabular-nums;
     color: var(--avocado-muted-label);
 
     &--warning {
       color: var(--chat-unread-line);
+      font-weight: 800;
+    }
+
+    // Past the limit the send will be refused, so the count stops being a hint
+    // and becomes the reason nothing happens when the button is pressed. A
+    // pill, not just red text: at 11px a colour change alone reads as "nearly
+    // there".
+    &--over {
+      padding: 1px 8px;
+      border-radius: @chat-radius-pill;
+      background: var(--chat-unread-line);
+      color: #fff;
       font-weight: 800;
     }
   }
@@ -1491,33 +1553,76 @@
 
 // ── Browse channels ──────────────────────────────────────────────────────────
 .ChatBrowse {
-  max-width: 900px;
+  max-width: 1040px;
   margin: 0 auto;
-  padding: 20px 12px 48px;
+  padding: @chat-space-lg @chat-space-md 48px;
 
+  // Every interactive element on this page below is styled here, including its
+  // hover, active and focus states. The filters and the two icon buttons used to
+  // rely on whatever the theme happened to give a bare `<button>` or a
+  // `.Button--flat`, which on this forum is nothing: they had no resting
+  // treatment and no hover, so nothing on the page looked clickable.
   &-back {
-    margin-bottom: 6px;
-    padding-left: 0;
+    .chat-flex-row(@chat-space-sm);
+    margin-bottom: @chat-space-md;
+    padding: 5px 12px 5px 10px;
+    border: 0;
+    border-radius: @chat-radius-pill;
+    background: none;
+    font-size: @chat-font-label;
+    font-weight: 700;
+    color: var(--avocado-muted-label);
+    cursor: pointer;
+    transition:
+      background var(--avocado-t-fast),
+      color var(--avocado-t-fast);
+
+    i {
+      font-size: 11px;
+      transition: transform var(--avocado-t-fast);
+    }
+
+    &:hover {
+      background: var(--chat-row-hover-bg);
+      color: var(--avocado-text-dark);
+
+      i {
+        transform: translateX(-2px);
+      }
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--primary-color);
+      outline-offset: 2px;
+    }
   }
 
   &-header {
-    .chat-flex-row(12px);
+    .chat-flex-row(@chat-space-md);
     // Wraps rather than crushing the title against the create button on a narrow
-    // viewport; `baseline` keeps the button's label on the title's baseline
-    // instead of floating in the middle of a 26px heading.
+    // viewport.
     flex-wrap: wrap;
-    align-items: baseline;
-    margin-bottom: 18px;
+    align-items: flex-end;
+    margin-bottom: @chat-space-lg;
+  }
+
+  &-heading {
+    flex: 1;
+    min-width: 0;
   }
 
   &-title {
-    flex: 1;
-    min-width: 0;
     margin: 0;
-    font-size: 26px;
+    font-size: 28px;
     font-weight: 900;
-    letter-spacing: -0.3px;
+    letter-spacing: -0.4px;
     color: var(--avocado-text-dark);
+  }
+
+  &-subtitle {
+    margin: 4px 0 0;
+    font-size: @chat-font-label;
+    color: var(--avocado-muted-label);
   }
 
   // Filters and search share one row on desktop and stack on mobile, so the two
@@ -1526,23 +1631,64 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 10px;
-    margin-bottom: 18px;
+    gap: @chat-space-sm;
+    margin-bottom: @chat-space-lg;
   }
 
+  // A segmented control: one track holding the five states, so they read as one
+  // choice rather than five separate buttons.
   &-filters {
-    .chat-flex-row(6px);
+    .chat-flex-row(2px);
     flex-wrap: wrap;
     flex: 1 1 auto;
+    padding: 3px;
+    border-radius: @chat-radius-pill;
+    background: var(--chat-row-hover-bg);
+  }
+
+  &-filter {
+    .chat-pill-btn(30px; 14px);
+    background: none;
+    color: var(--avocado-muted-label);
+
+    &:hover {
+      background: var(--avocado-surface-1);
+      color: var(--avocado-text-dark);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--primary-color);
+      outline-offset: 1px;
+    }
+
+    // Same trap as ChatComposer-send: --header-color equals --primary-color on a
+    // plain header, which would render the label invisible on its own fill.
+    &--active,
+    &--active:hover {
+      background: var(--button-primary-bg, var(--primary-color));
+      color: var(--button-primary-color, #fff);
+      box-shadow: var(--shadow-subtle);
+    }
   }
 
   &-search {
-    .chat-flex-row(8px);
-    flex: 0 1 260px;
+    .chat-flex-row(@chat-space-sm);
+    flex: 0 1 280px;
     min-width: 180px;
-    padding: 0 12px;
+    padding: 0 @chat-space-sm 0 @chat-space-md;
+    border: 1px solid transparent;
     border-radius: @chat-radius-pill;
-    background: var(--avocado-surface-1);
+    background: var(--chat-row-hover-bg);
+    transition:
+      border-color var(--avocado-t-fast),
+      background var(--avocado-t-fast);
+
+    // The whole field reacts, not just the input: the input has no border of its
+    // own, so a focus ring on it alone would sit inside the pill.
+    &:focus-within {
+      border-color: var(--primary-color);
+      background: var(--avocado-surface-1);
+    }
 
     &-icon {
       flex-shrink: 0;
@@ -1550,10 +1696,14 @@
       color: var(--avocado-muted-icon);
     }
 
+    &:focus-within &-icon {
+      color: var(--primary-color);
+    }
+
     &-input {
       flex: 1;
       min-width: 0;
-      height: 34px;
+      height: 36px;
       border: 0;
       background: none;
       font-size: @chat-font-label;
@@ -1567,99 +1717,243 @@
         display: none;
       }
     }
-  }
 
-  &-filter {
-    .chat-pill-btn(30px; 14px);
-    background: var(--avocado-surface-1);
-    color: var(--avocado-muted-label);
+    &-clear {
+      .chat-icon-circle(22px; transparent);
+      border: 0;
+      font-size: 11px;
+      color: var(--avocado-muted-icon);
+      cursor: pointer;
+      transition:
+        background var(--avocado-t-fast),
+        color var(--avocado-t-fast);
 
-    // Same trap as ChatComposer-send: --header-color equals --primary-color on a
-    // plain header, which would render the label invisible on its own fill.
-    &--active {
-      background: var(--button-primary-bg, var(--primary-color));
-      color: var(--button-primary-color, #fff);
+      &:hover {
+        background: var(--avocado-border-chip);
+        color: var(--avocado-text-dark);
+      }
+
+      &:focus-visible {
+        outline: 2px solid var(--primary-color);
+        outline-offset: 1px;
+      }
     }
   }
 
+  // Cards side by side once there is room. A single column of full-width rows
+  // wastes most of a desktop viewport on a list whose entries are three lines.
   &-list {
     display: grid;
-    gap: 10px;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: @chat-space-md;
   }
 
   &-empty {
-    padding: 40px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 56px @chat-space-lg;
     text-align: center;
-    color: var(--avocado-muted-label);
+
+    &-icon {
+      .chat-icon-circle(56px);
+      margin-bottom: @chat-space-md;
+      font-size: 22px;
+      color: var(--avocado-muted-icon);
+    }
+
+    &-text {
+      margin: 0 0 @chat-space-lg;
+      font-size: @chat-font-message;
+      color: var(--avocado-muted-label);
+    }
   }
 }
 
+// A card is now a column — head, description, footer — rather than one row of
+// three columns. In a grid track ~320px wide there is no room for a name, its
+// badges and a join button on the same line, and the previous layout got there
+// by squeezing the description to a few words.
 .ChatBrowseCard {
   .chat-surface(@chat-radius-md);
   display: flex;
-  gap: 12px;
-  padding: 14px 16px;
+  flex-direction: column;
+  gap: @chat-space-md;
+  padding: @chat-space-md;
 
   &:hover {
-    box-shadow: var(--shadow-subtle);
+    border-color: var(--avocado-border-chip);
+    box-shadow: var(--shadow-medium);
+  }
+
+  // A closed or archived channel is still browsable, but it is not somewhere
+  // anything is happening — it recedes rather than competing with live ones.
+  &--frozen {
+    opacity: 0.72;
+
+    &:hover {
+      opacity: 1;
+    }
+  }
+
+  &-head {
+    .chat-flex-row(@chat-space-sm);
+    align-items: flex-start;
+  }
+
+  &-headText {
+    min-width: 0;
+    flex: 1;
   }
 
   &-icon {
-    .chat-icon-circle(38px);
+    .chat-icon-circle(40px);
     font-size: 18px;
   }
 
-  &-body {
-    flex: 1;
-    min-width: 0;
-  }
-
   &-name {
-    .chat-flex-row(8px);
+    .chat-truncate();
     font-size: 16px;
     font-weight: 800;
+    line-height: 1.3;
     color: var(--avocado-text-dark);
+  }
+
+  &-badges {
+    .chat-flex-row(@chat-space-xs);
+    flex-wrap: wrap;
+
+    // Only when there is at least one badge — an empty flex row would still
+    // push the description down by its own margin.
+    &:not(:empty) {
+      margin-top: 5px;
+    }
   }
 
   &-description {
     .chat-line-clamp(2);
-    margin-top: 3px;
+    // Two lines' worth, always: cards in one grid row would otherwise have
+    // their footers at three different heights.
+    min-height: 2.8em;
+    margin: 0;
     font-size: @chat-font-label;
+    line-height: 1.4;
     color: var(--avocado-muted-label);
+  }
+
+  // Pushed to the bottom so the actions line up across a row of cards whose
+  // names wrap to different heights.
+  //
+  // Deliberately `nowrap`: with wrapping, whether the buttons sat beside the
+  // meta or below it depended on how many characters the counts happened to
+  // have, so two cards in the same row put their join buttons at different
+  // heights. The meta wraps internally instead.
+  &-footer {
+    .chat-flex-row(@chat-space-sm);
+    justify-content: space-between;
+    flex-wrap: nowrap;
+    margin-top: auto;
+    padding-top: @chat-space-sm;
+    border-top: 1px solid var(--avocado-border-soft);
   }
 
   &-meta {
-    .chat-flex-row(12px);
-    margin-top: 8px;
+    .chat-flex-row(@chat-space-md);
+    flex: 1;
+    min-width: 0;
+    flex-wrap: wrap;
+    // Row gap and column gap are not the same thing here: 14px between two
+    // counts on a line reads as one group, 14px between the lines makes a
+    // wrapped meta twice the height of an unwrapped one and drags the footer
+    // up on that card alone.
+    row-gap: @chat-space-xs;
+    // Two lines' worth whether it uses them or not, so the footer is the same
+    // height on every card and the join buttons across a row line up. The meta
+    // carries exactly two counts, so two lines is also its maximum.
+    min-height: 2.7em;
+    align-content: center;
     font-size: @chat-font-meta;
     color: var(--avocado-muted-label);
+
+    > span {
+      .chat-flex-row(5px);
+    }
+
+    i {
+      font-size: 10px;
+      opacity: 0.8;
+    }
   }
 
   &-status {
-    padding: 1px 7px;
+    .chat-flex-row(4px);
+    padding: 2px 8px;
     border-radius: @chat-radius-pill;
     background: var(--avocado-surface-1);
     font-size: 10px;
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    color: var(--avocado-muted-label);
+
+    i {
+      font-size: 9px;
+    }
+
+    &--joined {
+      background: var(--chat-row-selected-bg);
+      color: var(--primary-color);
+    }
+
+    &--frozen {
+      background: var(--avocado-border-chip);
+    }
   }
 
   // Was a bare block, so the edit icon and the join button sat side by side with
   // nothing but collapsed whitespace between them.
   &-action {
-    .chat-flex-row(6px);
-    align-self: center;
+    .chat-flex-row(@chat-space-xs);
     flex-shrink: 0;
+    margin-left: auto;
+  }
+
+  // The edit affordance. It was `.Button--icon.Button--flat`, which on a theme
+  // that restyles `.Button` leaves a transparent square with no resting shape
+  // and no hover — invisible until the pointer happened to land on it.
+  &-iconButton {
+    .chat-icon-circle(32px; transparent);
+    border: 0;
+    font-size: 12px;
+    color: var(--avocado-muted-icon);
+    cursor: pointer;
+    transition:
+      background var(--avocado-t-fast),
+      color var(--avocado-t-fast);
+
+    &:hover {
+      background: var(--chat-row-hover-bg);
+      color: var(--avocado-text-dark);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--primary-color);
+      outline-offset: 1px;
+    }
   }
 
   @media (max-width: @chat-mobile-breakpoint) {
-    // The action drops below the text instead of squeezing it to a couple of
-    // words; the icon stays on its own line with the body.
-    flex-wrap: wrap;
+    &-footer {
+      // One card per row on a phone, so there is no cross-card alignment left
+      // to protect and the buttons get a full line of their own instead of
+      // being squeezed to a two-word column beside the counts.
+      flex-direction: column;
+      align-items: stretch;
+      flex-wrap: wrap;
+    }
 
     &-action {
-      width: 100%;
+      margin-left: 0;
       justify-content: flex-end;
     }
   }
@@ -1748,88 +2042,6 @@
     font-size: @chat-font-label;
     font-weight: 800;
     color: var(--avocado-text-dark);
-  }
-
-  &-addToggle {
-    flex-shrink: 0;
-
-    // Open, the button is the way back out, so it reads as active rather than as
-    // another way to add.
-    &--open {
-      color: var(--primary-color);
-    }
-  }
-
-  // The add-someone block, shown while the toggle is open.
-  &-add {
-    margin-bottom: @chat-space-lg;
-    padding: @chat-space-md;
-    border-radius: @chat-radius-md;
-    background: var(--avocado-surface-1);
-
-    &-field {
-      width: 100%;
-    }
-
-    &-hint,
-    &-empty {
-      margin-top: @chat-space-sm;
-      font-size: @chat-font-meta;
-      color: var(--avocado-muted-label);
-    }
-  }
-
-  // Results: a vertical list of rows, not a wrapping grid of cards. Each row is a
-  // person and reads left to right — avatar, name, the action — so they line up
-  // with the member list directly below and scan as the same kind of thing.
-  &-candidates {
-    .chat-scroll-y();
-    max-height: 210px;
-    margin-top: @chat-space-sm;
-  }
-
-  &-candidate {
-    .chat-flex-row(@chat-space-sm);
-    width: 100%;
-    padding: @chat-space-sm;
-    border: 0;
-    border-radius: @chat-radius-sm;
-    background: none;
-    text-align: left;
-    cursor: pointer;
-    color: var(--avocado-text-dark);
-    transition: background var(--avocado-t-fast);
-
-    &:hover:not(:disabled) {
-      background: var(--chat-row-hover-bg);
-    }
-
-    &:disabled {
-      opacity: 0.5;
-      cursor: default;
-    }
-
-    .Avatar {
-      width: @chat-avatar-size-compact;
-      height: @chat-avatar-size-compact;
-      flex-shrink: 0;
-    }
-
-    &-name {
-      .chat-truncate();
-      flex: 1;
-      font-size: @chat-font-label;
-    }
-
-    &-add {
-      flex-shrink: 0;
-      font-size: 12px;
-      color: var(--avocado-muted-icon);
-    }
-
-    &:hover:not(:disabled) &-add {
-      color: var(--primary-color);
-    }
   }
 
   &-filter {
@@ -2059,17 +2271,33 @@
 // Empty-sidebar state. A fresh install has no channels, so this is the only
 // route to creating the first one — it must not be a dead end.
 .ChatSidebar-empty {
-  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: @chat-space-xl @chat-space-md;
   text-align: center;
 
+  &-icon {
+    .chat-icon-circle(48px);
+    margin-bottom: @chat-space-md;
+    font-size: 20px;
+    color: var(--avocado-muted-icon);
+  }
+
   p {
-    margin-bottom: 12px;
+    margin: 0 0 @chat-space-lg;
     font-size: @chat-font-label;
+    line-height: 1.5;
     color: var(--avocado-muted-label);
   }
 
-  .Button {
-    margin-bottom: 6px;
+  // Owns the gap between the two buttons. `Button--block` sets width only, so
+  // relying on the theme's own button margin left them touching.
+  &-actions {
+    display: flex;
+    flex-direction: column;
+    gap: @chat-space-sm;
+    align-self: stretch;
   }
 }
 
@@ -2162,6 +2390,652 @@
   }
 }
 
+// ── Channel form ─────────────────────────────────────────────────────────────
+// The create/edit dialog. Everything below exists because the form has eighteen
+// controls: in one 375px column that is a scroll of undifferentiated fields with
+// the submit at the bottom, so the shape here is two columns of titled groups
+// with the submit pinned in a footer.
+.ChannelFormModal {
+  // `&.Modal--large` rather than a bare width: core sets `.Modal--large {
+  // max-width: 800px }` at the same specificity, and which of the two wins
+  // would otherwise depend on the order Flarum happens to concatenate the
+  // stylesheets in.
+  @media @tablet-up {
+    &.Modal--large {
+      max-width: 880px;
+      // The vertical margin is set here rather than inherited because the
+      // body's height cap below is written against it. Core uses 120px, this
+      // forum's theme uses 10px, and a cap computed for one is wrong for the
+      // other — owning both keeps them consistent.
+      margin: @chat-modal-margin auto;
+    }
+  }
+
+  // Header, body and footer are three bands of one dialog, so the body is the
+  // only part that scrolls — the title stays legible and the submit stays
+  // reachable however long the form gets.
+  @media @tablet-up {
+    .Modal-content {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      max-height: ~"calc(100vh - @{chat-modal-reserved})";
+      max-height: ~"calc(100dvh - @{chat-modal-reserved})";
+    }
+  }
+
+  &-header {
+    .chat-flex-row(@chat-space-md);
+    // Overrides core's centred, 25px-padded header: with an icon beside the
+    // text, centring puts the pair off-axis from everything below it.
+    padding: @chat-space-lg @chat-space-xl;
+    text-align: left;
+    border-bottom: 1px solid var(--avocado-border-soft);
+    // Room for the close button, which core positions absolutely at the corner.
+    padding-right: 52px;
+
+    h3 {
+      margin: 0;
+      font-size: 17px;
+      font-weight: 800;
+      text-align: left;
+      color: var(--avocado-text-dark);
+    }
+  }
+
+  &-headerIcon {
+    .chat-icon-circle(44px);
+    font-size: 22px;
+    color: var(--avocado-muted-icon);
+    overflow: hidden;
+
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+  }
+
+  &-headerText {
+    min-width: 0;
+  }
+
+  // The channel's name once it has one, the orientation sentence before that.
+  // Truncated rather than wrapped: the header is a fixed band and a long name
+  // must not push the body down.
+  &-headerSubtitle {
+    .chat-truncate();
+    margin: 2px 0 0;
+    font-size: @chat-font-label;
+    color: var(--avocado-muted-label);
+  }
+
+  // Both classes, because `.ChatModal .Modal-body` above sets the padding every
+  // chat modal shares and would otherwise out-specify a single class here.
+  &-body.Modal-body {
+    padding: @chat-space-lg @chat-space-xl;
+
+    @media @tablet-up {
+      flex: 1;
+      min-height: 0;
+      .chat-scroll-y();
+
+      // The cap is repeated on the scrolling element itself, not left to the
+      // `flex: 1` against the parent's max-height. That chain only resolves if
+      // nothing else in the cascade gives `.Modal-content` a height — themes do
+      // — and when it fails the dialog runs off the bottom of the screen with
+      // the submit button below the fold. A max-height here needs no cooperation
+      // from any ancestor.
+      //
+      // Reserved = the dialog's own margins, plus the header and footer bands
+      // that do not scroll.
+      max-height: ~"calc(100vh - @{chat-modal-reserved} - @{chat-modal-bands})";
+      max-height: ~"calc(100dvh - @{chat-modal-reserved} - @{chat-modal-bands})";
+    }
+
+    @media @phone {
+      padding: @chat-space-lg;
+    }
+  }
+
+  &-grid {
+    display: grid;
+    // A single column below the tablet breakpoint — see the media query at the
+    // end of this block.
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: @chat-space-lg;
+    align-items: start;
+  }
+
+  // A titled group. The border is what makes two columns readable as two
+  // columns: without it the eye pairs fields across the gutter by row instead
+  // of down each column.
+  &-section {
+    min-width: 0;
+    padding: @chat-space-md;
+    border: 1px solid var(--avocado-border-soft);
+    border-radius: @chat-radius-md;
+    // A translucent tint rather than `--avocado-surface-1`: that token resolves
+    // to `--control-bg` on any theme that is not Avocado, which is exactly what
+    // the inputs inside the card use — the card would have disappeared behind
+    // its own fields.
+    background: var(--chat-row-hover-bg);
+  }
+
+  // The picture preview shares the card's tint, so it needs an edge of its own
+  // to read as a slot rather than as a hole.
+  .ChatChannelForm-imagePreview {
+    border: 1px solid var(--avocado-border-subtle);
+  }
+
+  // Identity and lifecycle run the full width. The name field and the
+  // description read as the subject of the dialog, and a description box half
+  // the dialog wide invites a one-line description.
+  &-section--wide {
+    // Escaped: LESS reads `1 / -1` as division and emits `grid-column: -1`,
+    // which is a start line with no end — the card lands in an implicit third
+    // column off to the side instead of spanning the two real ones.
+    grid-column: ~"1 / -1";
+  }
+
+  &-sectionTitle {
+    margin: 0 0 @chat-space-md;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 1.1px;
+    text-transform: uppercase;
+    color: var(--avocado-muted-label);
+  }
+
+  // Icon and name on one line. The emoji column is the picker's preview circle
+  // plus its clear button; the name takes the rest.
+  &-nameRow {
+    display: grid;
+    // The name takes the larger share: it is the only required field, and the
+    // picker only needs room for its preview, a search box and a clear button.
+    grid-template-columns: minmax(0, 1.4fr) minmax(200px, 1fr);
+    gap: @chat-space-md;
+    align-items: start;
+
+    > div {
+      min-width: 0;
+    }
+
+    // `.ChatModal .Form-group > label` cannot reach these — they are one level
+    // further down, inside each cell — so the shared label style is repeated
+    // here rather than the selector loosened for every modal in the extension.
+    label {
+      display: block;
+      margin-bottom: @chat-space-sm;
+      font-size: @chat-font-label;
+      font-weight: 700;
+      color: var(--avocado-text-dark);
+    }
+  }
+
+  // The icon slot: one label + switch line, then whichever field the switch
+  // selected. Both fields are laid out to the same width so flipping the switch
+  // does not resize the row around them.
+  &-iconField {
+    min-width: 0;
+
+    &-head {
+      .chat-flex-row(@chat-space-sm);
+      justify-content: space-between;
+      flex-wrap: wrap;
+      margin-bottom: @chat-space-sm;
+
+      > label {
+        margin: 0;
+        font-size: @chat-font-label;
+        font-weight: 700;
+        color: var(--avocado-text-dark);
+      }
+    }
+
+  }
+
+  // Emoji on one side, picture on the other: a switch with two named sides
+  // rather than two buttons that happen to sit together. One track, one
+  // border, and the lit half is the side in use — which is also the field
+  // showing below it.
+  //
+  // Roughly 70px, against the ~200px a `Switch` plus its written label took on
+  // a row whose whole job is to introduce one field.
+  &-iconKind {
+    display: flex;
+    flex-shrink: 0;
+    padding: 2px;
+    border: 1px solid var(--avocado-border-subtle);
+    border-radius: @chat-radius-pill;
+    background: var(--body-bg);
+
+    &-option {
+      .chat-flex-center();
+      width: 34px;
+      height: 24px;
+      padding: 0;
+      border: 0;
+      border-radius: @chat-radius-pill;
+      background: none;
+      font-size: 12px;
+      line-height: 1;
+      color: var(--avocado-muted-icon);
+      cursor: pointer;
+      transition:
+        background var(--avocado-t-fast),
+        color var(--avocado-t-fast);
+
+      &:hover:not(:disabled):not(.ChannelFormModal-iconKind-option--active) {
+        background: var(--chat-row-hover-bg);
+        color: var(--avocado-text-dark);
+      }
+
+      &:focus-visible {
+        outline: 2px solid var(--primary-color);
+        outline-offset: 1px;
+      }
+
+      &:disabled {
+        cursor: not-allowed;
+        opacity: 0.5;
+      }
+
+      // The side that is on. Filled like a switch's track rather than tinted,
+      // so which half is active survives a glance.
+      &--active {
+        background: var(--button-primary-bg, var(--primary-color));
+        color: var(--button-primary-color, #fff);
+      }
+    }
+  }
+
+  // Preview, upload and remove wrap rather than overflow: this sits in the
+  // narrower of the two name-row cells.
+  .ChatChannelForm-imageRow {
+    flex-wrap: wrap;
+    margin-top: 0;
+  }
+
+  // The number field the "Custom…" option reveals, directly under the select
+  // that revealed it.
+  &-customLength {
+    margin-top: @chat-space-sm;
+  }
+
+  // Two visibility cards side by side.
+  &-choices {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: @chat-space-sm;
+  }
+
+  &-choice {
+    display: flex;
+    flex-direction: column;
+    gap: @chat-space-xs;
+    margin: 0;
+    padding: @chat-space-sm @chat-space-md;
+    border: 1px solid var(--avocado-border-subtle);
+    border-radius: @chat-radius-sm;
+    background: var(--body-bg);
+    cursor: pointer;
+    font-weight: 400;
+    transition:
+      border-color var(--avocado-t-fast),
+      background var(--avocado-t-fast);
+
+    &:hover {
+      border-color: var(--avocado-border-chip);
+      background: var(--chat-row-hover-bg);
+    }
+
+    // The radio stays in the DOM for keyboard and screen-reader semantics; the
+    // card's border is what shows the selection visually.
+    input[type='radio'] {
+      .chat-sr-only();
+    }
+
+    // :focus-visible does not apply to a hidden input, so the ring is drawn on
+    // the card whenever the input inside it has focus.
+    &:focus-within {
+      outline: 2px solid var(--primary-color);
+      outline-offset: 2px;
+    }
+
+    &--selected {
+      border-color: var(--primary-color);
+      background: var(--chat-row-selected-bg);
+    }
+
+    &-title {
+      .chat-flex-row(@chat-space-sm);
+      font-size: @chat-font-label;
+      font-weight: 700;
+      color: var(--avocado-text-dark);
+
+      i {
+        width: 14px;
+        font-size: 12px;
+        text-align: center;
+        color: var(--avocado-muted-icon);
+      }
+    }
+
+    &--selected &-title i {
+      color: var(--primary-color);
+    }
+
+    &-help {
+      font-size: @chat-font-meta;
+      line-height: 1.4;
+      color: var(--avocado-muted-label);
+    }
+  }
+
+  // Switch rows. Separated by rules rather than by whitespace alone: five
+  // toggles with help text under each is a wall of prose otherwise.
+  &-toggles {
+    display: flex;
+    flex-direction: column;
+  }
+
+  &-toggle {
+    padding: @chat-space-sm 0;
+
+    & + & {
+      border-top: 1px solid var(--avocado-border-soft);
+    }
+
+    &:first-child {
+      padding-top: 0;
+    }
+
+    &:last-child {
+      padding-bottom: 0;
+    }
+
+    .Checkbox {
+      margin: 0;
+      font-size: @chat-font-label;
+      font-weight: 600;
+      color: var(--avocado-text-dark);
+    }
+
+    .Checkbox--switch {
+      --left-pad: @chat-switch-indent;
+    }
+
+    // An off switch's track is `--control-bg`, which is the card's own colour
+    // give or take a few percent — off rows read as a label with nothing beside
+    // it. An inset ring rather than a border, so the track keeps its 50×28.
+    .Checkbox--switch.off .Checkbox-display {
+      box-shadow: inset 0 0 0 1px var(--avocado-border-chip);
+    }
+
+    // Lines the sentence up with the switch's label rather than with the
+    // switch, so the two read as one block.
+    .helpText {
+      margin-top: @chat-space-xs;
+      padding-left: @chat-switch-indent;
+    }
+  }
+
+  // Close and archive are state changes that act immediately, not settings that
+  // wait for the save. A dashed edge and no fill separates them from the cards
+  // above, which all describe things the submit button will apply.
+  &-lifecycle {
+    border-style: dashed;
+    background: none;
+  }
+
+  &-lifecycleActions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: @chat-space-sm;
+  }
+
+  &-footer {
+    .chat-flex-row(@chat-space-sm);
+    justify-content: flex-end;
+    flex-shrink: 0;
+    margin: 0;
+    padding: @chat-space-md @chat-space-xl;
+    border-top: 1px solid var(--avocado-border-soft);
+    background: var(--body-bg);
+  }
+
+  // One column on a phone. Two 150px columns of settings in a 390px viewport is
+  // narrower than the text inside them.
+  @media @phone {
+    &-header {
+      padding: @chat-space-md @chat-space-lg;
+      padding-right: 52px;
+    }
+
+    &-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    &-nameRow {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    // `auto-fit` cannot drop below the track's own minimum, so two 150px cards
+    // plus the gap and four levels of padding overflowed a 390px viewport
+    // instead of wrapping. One column is the only fit that exists here.
+    &-choices {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    &-footer {
+      padding: @chat-space-md @chat-space-lg;
+      // Sticks to the bottom of the phone's full-height modal, so the submit is
+      // reachable without scrolling to the end of the form.
+      position: sticky;
+      bottom: 0;
+      z-index: 1;
+    }
+  }
+}
+
+// ── Message too long ─────────────────────────────────────────────────────────
+// Shown when a send is refused for length. Deliberately plain: it is one
+// sentence and one way out, and the composer behind it still holds the text.
+.ChatTooLongModal {
+  &-body.Modal-body {
+    padding: @chat-space-lg;
+  }
+
+  &-text {
+    margin: 0 0 @chat-space-lg;
+    font-size: @chat-font-label;
+    line-height: 1.5;
+    color: var(--avocado-muted-label);
+  }
+}
+
+// ── Add members ──────────────────────────────────────────────────────────────
+// The people picker, opened on top of the channel-info modal. Its search field
+// and result rows are styled here rather than reusing the member list's: these
+// rows are a multi-select, and a row that can be picked has to look different
+// from one that is merely being listed.
+.ChatAddMembers {
+  &-body.Modal-body {
+    padding: @chat-space-lg;
+  }
+
+  &-search {
+    .chat-flex-row(@chat-space-sm);
+    padding: 0 @chat-space-md;
+    border: 1px solid transparent;
+    border-radius: @chat-radius-pill;
+    background: var(--chat-row-hover-bg);
+    transition:
+      border-color var(--avocado-t-fast),
+      background var(--avocado-t-fast);
+
+    &:focus-within {
+      border-color: var(--primary-color);
+      background: var(--avocado-surface-1);
+    }
+
+    &-icon {
+      flex-shrink: 0;
+      font-size: 12px;
+      color: var(--avocado-muted-icon);
+    }
+
+    &-input {
+      flex: 1;
+      min-width: 0;
+      height: 38px;
+      border: 0;
+      background: none;
+      font-size: @chat-font-label;
+      color: var(--avocado-text-dark);
+
+      &:focus {
+        outline: none;
+      }
+
+      &::-webkit-search-cancel-button {
+        display: none;
+      }
+    }
+  }
+
+  // Who is about to be added. Survives the query changing, which is the whole
+  // reason the selection is not just "the highlighted rows".
+  &-chips {
+    .chat-flex-row(@chat-space-xs);
+    flex-wrap: wrap;
+    margin-top: @chat-space-md;
+  }
+
+  &-chip {
+    .chat-flex-row(6px);
+    padding: 3px 10px 3px 3px;
+    border: 0;
+    border-radius: @chat-radius-pill;
+    background: var(--chat-row-selected-bg);
+    font-size: @chat-font-meta;
+    font-weight: 700;
+    color: var(--avocado-text-dark);
+    cursor: pointer;
+    transition: background var(--avocado-t-fast);
+
+    &:hover:not(:disabled) {
+      background: var(--avocado-border-chip);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--primary-color);
+      outline-offset: 1px;
+    }
+
+    .Avatar {
+      width: 22px;
+      height: 22px;
+      flex-shrink: 0;
+    }
+
+    i {
+      font-size: 10px;
+      color: var(--avocado-muted-icon);
+    }
+  }
+
+  &-hint {
+    margin: @chat-space-lg 0 0;
+    padding: @chat-space-lg;
+    border-radius: @chat-radius-md;
+    background: var(--chat-row-hover-bg);
+    text-align: center;
+    font-size: @chat-font-label;
+    color: var(--avocado-muted-label);
+  }
+
+  // Bounded so the dialog does not grow past the viewport on a long result
+  // list; the selection above stays visible while this scrolls.
+  &-results {
+    .chat-scroll-y();
+    max-height: 300px;
+    margin-top: @chat-space-md;
+  }
+
+  &-result {
+    .chat-flex-row(@chat-space-sm);
+    width: 100%;
+    padding: @chat-space-sm;
+    border: 0;
+    border-radius: @chat-radius-sm;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+    color: var(--avocado-text-dark);
+    transition: background var(--avocado-t-fast);
+
+    &:hover:not(:disabled) {
+      background: var(--chat-row-hover-bg);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--primary-color);
+      outline-offset: -2px;
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+
+    .Avatar {
+      width: 28px;
+      height: 28px;
+      flex-shrink: 0;
+    }
+
+    &-name {
+      .chat-truncate();
+      flex: 1;
+      font-size: @chat-font-label;
+      font-weight: 600;
+    }
+
+    // The tick doubles as the affordance: a plus when the row can be picked, a
+    // check once it has been.
+    &-mark {
+      .chat-icon-circle(24px);
+      font-size: 11px;
+      color: var(--avocado-muted-icon);
+    }
+
+    &--selected {
+      background: var(--chat-row-selected-bg);
+    }
+
+    &--selected &-mark {
+      background: var(--button-primary-bg, var(--primary-color));
+      color: var(--button-primary-color, #fff);
+    }
+  }
+
+  &-footer {
+    .chat-flex-row(@chat-space-sm);
+    justify-content: flex-end;
+    margin: 0;
+    padding: @chat-space-md @chat-space-lg;
+    border-top: 1px solid var(--avocado-border-soft);
+
+    &-warning {
+      margin-right: auto;
+      font-size: @chat-font-meta;
+      color: var(--alert-error-color, #d83e3e);
+    }
+  }
+}
+
 // ── Drawer overrides ─────────────────────────────────────────────────────────
 // Inside the drawer, the sidebar and the channel are alternative views rather
 // than adjacent panes — only one is mounted at a time. The sidebar's fixed
@@ -2178,6 +3052,26 @@
 
   > .ChatChannel {
     min-width: 0;
+  }
+
+  // A shorter cap on the growing textarea than the full-screen page gets.
+  //
+  // 220px of composer inside a 560px drawer, once the header and the padding
+  // are counted, leaves barely two messages of stream visible — pasting
+  // something long turned the panel into a text box with a conversation
+  // squeezed above it. The composer still scrolls internally past this point,
+  // so nothing is unreachable; it just stops taking the room the messages need.
+  //
+  // Not applied below the mobile breakpoint: there the drawer is a full-height
+  // sheet, and the page cap is proportionate again.
+  @media (min-width: (@chat-mobile-breakpoint + 1)) {
+    .ChatComposer-input {
+      max-height: 120px;
+      // Same reasoning as the base cap: 120px is a fifth of a 560px drawer, but
+      // the drawer is itself capped at `100vh - 80px`, so on a short window it
+      // has to give way too.
+      max-height: ~"min(120px, 22vh)";
+    }
   }
 }
 
@@ -2408,18 +3302,6 @@
   text-transform: uppercase;
   color: var(--body-bg);
   background: var(--avocado-muted-label);
-}
-
-// Close and archive on the channel form: state changes, kept visually apart from
-// the fields above them so they cannot be mistaken for part of the save.
-.ChannelFormModal-lifecycle {
-  padding-top: 14px;
-  border-top: 1px solid var(--avocado-border-soft);
-
-  &Actions {
-    .chat-flex-row(8px);
-    flex-wrap: wrap;
-  }
 }
 
 // A private channel is marked in the sidebar and in Browse, so its restricted

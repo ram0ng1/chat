@@ -49,6 +49,16 @@ export default class Channel extends Model {
    * is worse than one that shows the wait.
    */
   slowModeRemaining = Model.attribute<number>("slowModeRemaining");
+
+  /**
+   * Longest message this channel accepts, or null to follow the forum setting.
+   *
+   * Null is "inherit", not "unlimited" — see `Channel::maxMessageLength()` on
+   * the server, which is the authority. Resolve it with
+   * `resolveMaxMessageLength()` rather than reading it raw.
+   */
+  maxMessageLength = Model.attribute<number | null>("maxMessageLength");
+
   autoJoin = Model.attribute<boolean>("autoJoin");
 
   /** Subscribe a user when they reply in the bound category. */

@@ -21,6 +21,42 @@ import { chatTitle, chatIcon } from "../utils/branding";
  * not tear down an open conversation — which is the entire point of a drawer.
  */
 export default class ChatDrawer extends Component<ComponentAttrs> {
+  /**
+   * Marks `<body>` while the drawer is open.
+   *
+   * Below the mobile breakpoint the drawer is edge-to-edge and a full `100dvh`
+   * tall, so the page behind it is not something the reader can see or use —
+   * only something they can scroll by accident, dragging a footer into view
+   * under a panel that covers the screen. The stylesheet keys the same
+   * suppression off this class that `ChatPage` gets from `ChatFullPage`, scoped
+   * to the width where the drawer actually fills the viewport.
+   */
+  protected static readonly BODY_CLASS = "ChatDrawerFullscreen";
+
+  oncreate(vnode: Mithril.VnodeDOM<ComponentAttrs, this>): void {
+    super.oncreate(vnode);
+    this.syncBodyClass();
+  }
+
+  // The drawer stays mounted and returns null while closed, so opening and
+  // closing it is an update rather than a create or a remove.
+  onupdate(vnode: Mithril.VnodeDOM<ComponentAttrs, this>): void {
+    super.onupdate(vnode);
+    this.syncBodyClass();
+  }
+
+  onremove(vnode: Mithril.VnodeDOM<ComponentAttrs, this>): void {
+    super.onremove(vnode);
+    document.body.classList.remove(ChatDrawer.BODY_CLASS);
+  }
+
+  protected syncBodyClass(): void {
+    document.body.classList.toggle(
+      ChatDrawer.BODY_CLASS,
+      chatState.drawerOpen && !chatState.drawerCollapsed,
+    );
+  }
+
   view(): Mithril.Children {
     if (!chatState.drawerOpen) return null;
 
