@@ -3,7 +3,6 @@ import Component from "flarum/common/Component";
 import type { ComponentAttrs } from "flarum/common/Component";
 import Button from "flarum/common/components/Button";
 import LoadingIndicator from "flarum/common/components/LoadingIndicator";
-import username from "flarum/common/helpers/username";
 import classList from "flarum/common/utils/classList";
 import type Mithril from "mithril";
 
@@ -56,6 +55,12 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
   /** Seconds left before this channel will accept another message from us. */
   private cooldown = 0;
   private cooldownTimer: number | null = null;
+
+  /** Last `slowModeRemaining` seen, so a change can be told from a redraw. */
+  private lastServerCooldown = -1;
+
+  /** Last `slowModeSeconds` seen. -1 so the first sync always runs. */
+  private lastSlowModeWindow = -1;
   private uploading = false;
 
   /** Id of the reply/edit target the cursor was last moved for. */
@@ -84,7 +89,70 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
   oninit(vnode: Mithril.Vnode<ChatComposerAttrs>): void {
     super.oninit(vnode);
 
-    this.startCooldown(Number(this.attrs.channel.slowModeRemaining() ?? 0));
+    this.syncSlowMode();
+  }
+
+  /**
+   * Reconciles the local countdown with the channel's slow-mode rule.
+   *
+   * Both directions matter, and they are not symmetrical.
+   *
+   * Turning slow mode *on* is the server's word to adopt: `slowModeRemaining`
+   * says how long this actor has left, and an already-open composer has to pick
+   * it up or the new rule binds them only after they navigate away and back.
+   * It is read on a *change* rather than every draw — it is a snapshot from the
+   * last channel read, not a ticking value, so comparing it each time would
+   * restart the countdown from the same stale number and it would never reach
+   * zero.
+   *
+   * Turning slow mode *off* has to release whoever is mid-wait. The local
+   * countdown exists only because of the window it was started from, so it
+   * cannot outlive that window: with no window there is nothing left to wait
+   * for, and a narrowed one caps what is left. This is the half that was
+   * missing — a "never shorten" guard meant to protect the local countdown from
+   * a stale snapshot also kept enforcing a rule that had just been withdrawn.
+   *
+   * Narrowing is capped rather than recomputed: the broadcast moves the window
+   * immediately while the per-actor refetch is still in flight, so `remaining`
+   * is briefly stale. Capping at the new window is never more permissive than
+   * the server, and the next send resyncs it exactly.
+   */
+  protected syncSlowMode(): void {
+    const channel = this.attrs.channel;
+    const window = Number(channel.slowModeSeconds() ?? 0);
+    const remaining = Number(channel.slowModeRemaining() ?? 0);
+
+    if (
+      window === this.lastSlowModeWindow &&
+      remaining === this.lastServerCooldown
+    ) {
+      return;
+    }
+
+    const windowChanged = window !== this.lastSlowModeWindow;
+
+    this.lastSlowModeWindow = window;
+    this.lastServerCooldown = remaining;
+
+    if (windowChanged && this.cooldown > window) {
+      if (window <= 0) {
+        this.stopCooldown();
+      } else {
+        this.startCooldown(window);
+      }
+
+      return;
+    }
+
+    // Capped at the window for the same reason it is capped above: while the
+    // refetch is in flight `remaining` still describes the *old* rule, and a
+    // window that was just narrowed must not be lengthened by a stale figure.
+    // The server can never require longer than the window itself.
+    const wait = Math.min(remaining, window);
+
+    if (wait > this.cooldown) {
+      this.startCooldown(wait);
+    }
   }
 
   oncreate(vnode: Mithril.VnodeDOM<ChatComposerAttrs>): void {
@@ -97,6 +165,7 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
   onupdate(vnode: Mithril.VnodeDOM<ChatComposerAttrs>): void {
     super.onupdate(vnode);
 
+    this.syncSlowMode();
     this.focusOnNewContext();
   }
 
@@ -411,6 +480,14 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
     );
   }
 
+  /** Whether the staged reply was started as "reply in thread". */
+  protected branching(): boolean {
+    return this.attrs.state.branchingFrom(
+      Number(this.attrs.channel.id()),
+      this.attrs.threadId ?? null,
+    );
+  }
+
   protected editing() {
     return this.attrs.state.editing(
       Number(this.attrs.channel.id()),
@@ -445,18 +522,30 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
 
     const editing = Boolean(editingTarget);
 
+    // A branch and a reply stage identically, and now send differently — so the
+    // strip has to say which one is about to happen. Same icon the thread action
+    // uses, so the two read as the same feature.
+    const branching = !editing && this.branching();
+
     return (
       <div className="ChatComposer-context">
         <i
-          className={editing ? "fas fa-pencil" : "fas fa-reply"}
+          className={classList({
+            "fas fa-pencil": editing,
+            "fas fa-comments": branching,
+            "fas fa-reply": !editing && !branching,
+          })}
           aria-hidden="true"
         />
         <span className="ChatComposer-context-label">
           {editing
             ? app.translator.trans("ramon-chat.forum.composer.editing")
-            : app.translator.trans("ramon-chat.forum.message.replying_to", {
-                username: authorName(target),
-              })}
+            : app.translator.trans(
+                branching
+                  ? "ramon-chat.forum.message.starting_thread"
+                  : "ramon-chat.forum.message.replying_to",
+                { username: authorName(target) },
+              )}
         </span>
         <span className="ChatComposer-context-preview">
           {messagePreview(target, 80)}
@@ -935,10 +1024,16 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
         await state.send(channelId, content, {
           threadId: threadId ?? null,
           replyToId: replyingTo ? Number(replyingTo.id()) : null,
-          // Only from the channel composer, and only when the reply target can
-          // actually be branched — `createThread` inside a thread would ask for a
-          // nested one, which the policy refuses.
+          // Only when the reply was staged by "reply in thread". This used to be
+          // inferred from the reply being branchable at all, which made every
+          // ordinary reply in a threading-enabled channel open a thread and left
+          // no way to simply reply.
+          //
+          // The rest still guards it: only from the channel composer, and only
+          // when the target can actually be branched — `createThread` inside a
+          // thread would ask for a nested one, which the policy refuses.
           createThread:
+            state.branchingFrom(channelId, threadId ?? null) &&
             Boolean(replyingTo) &&
             Boolean(channel.threadingEnabled()) &&
             !threadId &&
