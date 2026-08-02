@@ -41,6 +41,7 @@ class AutomaticJoinAnnouncementTest extends TestCase
     private const REPLIER = 2;
     private const AUTHOR = 3;
     private const CHANNEL = 1;
+    private const DISCUSSION = 1;
 
     protected function setUp(): void
     {
@@ -62,11 +63,49 @@ class AutomaticJoinAnnouncementTest extends TestCase
             'group_permission' => [
                 ['group_id' => Group::MEMBER_ID, 'permission' => 'viewForum'],
                 ['group_id' => Group::MEMBER_ID, 'permission' => 'ramon-chat.use'],
-                ['group_id' => Group::MEMBER_ID, 'permission' => 'startDiscussion'],
                 ['group_id' => Group::MEMBER_ID, 'permission' => 'discussion.reply'],
             ],
             'tags' => [
                 ['id' => 1, 'name' => 'Lounge', 'slug' => 'lounge', 'position' => 0, 'is_restricted' => 0],
+            ],
+            // The discussion is fixture rows, not an API call.
+            //
+            // Creating it through `POST /api/discussions` drags in flarum/tags'
+            // `validateTagCount()`, which builds a `size:$min` rule out of the
+            // `flarum-tags.min_*_tags` settings. On a database that has never had
+            // those written they are null, the rule becomes `size:`, and Brick\Math
+            // rejects the empty number with a 500 — a failure about tag settings,
+            // in a test about chat announcements. It reproduces only on a fresh
+            // database, which is why it passed locally and failed in CI.
+            //
+            // Only the reply below needs to be real: it is what raises `Posted`,
+            // and `Posted` is what JoinChannelsOnReply listens to.
+            'discussions' => [
+                [
+                    'id'            => self::DISCUSSION,
+                    'title'         => 'A thread in the lounge',
+                    'slug'          => 'a-thread-in-the-lounge',
+                    'user_id'       => self::AUTHOR,
+                    'first_post_id' => 1,
+                    'comment_count' => 1,
+                    'created_at'    => Carbon::now()->toDateTimeString(),
+                    'is_private'    => 0,
+                ],
+            ],
+            'discussion_tag' => [
+                ['discussion_id' => self::DISCUSSION, 'tag_id' => 1],
+            ],
+            'posts' => [
+                [
+                    'id'            => 1,
+                    'discussion_id' => self::DISCUSSION,
+                    'number'        => 1,
+                    'user_id'       => self::AUTHOR,
+                    'type'          => 'comment',
+                    'content'       => '<t><p>opening post</p></t>',
+                    'created_at'    => Carbon::now()->toDateTimeString(),
+                    'is_private'    => 0,
+                ],
             ],
             'chat_channels' => [
                 [
@@ -83,27 +122,6 @@ class AutomaticJoinAnnouncementTest extends TestCase
                 ],
             ],
         ]);
-    }
-
-    /**
-     * Built through the API rather than as fixture rows: the listener runs off the
-     * `Posted` event, and only the real create path raises it the way a forum does.
-     */
-    private function startDiscussion(): int
-    {
-        $response = $this->send(
-            $this->request('POST', '/api/discussions', [
-                'authenticatedAs' => self::AUTHOR,
-                'json'            => ['data' => [
-                    'attributes'    => ['title' => 'A thread in the lounge', 'content' => 'opening post'],
-                    'relationships' => ['tags' => ['data' => [['type' => 'tags', 'id' => '1']]]],
-                ]],
-            ])
-        );
-
-        $this->assertSame(201, $response->getStatusCode(), (string) $response->getBody());
-
-        return (int) json_decode((string) $response->getBody(), true)['data']['id'];
     }
 
     /** @return string[] */
@@ -128,14 +146,12 @@ class AutomaticJoinAnnouncementTest extends TestCase
 
     public function test_replying_joins_the_bound_channel_without_announcing_it(): void
     {
-        $discussion = $this->startDiscussion();
-
         $response = $this->send(
             $this->request('POST', '/api/posts', [
                 'authenticatedAs' => self::REPLIER,
                 'json'            => ['data' => [
                     'attributes'    => ['content' => 'replying here'],
-                    'relationships' => ['discussion' => ['data' => ['type' => 'discussions', 'id' => (string) $discussion]]],
+                    'relationships' => ['discussion' => ['data' => ['type' => 'discussions', 'id' => (string) self::DISCUSSION]]],
                 ]],
             ])
         );
