@@ -144,6 +144,14 @@ app.initializers.add("ramon-chat", () => {
       ),
     })
     .registerSetting({
+      setting: "ramon-chat.queue_realtime",
+      type: "boolean",
+      label: app.translator.trans("ramon-chat.admin.settings.queue_realtime"),
+      help: app.translator.trans(
+        "ramon-chat.admin.settings.queue_realtime_help",
+      ),
+    })
+    .registerSetting({
       setting: "ramon-chat.send_with_ctrl_enter",
       type: "boolean",
       label: app.translator.trans(
