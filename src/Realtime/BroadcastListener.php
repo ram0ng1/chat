@@ -307,7 +307,10 @@ class BroadcastListener
     {
         $user = $message->relationLoaded('user') ? $message->user : $message->user()->first();
 
-        if ($user === null) {
+        // `instanceof` rather than a null check: the relation is typed as a bare
+        // Model on the way out, and a bot message has no author at all, so this
+        // is both the null guard and the narrowing the rest of the method needs.
+        if (! $user instanceof User) {
             return null;
         }
 

@@ -132,7 +132,11 @@ class SendChatEventJob extends AbstractJob
         // outlives a permission change — so someone who joined before the category
         // was restricted must not keep receiving pushes. This costs one query per
         // member, which is why it is confined to the case that actually needs it.
-        $users = User::query()->whereIn('id', $memberIds->all())->get();
+        // `whereKey` rather than `whereIn('id', ...)`: the two do the same thing,
+        // but `whereIn` is reached through Eloquent's mixin onto the query builder
+        // and comes back typed as that builder, which loses the model type and
+        // turns the collection below into one of anonymous rows.
+        $users = User::query()->whereKey($memberIds->all())->get();
 
         return $users
             ->filter(fn (User $user) => Channel::whereVisibleTo($user)->whereKey($channel->id)->exists())
