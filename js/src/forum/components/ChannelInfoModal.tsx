@@ -17,6 +17,7 @@ import chatState from "../state/chat";
 import { isOnline } from "../utils/presence";
 import { MembersSkeleton } from "./Skeletons";
 import { channelIcon } from "../utils/channelIcon";
+import AddMembersModal from "./AddMembersModal";
 
 export interface ChannelInfoModalAttrs extends IInternalModalAttrs {
   channel: Channel;
@@ -38,18 +39,6 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
   private loadedMembers = false;
   private memberFilter = "";
   private working = false;
-
-  // Candidate search for the add-member field.
-  private candidateQuery = "";
-  private candidates: User[] = [];
-  private candidateTimer: number | null = null;
-  private candidateSequence = 0;
-  /** Whether the add-member field is open. */
-  private adding = false;
-
-  onremove(): void {
-    if (this.candidateTimer !== null) window.clearTimeout(this.candidateTimer);
-  }
 
   className(): string {
     return "ChatModal ChatChannelInfoModal Modal--medium";
@@ -159,6 +148,13 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
             </select>
           </label>
 
+          {/* What the chosen level actually does. Three named levels with no
+              explanation left the difference between "mentions only" and
+              "nothing" to be discovered by picking one and waiting. */}
+          <div className="helpText">
+            {app.translator.trans(this.notificationLevelHelp(channel))}
+          </div>
+
           <Switch
             state={Boolean(channel.isMuted())}
             onchange={(value: boolean) => this.saveNotifications(null, value)}
@@ -175,6 +171,18 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
         {this.moderation()}
       </div>
     );
+  }
+
+  /** The line describing the notification level currently selected. */
+  protected notificationLevelHelp(channel: Channel): string {
+    switch (channel.notificationLevel() ?? NotificationLevel.Mentions) {
+      case NotificationLevel.Always:
+        return "ramon-chat.forum.info.level_always_help";
+      case NotificationLevel.Never:
+        return "ramon-chat.forum.info.level_never_help";
+      default:
+        return "ramon-chat.forum.info.level_mentions_help";
+    }
   }
 
   /**
@@ -265,29 +273,24 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
             })}
           </span>
 
-          {/* The add field is behind a `+` rather than always open: the common
-              reason to visit this tab is to look at who is here, and a search box
-              at the top of a list of people invites filtering, not inviting. */}
+          {/* Opens a picker rather than unfolding a field here: choosing people
+              is its own task, and a search box for candidates directly above a
+              search box for members made two controls that look identical do
+              different things. */}
           {this.attrs.channel.canManageMembers() ? (
             <Button
-              className={classList(
-                "Button Button--icon Button--flat ChatChannelInfo-addToggle",
-                {
-                  "ChatChannelInfo-addToggle--open": this.adding,
-                },
-              )}
-              icon={this.adding ? "fas fa-xmark" : "fas fa-plus"}
-              title={app.translator.trans(
-                "ramon-chat.forum.info.add_member",
-                {},
-                true,
-              )}
-              onclick={() => this.toggleAdding()}
-            />
+              className="Button Button--primary Button--compact"
+              icon="fas fa-user-plus"
+              disabled={this.working}
+              onclick={() => this.openAddMembers()}
+            >
+              {/* The dialog's own title, not `info.add_member`: that string is
+                  the phrasing of a search field ("Add someone by name") and
+                  reads as an instruction rather than as a button. */}
+              {app.translator.trans("ramon-chat.forum.add_members.title")}
+            </Button>
           ) : null}
         </div>
-
-        {this.addMembers()}
 
         <input
           className="FormControl ChatChannelInfo-filter"
@@ -347,162 +350,43 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
   }
 
   /**
-   * Adding people to the channel.
+   * Opens the people picker.
+   *
+   * Stacked on top of this modal rather than replacing it: the member list is
+   * the context for the choice, and coming back to a closed dialog after adding
+   * three people would mean reopening it to check they landed.
    *
    * This is how anyone gets into a private channel: it is not discoverable and
    * cannot be joined, so an existing member with `manageMembers` has to put you
-   * there. Drawn only when the server says the actor may — a moderator, or the
+   * there. Offered only when the server says the actor may — a moderator, or the
    * creator of a group conversation.
    */
-  protected addMembers(): Mithril.Children {
-    if (!this.attrs.channel.canManageMembers() || !this.adding) return null;
-
-    const searching = this.candidateQuery.trim().length >= 2;
-
-    return (
-      <div className="ChatChannelInfo-add">
-        <input
-          className="FormControl ChatChannelInfo-add-field"
-          type="search"
-          placeholder={app.translator.trans(
-            "ramon-chat.forum.info.add_member",
-            {},
-            true,
-          )}
-          value={this.candidateQuery}
-          oninput={(e: Event) =>
-            this.searchCandidates((e.target as HTMLInputElement).value)
-          }
-          oncreate={(vnode: Mithril.VnodeDOM) =>
-            (vnode.dom as HTMLInputElement).focus()
-          }
-        />
-
-        {this.candidates.length > 0 ? (
-          <div className="ChatChannelInfo-candidates">
-            {this.candidates.map((user) => (
-              <button
-                type="button"
-                key={user.id()}
-                className="ChatChannelInfo-candidate"
-                disabled={this.working}
-                onclick={() => this.add(user)}
-              >
-                <Avatar user={user} className="Avatar" />
-                <span className="ChatChannelInfo-candidate-name">
-                  {username(user)}
-                </span>
-                <i
-                  className="ChatChannelInfo-candidate-add fas fa-plus"
-                  aria-hidden="true"
-                />
-              </button>
-            ))}
-          </div>
-        ) : searching ? (
-          <div className="ChatChannelInfo-add-empty">
-            {app.translator.trans("ramon-chat.forum.info.no_candidates")}
-          </div>
-        ) : (
-          <div className="ChatChannelInfo-add-hint">
-            {app.translator.trans("ramon-chat.forum.info.add_member_hint")}
-          </div>
-        )}
-      </div>
+  protected openAddMembers(): void {
+    app.modal.show(
+      AddMembersModal,
+      {
+        channel: this.attrs.channel,
+        existing: this.members,
+        onAdded: (users: User[]) => this.onMembersAdded(users),
+      },
+      true,
     );
   }
 
-  protected toggleAdding(): void {
-    this.adding = !this.adding;
+  /** Folds the picker's result into the list this tab is already showing. */
+  protected onMembersAdded(users: User[]): void {
+    const known = new Set(this.members.map((member) => member.id()));
+    const fresh = users.filter((user) => !known.has(user.id()));
 
-    // Leaving a stale query and its results behind would mean reopening the field
-    // shows matches for something typed minutes ago.
-    if (!this.adding) {
-      this.candidateQuery = "";
-      this.candidates = [];
-    }
+    if (fresh.length === 0) return;
+
+    this.members = [...this.members, ...fresh];
+
+    this.attrs.channel.pushAttributes({
+      userCount: (this.attrs.channel.userCount() ?? 0) + fresh.length,
+    });
 
     m.redraw();
-  }
-
-  protected searchCandidates(value: string): void {
-    this.candidateQuery = value;
-
-    if (this.candidateTimer !== null) window.clearTimeout(this.candidateTimer);
-
-    if (value.trim().length < 2) {
-      this.candidates = [];
-
-      return;
-    }
-
-    const mine = ++this.candidateSequence;
-
-    this.candidateTimer = window.setTimeout(() => {
-      app.store
-        .find<User[]>("users", {
-          filter: { q: value.trim() },
-          page: { limit: 6 },
-        })
-        .then((results) => {
-          // A slower earlier search must not overwrite a later one.
-          if (mine !== this.candidateSequence) return;
-
-          const already = new Set(this.members.map((member) => member.id()));
-
-          // Someone already in the channel is not a candidate; offering them and
-          // then silently doing nothing is worse than not offering.
-          this.candidates = (Array.isArray(results) ? results : []).filter(
-            (user) => !already.has(user.id()),
-          );
-
-          m.redraw();
-        })
-        .catch(() => {
-          if (mine === this.candidateSequence) this.candidates = [];
-        });
-    }, 250);
-  }
-
-  protected async add(user: User): Promise<void> {
-    this.working = true;
-    m.redraw();
-
-    try {
-      const payload = await app.request<any>({
-        method: "POST",
-        url: `${app.forum.attribute("apiUrl")}/chat-channels/${this.attrs.channel.id()}/members`,
-        body: { data: { attributes: { userIds: [Number(user.id())] } } },
-      });
-
-      if (payload?.data) app.store.pushPayload(payload);
-
-      this.members = [...this.members, user];
-      this.candidates = this.candidates.filter(
-        (candidate) => candidate.id() !== user.id(),
-      );
-      this.candidateQuery = "";
-
-      this.attrs.channel.pushAttributes({
-        userCount: (this.attrs.channel.userCount() ?? 0) + 1,
-      });
-
-      app.alerts.show(
-        { type: "success" },
-        app.translator.trans("ramon-chat.forum.info.member_added", {
-          username: username(user),
-        }),
-      );
-    } catch (e: any) {
-      app.alerts.show(
-        { type: "error" },
-        e?.response?.errors?.[0]?.detail ??
-          app.translator.trans("ramon-chat.forum.info.save_failed"),
-      );
-    } finally {
-      this.working = false;
-      m.redraw();
-    }
   }
 
   /**

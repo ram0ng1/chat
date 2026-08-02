@@ -655,7 +655,12 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
           className={classList("ChatMessage-action", {
             "ChatMessage-action--active": pinned,
           })}
-          icon="fas fa-thumbtack"
+          // The struck-through pin on an already-pinned message: the icon shows
+          // what the click does, not what the message currently is. Colour alone
+          // said "this is pinned" and left the reader to guess that pressing it
+          // again undoes that — and the accent is invisible to anyone who cannot
+          // separate it from the resting colour.
+          icon={pinned ? "fas fa-thumbtack-slash" : "fas fa-thumbtack"}
           title={app.translator.trans(
             pinned
               ? "ramon-chat.forum.message.unpin"
