@@ -55,6 +55,30 @@ class RestrictedChatAccessTest extends TestCase
                 ['group_id' => 100, 'permission' => 'ramon-chat.use'],
             ],
         ]);
+
+        $this->closeChatToMembers();
+    }
+
+    /**
+     * Revokes the chat grants the extension seeds on install.
+     *
+     * Not optional, and not a detail of the fixture. Enabling the extension runs
+     * `2026_07_29_000013`, which grants `ramon-chat.use` to MEMBER — and every
+     * confirmed account belongs to MEMBER implicitly. The harness's
+     * `populateDatabase()` adds fixture rows with `updateOrInsert` rather than
+     * replacing the table, so listing group 100 above does not displace that
+     * grant: without this, every user in the fixture still holds the permission
+     * and none of the gates below are being exercised at all.
+     *
+     * This is also what a forum restricted to one group actually does — the
+     * admin revokes the default and adds their group. The fixture models that.
+     */
+    private function closeChatToMembers(): void
+    {
+        $this->database()->table('group_permission')
+            ->where('group_id', Group::MEMBER_ID)
+            ->where('permission', 'like', 'ramon-chat.%')
+            ->delete();
     }
 
     private function canUseChat(int $as): bool
