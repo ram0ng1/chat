@@ -89,7 +89,10 @@ class JoinChannelsOnReply
             $this->memberships->join($channel, $actor);
             $channel->refreshMetadata()->save();
 
-            $this->events->dispatch(new UserJoinedChannel($channel, $actor, $actor));
+            // `automatic`: the user replied to a discussion, they did not ask to be
+            // put in this channel. Announcing it would make a system row out of
+            // every first reply in the category.
+            $this->events->dispatch(new UserJoinedChannel($channel, $actor, $actor, automatic: true));
         }
     }
 

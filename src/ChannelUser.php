@@ -84,6 +84,24 @@ class ChannelUser extends AbstractModel
     }
 
     /**
+     * Whether this membership is a hidden one — in the channel without appearing
+     * in its member list or count.
+     *
+     * Reads the attribute by name instead of `$this->hidden`, and that is not
+     * style: Eloquent declares `protected $hidden` for its own serialisation
+     * allow-list, and this table has a column of the same name. From outside the
+     * class the property is inaccessible, so PHP falls through to `__get()` and
+     * the column wins — by accident. From inside one — an accessor, a scope, a
+     * subclass — `$this->hidden` is Eloquent's array and the column is
+     * unreachable. Naming the attribute is the only form that means the same
+     * thing in both places.
+     */
+    public function isHidden(): bool
+    {
+        return (bool) $this->getAttribute('hidden');
+    }
+
+    /**
      * Muting is deliberately separate from level 0: a muted channel also stops
      * contributing unread badges, whereas level 0 only suppresses notifications.
      */

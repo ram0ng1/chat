@@ -373,7 +373,7 @@ class ChannelResource extends AbstractDatabaseResource
                         ]);
                     }
 
-                    $this->events->dispatch(new UserLeftChannel($channel, $user, $actor));
+                    $this->events->dispatch(new UserLeftChannel($channel, $user, $actor, $membership->isHidden()));
 
                     return $channel;
                 })
@@ -391,9 +391,11 @@ class ChannelResource extends AbstractDatabaseResource
                         throw new ForbiddenException();
                     }
 
-                    $this->memberships->leave($channel, $actor);
+                    $membership = $this->memberships->leave($channel, $actor);
 
-                    $this->events->dispatch(new UserLeftChannel($channel, $actor, $actor));
+                    $this->events->dispatch(
+                        new UserLeftChannel($channel, $actor, $actor, (bool) $membership?->isHidden())
+                    );
                 })
                 ->response(fn () => new EmptyResponse(204)),
 
@@ -649,7 +651,7 @@ class ChannelResource extends AbstractDatabaseResource
             // So a lurking moderator can tell they are lurking; without it the UI
             // looks identical to an ordinary membership and the distinction is lost.
             Schema\Boolean::make('isHiddenMember')
-                ->get(fn (Channel $c, Context $context) => (bool) ($this->membership($c, $context->getActor())?->hidden ?? false)),
+                ->get(fn (Channel $c, Context $context) => (bool) $this->membership($c, $context->getActor())?->isHidden()),
 
             Schema\Boolean::make('canJoin')
                 ->get(fn (Channel $c, Context $context) => $context->getActor()->can('join', $c)),
