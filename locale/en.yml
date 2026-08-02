@@ -514,6 +514,8 @@ ramon-chat:
 
       threading_default: Enable threads on new channels by default
       allow_archiving_channels: Allow archiving channels
+      queue_realtime: Deliver realtime events through the queue
+      queue_realtime_help: "Off by default: pushes run in the request, so messages arrive immediately. Turn this on only if your forum runs a continuous queue worker, or if the web server cannot reach the websocket daemon. With Flarum's database queue driver the worker runs once a minute, which will delay every message by up to that long."
       send_with_ctrl_enter: Send messages with Ctrl+Enter
       send_with_ctrl_enter_help: When enabled, Enter inserts a line break and only Ctrl+Enter (Cmd+Enter on macOS) sends the message. When disabled, Enter sends and Shift+Enter inserts a line break.
       sound: Notification sound

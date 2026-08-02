@@ -9,6 +9,8 @@
 
 namespace Ramon\Chat\Realtime;
 
+use Flarum\Settings\SettingsRepositoryInterface;
+use Illuminate\Contracts\Bus\Dispatcher as Bus;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Queue\Queue;
 use Psr\Log\LoggerInterface;
@@ -32,17 +34,24 @@ use Ramon\Chat\Realtime\Job\SendChatEventJob;
  * browser, regardless of permissions. So every chat payload is addressed to
  * specific users' private channels instead.
  *
- * ## Why nothing here talks to the daemon
+ * ## Why nothing here talks to the daemon, and why it still runs now
  *
- * This class only enqueues. The HTTP call to the websocket daemon, and the
- * queries that resolve who should receive the event, both happen inside
- * SendChatEventJob — the same shape flarum/realtime uses for its own pushes,
- * where every listener ends in `queue()->push(new SendTriggerJob(...))`.
+ * The HTTP call to the websocket daemon, and the queries that resolve who should
+ * receive the event, both live in SendChatEventJob. But the job is *run*, not
+ * enqueued, unless the forum asks otherwise.
  *
- * Triggering inline made the send request wait on the daemon and made a daemon
- * the web process cannot reach look like a chat that silently stops updating.
- * Matching core's shape puts chat on the same path as the post broadcasts that
- * already work on any install where realtime works at all.
+ * flarum/realtime enqueues its own pushes, and chat followed that for one
+ * release. It is the wrong trade here. Flarum's database queue driver schedules
+ * its worker `everyMinute()` with `--stop-when-empty`
+ * (Flarum\Queue\QueueServiceProvider::registerSchedule), so on the queue path a
+ * chat message can wait a full minute for delivery. A minute is nothing for the
+ * "someone replied to your discussion" push that shape was designed for, and it
+ * is not a chat.
+ *
+ * So the default is immediate, and `ramon-chat.queue_realtime` moves it back
+ * onto the queue for the forums that need it: one whose web process cannot reach
+ * the daemon, or one large enough that the fan-out belongs off the request. That
+ * setting is only sane alongside a continuously running worker.
  *
  * ## Who receives a message
  *
@@ -65,7 +74,9 @@ class ChatBroadcaster
 {
     public function __construct(
         protected Container $container,
+        protected Bus $bus,
         protected Queue $queue,
+        protected SettingsRepositoryInterface $settings,
         protected LoggerInterface $log
     ) {
     }
@@ -105,14 +116,14 @@ class ChatBroadcaster
     }
 
     /**
-     * Enqueuing must never be able to fail the action that caused the event: the
-     * message is already committed, and a client that misses the push reconciles
-     * through the API. A queue backend that is down would otherwise turn every
-     * send into a 500.
+     * Running the job must never be able to fail the action that caused the
+     * event: the message is already committed, and a client that misses the push
+     * reconciles through the API. A daemon that is down would otherwise turn
+     * every send into a 500.
      *
-     * Nothing is queued at all without a Pusher binding — PresenceBroadcaster is
+     * Nothing happens at all without a Pusher binding — PresenceBroadcaster is
      * wired unconditionally, so on a forum with no realtime this is what keeps
-     * every keystroke from enqueuing a job that would resolve to a no-op.
+     * every keystroke from running a job that would resolve to a no-op.
      */
     protected function dispatch(SendChatEventJob $job): void
     {
@@ -121,7 +132,20 @@ class ChatBroadcaster
         }
 
         try {
-            $this->queue->push($job);
+            if ($this->settings->get('ramon-chat.queue_realtime')) {
+                $this->queue->push($job);
+
+                return;
+            }
+
+            // `dispatchNow`, not `dispatchSync`. They read alike and are not: on a
+            // ShouldQueue job `dispatchSync` re-dispatches to the queue named
+            // 'sync', and Flarum's QueueFactory::connection() ignores the name it
+            // is given and hands back the one configured connection. On a forum
+            // using the database driver that quietly puts the job back on the
+            // queue the setting above exists to avoid. `dispatchNow` runs it in
+            // this process, full stop.
+            $this->bus->dispatchNow($job);
         } catch (\Throwable $e) {
             $this->log->warning('[ramon/chat] realtime dispatch failed: '.$e->getMessage());
         }

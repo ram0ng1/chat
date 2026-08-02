@@ -21,16 +21,15 @@ use Ramon\Chat\ChannelUser;
 /**
  * Delivers one chat event to the websocket daemon.
  *
- * Queued rather than triggered from the request that caused it, which is what
- * flarum/realtime does for every one of its own pushes — see
- * Flarum\Realtime\Push\EventSubscriber, where each listener ends in
- * `queue()->push(new SendTriggerJob(...))`. Sending a message therefore no longer
- * waits on an HTTP round-trip to the daemon per 100 recipients, and a daemon the
- * web process cannot reach stops being a failure the send path has to swallow.
+ * A job because flarum/realtime models its own pushes as jobs — see
+ * Flarum\Realtime\Push\EventSubscriber — and because it keeps the fan-out and
+ * the audience query in one testable place rather than in the listener. But
+ * whether it is *queued* or run immediately is ChatBroadcaster's call, and it
+ * runs immediately by default: read the note there before changing it.
  *
- * Resolving the audience is part of the job for the same reason: for a tag-bound
- * channel it costs a visibility query per member, and that belongs in a worker
- * rather than between a member pressing enter and their message appearing.
+ * Resolving the audience lives here rather than at the call site so that the
+ * queued path, when a forum chooses it, moves the per-member visibility query
+ * for tag-bound channels off the request along with the HTTP calls.
  */
 class SendChatEventJob extends AbstractJob
 {

@@ -206,6 +206,13 @@ return [
         ->default('ramon-chat.max_upload_size', 10485760)
         ->default('ramon-chat.allow_archiving_channels', true)
         ->default('ramon-chat.threading_default', false)
+        // Whether realtime pushes go through the queue instead of running in the
+        // request that caused them. Off by default: Flarum's database queue runs
+        // its worker once a minute, and a chat message that arrives a minute late
+        // has not arrived. Turn it on only alongside a worker that runs
+        // continuously — see Realtime\ChatBroadcaster. Never serialised to the
+        // forum: it changes nothing the client can see or act on.
+        ->default('ramon-chat.queue_realtime', false)
         // Which keystroke sends. Off (the default) keeps the chat convention —
         // Enter sends, Shift+Enter breaks the line. On, Enter breaks the line and
         // the message only leaves on Ctrl+Enter, for forums whose members write
