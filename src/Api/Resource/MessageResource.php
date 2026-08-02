@@ -77,8 +77,8 @@ class MessageResource extends AbstractDatabaseResource
                 // without the gate these endpoints would answer 200 with an empty
                 // collection to anyone, which is a slower way of saying no.
                 ->authenticated()
-                ->defaultInclude(['user', 'replyTo', 'replyTo.user', 'uploads', 'thread', 'thread.lastMessage', 'deletedBy'])
-                ->eagerLoad(['reactions', 'uploads', 'mentions', 'flags']),
+                ->defaultInclude(['user', 'user.groups', 'replyTo', 'replyTo.user', 'uploads', 'thread', 'thread.lastMessage', 'deletedBy'])
+                ->eagerLoad(['user.groups', 'reactions', 'uploads', 'mentions', 'flags']),
 
             Endpoint\Index::make()
                 ->authenticated()
@@ -94,8 +94,13 @@ class MessageResource extends AbstractDatabaseResource
                 // for them too on the next reload.
                 //
                 // `thread.lastMessage` comes along for the indicator's preview text.
-                ->defaultInclude(['user', 'replyTo', 'replyTo.user', 'uploads', 'thread', 'thread.lastMessage', 'deletedBy'])
-                ->eagerLoad(['reactions', 'uploads', 'mentions', 'thread', 'flags'])
+                //
+                // `user.groups` feeds the author's badges, the same way core's
+                // PostResource includes it for a post. Eager-loaded as well as
+                // included: without it the serialiser reads the relation once per
+                // row, which is fifty queries on a full page of messages.
+                ->defaultInclude(['user', 'user.groups', 'replyTo', 'replyTo.user', 'uploads', 'thread', 'thread.lastMessage', 'deletedBy'])
+                ->eagerLoad(['user.groups', 'reactions', 'uploads', 'mentions', 'thread', 'flags'])
                 ->paginate(50),
 
             // Creation goes through MessageDispatcher rather than Create's own
@@ -151,7 +156,7 @@ class MessageResource extends AbstractDatabaseResource
                         createThread: $createThread
                     );
                 })
-                ->defaultInclude(['user', 'replyTo', 'replyTo.user', 'uploads', 'thread']),
+                ->defaultInclude(['user', 'user.groups', 'replyTo', 'replyTo.user', 'uploads', 'thread']),
 
             Endpoint\Endpoint::make('edit')
                 ->route('PATCH', '/{id}')
@@ -187,7 +192,7 @@ class MessageResource extends AbstractDatabaseResource
 
                     return $message;
                 })
-                ->defaultInclude(['user', 'replyTo', 'replyTo.user', 'uploads']),
+                ->defaultInclude(['user', 'user.groups', 'replyTo', 'replyTo.user', 'uploads']),
 
             Endpoint\Endpoint::make('remove')
                 ->route('POST', '/{id}/delete')
@@ -282,7 +287,7 @@ class MessageResource extends AbstractDatabaseResource
 
                     return $message;
                 })
-                ->defaultInclude(['user', 'uploads']),
+                ->defaultInclude(['user', 'user.groups', 'uploads']),
 
             Endpoint\Endpoint::make('react')
                 ->route('POST', '/{id}/react')
@@ -328,7 +333,7 @@ class MessageResource extends AbstractDatabaseResource
 
                     return $message;
                 })
-                ->defaultInclude(['user', 'uploads']),
+                ->defaultInclude(['user', 'user.groups', 'uploads']),
 
             Endpoint\Endpoint::make('bookmark')
                 ->route('POST', '/{id}/bookmark')
@@ -360,7 +365,7 @@ class MessageResource extends AbstractDatabaseResource
 
                     return $message;
                 })
-                ->defaultInclude(['user']),
+                ->defaultInclude(['user', 'user.groups']),
 
             // The edit history. Its own endpoint rather than a relationship: it is
             // read rarely and by few people, and including it in the message schema
@@ -433,7 +438,7 @@ class MessageResource extends AbstractDatabaseResource
 
                     return $message;
                 })
-                ->defaultInclude(['user', 'pinnedBy']),
+                ->defaultInclude(['user', 'user.groups', 'pinnedBy']),
         ];
     }
 

@@ -15,6 +15,7 @@ import { searchEmoji } from "../utils/emoji";
 import { messagePreview } from "../../common/utils/preview";
 import { humanDuration } from "../utils/duration";
 import { resolveMaxMessageLength } from "../utils/messageLimit";
+import { sendsOnCtrlEnter } from "../utils/shortcuts";
 import MessageTooLongModal from "./MessageTooLongModal";
 import { authorName } from "../utils/bot";
 import {
@@ -327,11 +328,9 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
             <button
               type="button"
               className="ChatComposer-send"
-              title={app.translator.trans(
-                "ramon-chat.forum.composer.send",
-                {},
-                true,
-              )}
+              // Names the keystroke, since which one sends is a forum setting and
+              // the button is the only place a member would find out.
+              title={this.sendHint()}
               disabled={
                 this.sending ||
                 (!value.trim() && state.pendingUploads.length === 0)
@@ -509,6 +508,17 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
       {
         channel: channel.displayName(),
       },
+      true,
+    );
+  }
+
+  /** The send button's tooltip, naming the keystroke that actually sends. */
+  protected sendHint(): string {
+    return app.translator.trans(
+      sendsOnCtrlEnter()
+        ? "ramon-chat.forum.composer.send_ctrl_enter"
+        : "ramon-chat.forum.composer.send_enter",
+      {},
       true,
     );
   }
@@ -776,7 +786,17 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
         return;
       }
 
-      if (e.key === "Enter" || e.key === "Tab") {
+      // Ctrl/Cmd+Enter is "send", never "accept": in Ctrl+Enter mode a plain
+      // Enter still belongs to the list, but the send shortcut has to reach the
+      // send path or the list becomes a trap for anyone who used it.
+      if (e.key === "Enter" && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        this.applySuggestion(this.suggestions[this.activeSuggestion]);
+
+        return;
+      }
+
+      if (e.key === "Tab") {
         e.preventDefault();
         this.applySuggestion(this.suggestions[this.activeSuggestion]);
 
@@ -791,20 +811,22 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
       }
     }
 
-    // Enter sends; Shift+Enter inserts a newline. On mobile the on-screen
-    // keyboard's Enter should insert a newline instead, which is why this checks
-    // for a real keyboard event rather than assuming.
-    if (
-      e.key === "Enter" &&
-      !e.shiftKey &&
-      !e.ctrlKey &&
-      !e.metaKey &&
-      !e.altKey
-    ) {
-      e.preventDefault();
-      this.submit();
+    // Which keystroke sends is the forum's choice. Default: Enter sends and
+    // Shift+Enter breaks the line, the chat convention. With
+    // `send_with_ctrl_enter` on, Enter breaks the line and only Ctrl/Cmd+Enter
+    // sends — for forums whose members write long messages and lose them to a
+    // stray Enter. Cmd is accepted alongside Ctrl because on macOS the modifier
+    // for this shortcut is Cmd, and a mac user pressing Ctrl+Enter means the
+    // same thing.
+    if (e.key === "Enter" && !e.altKey) {
+      const withModifier = e.ctrlKey || e.metaKey;
 
-      return;
+      if (sendsOnCtrlEnter() ? withModifier : !e.shiftKey && !withModifier) {
+        e.preventDefault();
+        this.submit();
+
+        return;
+      }
     }
 
     if (e.key === "Escape") {

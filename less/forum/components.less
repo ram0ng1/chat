@@ -780,6 +780,54 @@ body.ChatFullPage {
     }
   }
 
+  // Group badges, on the avatar rather than beside the name. The gutter is a
+  // fixed @chat-avatar-size column and the meta row is already carrying the name,
+  // the bot tag, the verified tick and the timestamp — a badge there would push
+  // the timestamp off a narrow row. Overlapping the avatar costs no width.
+  //
+  // The wrapper is the positioning context the badges sit in. It is the size of
+  // the avatar exactly, so the offsets below can be read against the picture.
+  &-avatar {
+    position: relative;
+    display: block;
+    width: @chat-avatar-size;
+    height: @chat-avatar-size;
+  }
+
+  // On the low corner of the avatar, the side the message body is not on.
+  //
+  // Core puts a post's badges above the picture, and that was tried here: at the
+  // chat's 32px avatar it reads as an emblem pinned on top of the face, and a
+  // column of them down a message list draws the eye away from the text. Low and
+  // small sits closer to how the rest of this row is weighted.
+  &-badges {
+    position: absolute;
+    right: -4px;
+    bottom: -3px;
+    // Four packed badges are 35px against a 32px containing block, and without
+    // this the fourth drops to a second line halfway up the avatar.
+    white-space: nowrap;
+    // Doesn't intercept the click that opens the profile; core sets the same on
+    // .PostUser-badges, and `badges--packed` restores it on each Badge so the
+    // tooltip still answers to a hover.
+    pointer-events: none;
+
+    .Badge {
+      // Core's 20px is sized against a post's avatar and its own generous
+      // spacing. Scaled to the same proportion of the avatar it sits on.
+      .Badge--size(14px);
+      // It overlaps the picture, so it needs an edge against it — core has no
+      // equivalent because its badge hangs clear of the avatar.
+      box-shadow: 0 0 0 2px var(--body-bg);
+    }
+
+    // Half of each badge stays visible. Core hides 65% of a 20px one, which at
+    // 14px would leave 5px of icon — too little to tell two groups apart.
+    &.badges--packed {
+      --packing-space: 7px;
+    }
+  }
+
   // In a grouped message the gutter holds the timestamp on hover instead of an
   // avatar, which is how Discourse keeps dense runs scannable.
   &--grouped &-gutter {
@@ -855,20 +903,12 @@ body.ChatFullPage {
     }
   }
 
-  // A button, since it opens the edit history, but styled as the inline marker it
-  // reads as rather than as a control.
+  // An inline note, not a control: it states that the row was edited and when.
   &-editedMark {
     font-size: 11px;
     color: var(--avocado-muted-label);
     margin-left: 4px;
-    padding: 0;
-    border: 0;
-    background: none;
-    cursor: pointer;
-
-    &:hover {
-      text-decoration: underline;
-    }
+    white-space: nowrap;
   }
 
   // Deleted message tombstone.

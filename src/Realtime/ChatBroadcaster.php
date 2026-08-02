@@ -9,13 +9,12 @@
 
 namespace Ramon\Chat\Realtime;
 
-use Flarum\User\User;
 use Illuminate\Contracts\Container\Container;
-use Illuminate\Support\Collection;
+use Illuminate\Contracts\Queue\Queue;
 use Psr\Log\LoggerInterface;
 use Pusher\Pusher;
 use Ramon\Chat\Channel;
-use Ramon\Chat\ChannelUser;
+use Ramon\Chat\Realtime\Job\SendChatEventJob;
 
 /**
  * Delivers chat events over flarum/realtime's websocket.
@@ -33,12 +32,25 @@ use Ramon\Chat\ChannelUser;
  * browser, regardless of permissions. So every chat payload is addressed to
  * specific users' private channels instead.
  *
+ * ## Why nothing here talks to the daemon
+ *
+ * This class only enqueues. The HTTP call to the websocket daemon, and the
+ * queries that resolve who should receive the event, both happen inside
+ * SendChatEventJob — the same shape flarum/realtime uses for its own pushes,
+ * where every listener ends in `queue()->push(new SendTriggerJob(...))`.
+ *
+ * Triggering inline made the send request wait on the daemon and made a daemon
+ * the web process cannot reach look like a chat that silently stops updating.
+ * Matching core's shape puts chat on the same path as the post broadcasts that
+ * already work on any install where realtime works at all.
+ *
  * ## Who receives a message
  *
  * The audience is the channel's active members — *not* intersected with who is
  * currently connected. Pusher's channel-list API is eventually consistent, so
  * using it to pick recipients drops messages at random; triggering on an
- * unsubscribed channel is free by comparison. See recipients().
+ * unsubscribed channel is free by comparison. See
+ * SendChatEventJob::channelMembers().
  *
  * Restricting to members is deliberate: a non-member reading a public channel
  * picks up new messages on their next fetch rather than by push, which is the
@@ -53,6 +65,7 @@ class ChatBroadcaster
 {
     public function __construct(
         protected Container $container,
+        protected Queue $queue,
         protected LoggerInterface $log
     ) {
     }
@@ -69,31 +82,12 @@ class ChatBroadcaster
         array $payload,
         ?int $exceptUserId = null
     ): void {
-        $pusher = $this->pusher();
-
-        if ($pusher === null) {
-            return;
-        }
-
-        $recipients = $this->recipients($pusher, $channel, $exceptUserId);
-
-        if ($recipients->isEmpty()) {
-            return;
-        }
-
-        // Pusher caps a multi-channel trigger at 100 channels per call.
-        foreach ($recipients->chunk(100) as $chunk) {
-            $channels = $chunk->map(fn (int $id) => 'private-user='.$id)->values()->all();
-
-            try {
-                $pusher->trigger($channels, $event, $payload);
-            } catch (\Throwable $e) {
-                // A websocket delivery failure must never surface as a failed
-                // send: the message is already committed, and the client will
-                // reconcile on its next fetch.
-                $this->log->warning('[ramon/chat] realtime trigger failed: '.$e->getMessage());
-            }
-        }
+        $this->dispatch(new SendChatEventJob(
+            event: $event,
+            payload: $payload,
+            channelId: (int) $channel->id,
+            exceptUserId: $exceptUserId
+        ));
     }
 
     /**
@@ -103,79 +97,33 @@ class ChatBroadcaster
      */
     public function toUser(int $userId, string $event, array $payload): void
     {
-        $pusher = $this->pusher();
+        $this->dispatch(new SendChatEventJob(
+            event: $event,
+            payload: $payload,
+            userId: $userId
+        ));
+    }
 
-        if ($pusher === null) {
+    /**
+     * Enqueuing must never be able to fail the action that caused the event: the
+     * message is already committed, and a client that misses the push reconciles
+     * through the API. A queue backend that is down would otherwise turn every
+     * send into a 500.
+     *
+     * Nothing is queued at all without a Pusher binding — PresenceBroadcaster is
+     * wired unconditionally, so on a forum with no realtime this is what keeps
+     * every keystroke from enqueuing a job that would resolve to a no-op.
+     */
+    protected function dispatch(SendChatEventJob $job): void
+    {
+        if (! class_exists(Pusher::class) || ! $this->container->bound(Pusher::class)) {
             return;
         }
 
         try {
-            $pusher->trigger('private-user='.$userId, $event, $payload);
+            $this->queue->push($job);
         } catch (\Throwable $e) {
-            $this->log->warning('[ramon/chat] realtime trigger failed: '.$e->getMessage());
-        }
-    }
-
-    /**
-     * @return Collection<int, int> Eligible user ids.
-     */
-    protected function recipients(Pusher $pusher, Channel $channel, ?int $exceptUserId): Collection
-    {
-        // Deliberately NOT filtered by who is currently connected.
-        //
-        // Pusher's channel-list API is eventually consistent: a client that just
-        // subscribed may not appear yet, and one that just dropped may still be
-        // listed. Intersecting the audience with it therefore loses messages at
-        // random — which is exactly the "realtime works most of the time" symptom.
-        //
-        // Triggering on a channel nobody is subscribed to is free: the daemon
-        // discards it. Paying for that is strictly better than a race, and it also
-        // removes an HTTP round-trip to the daemon per broadcast.
-        $memberIds = ChannelUser::query()
-            ->where('channel_id', $channel->id)
-            ->whereNull('left_at')
-            ->when($exceptUserId !== null, fn ($q) => $q->where('user_id', '!=', $exceptUserId))
-            ->pluck('user_id')
-            ->map(fn ($id) => (int) $id);
-
-        if ($memberIds->isEmpty()) {
-            return collect();
-        }
-
-        // For a direct channel, membership *is* the visibility rule — the scope
-        // resolves through the same `chat_channel_user` rows we just read. Nothing
-        // further to check, and no per-user query.
-        if ($channel->isDirect() || $channel->tag_id === null) {
-            return $memberIds->values();
-        }
-
-        // A tag-bound channel inherits the tag's `viewForum`, and a membership row
-        // outlives a permission change — so someone who joined before the category
-        // was restricted must not keep receiving pushes. This costs one query per
-        // member, which is why it is confined to the case that actually needs it.
-        $users = User::query()->whereIn('id', $memberIds->all())->get();
-
-        return $users
-            ->filter(fn (User $user) => Channel::whereVisibleTo($user)->whereKey($channel->id)->exists())
-            ->map(fn (User $user) => (int) $user->id)
-            ->values();
-    }
-
-
-    /**
-     * Null when flarum/realtime is not installed or not booted, which is what
-     * makes every caller safe to invoke unconditionally.
-     */
-    protected function pusher(): ?Pusher
-    {
-        if (! class_exists(Pusher::class) || ! $this->container->bound(Pusher::class)) {
-            return null;
-        }
-
-        try {
-            return $this->container->make(Pusher::class);
-        } catch (\Throwable $e) {
-            return null;
+            $this->log->warning('[ramon/chat] realtime dispatch failed: '.$e->getMessage());
         }
     }
 }
