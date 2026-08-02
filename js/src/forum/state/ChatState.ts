@@ -26,6 +26,15 @@ interface TypingEntry {
   username: string;
   /** Epoch ms after which the indicator is dropped. */
   expiresAt: number;
+  /**
+   * Redraw scheduled for the moment it expires.
+   *
+   * `typistsIn()` drops expired entries, but only when something calls it — and
+   * a typist who simply stops produces no further events, so nothing redraws and
+   * the last frame keeps their name on screen indefinitely. The timer is what
+   * makes the expiry visible.
+   */
+  timer: number;
 }
 
 const PAGE_SIZE = 50;
@@ -1009,6 +1018,7 @@ export default class ChatState {
 
     for (const [userId, entry] of Object.entries(entries)) {
       if (entry.expiresAt <= now) {
+        window.clearTimeout(entry.timer);
         delete entries[Number(userId)];
         continue;
       }
@@ -1028,14 +1038,39 @@ export default class ChatState {
   ): void {
     if (!this.typing[channelId]) this.typing[channelId] = {};
 
+    // Whatever happens next replaces this entry, so its pending redraw is stale.
+    // Left running, a stopped typist's old timer would fire against a fresh
+    // entry — and a stream of keystrokes would pile up one timer per event.
+    const previous = this.typing[channelId][userId];
+
+    if (previous) window.clearTimeout(previous.timer);
+
     if (!typing) {
       delete this.typing[channelId][userId];
-    } else {
-      this.typing[channelId][userId] = {
-        username,
-        expiresAt: Date.now() + expiresIn * 1000,
-      };
+
+      return;
     }
+
+    // A shade past the deadline, so the redraw reads an entry that has already
+    // expired rather than one expiring on the same millisecond.
+    const timer = window.setTimeout(() => m.redraw(), expiresIn * 1000 + 100);
+
+    this.typing[channelId][userId] = {
+      username,
+      expiresAt: Date.now() + expiresIn * 1000,
+      timer,
+    };
+  }
+
+  /**
+   * Drops a typist outright — they have just said what they were typing.
+   *
+   * Waiting for the entry to expire leaves "X is typing…" sitting under the very
+   * message X sent, for as long as the window that was still open when it
+   * arrived.
+   */
+  clearTyping(channelId: number, userId: number): void {
+    this.noteTyping(channelId, userId, "", false);
   }
 
   private typingSentAt = 0;

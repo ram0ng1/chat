@@ -197,6 +197,14 @@ function onMessage(data: MessagePayload): void {
   if (!message) return;
 
   chatState.upsertMessage(message);
+
+  // Whatever they were typing, they have now said it. The typing entry would
+  // otherwise sit under their own message for the rest of its window — which is
+  // what "X is typing…" under a message from X was.
+  if (data.userId) {
+    chatState.clearTyping(data.channelId, data.userId);
+  }
+
   bumpChannel(data);
   bumpThread(data);
   announce(data, message);
