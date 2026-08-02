@@ -36,7 +36,6 @@ class MessageRevision extends AbstractModel implements Formattable
 
     public $timestamps = false;
 
-    protected $guarded = [];
 
     protected $casts = [
         'message_id'   => 'integer',

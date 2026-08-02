@@ -36,7 +36,6 @@ class ThreadUser extends AbstractModel
 
     public $timestamps = true;
 
-    protected $guarded = [];
 
     protected $casts = [
         'thread_id'            => 'integer',
