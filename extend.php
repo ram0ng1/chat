@@ -206,6 +206,11 @@ return [
         ->default('ramon-chat.max_upload_size', 10485760)
         ->default('ramon-chat.allow_archiving_channels', true)
         ->default('ramon-chat.threading_default', false)
+        // Which keystroke sends. Off (the default) keeps the chat convention —
+        // Enter sends, Shift+Enter breaks the line. On, Enter breaks the line and
+        // the message only leaves on Ctrl+Enter, for forums whose members write
+        // long multi-line messages and lose them to a stray Enter.
+        ->default('ramon-chat.send_with_ctrl_enter', false)
         // Notification sound. 'none' disables it; the others name a file under
         // assets/sounds, published to public/assets/extensions/ramon-chat.
         ->default('ramon-chat.notification_sound', 'chime')
@@ -219,6 +224,7 @@ return [
         ->serializeToForum('ramon-chat.maxUploadSize', 'ramon-chat.max_upload_size', 'intval')
         ->serializeToForum('ramon-chat.allowUploads', 'ramon-chat.allow_uploads', 'boolval')
         ->serializeToForum('ramon-chat.threadingDefault', 'ramon-chat.threading_default', 'boolval')
+        ->serializeToForum('ramon-chat.sendWithCtrlEnter', 'ramon-chat.send_with_ctrl_enter', 'boolval')
         ->serializeToForum('ramon-chat.notificationSound', 'ramon-chat.notification_sound')
         ->serializeToForum('ramon-chat.title', 'ramon-chat.title')
         ->serializeToForum('ramon-chat.icon', 'ramon-chat.icon')
