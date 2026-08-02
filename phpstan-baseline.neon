@@ -133,12 +133,6 @@ parameters:
 			path: src/Api/Controller/UploadController.php
 
 		-
-			message: '#^Access to protected property Ramon\\Chat\\ChannelUser\:\:\$hidden\.$#'
-			identifier: property.protected
-			count: 1
-			path: src/Api/Resource/ChannelResource.php
-
-		-
 			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Flarum\\User\\User\>\:\:whereVisibleTo\(\)\.$#'
 			identifier: method.notFound
 			count: 2
@@ -164,12 +158,6 @@ parameters:
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>following" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: src/Api/Resource/ChannelResource.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>hidden" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
 			path: src/Api/Resource/ChannelResource.php

@@ -25,13 +25,24 @@ use Ramon\Chat\Service\MessageDispatcher;
  *
  * ## What is and is not announced
  *
- * Leaving is announced everywhere: it changes who can read what, so it is never
- * noise.
+ * Arrivals and departures are both announced, in every kind of channel. They are
+ * the same fact about who is in the room, and a room that narrates only exits
+ * reads as though people keep leaving a channel nobody ever joined.
  *
- * Joining is announced only in direct channels, where being added to a group
- * conversation is a real event. In a category channel, joins are routine — and
- * `auto_join_on_reply` would turn every first reply in the category into a system
- * message, burying the actual conversation.
+ * Two exceptions, and both are about the join not being an event at all:
+ *
+ *  - a hidden join, and the departure that ends it. The point of joining unseen
+ *    is that nobody learns of it, which has to include learning of it afterwards.
+ *  - an automatic join. `auto_join_on_reply` puts somebody in a channel for
+ *    replying in the category it is bound to; announcing those would make a
+ *    system row out of every first reply and bury the conversation. This is the
+ *    reason category joins went unannounced entirely for a while — the fix is to
+ *    tell the two kinds of join apart, not to silence both.
+ *
+ * The bulk paths never reach here at all: JoinAutoJoinChannels (registration) and
+ * AutoJoinUsers (a channel created with `auto_join`) add memberships without
+ * dispatching the event, so a channel created with auto-join cannot narrate
+ * itself into thousands of rows.
  */
 class AnnounceMembershipChanges
 {
@@ -48,7 +59,8 @@ class AnnounceMembershipChanges
             return;
         }
 
-        if (! $event->channel->isDirect()) {
+        // A side effect of replying elsewhere is not an arrival.
+        if ($event->automatic) {
             return;
         }
 
@@ -57,6 +69,13 @@ class AnnounceMembershipChanges
 
     public function whenLeft(UserLeftChannel $event): void
     {
+        // Somebody whose arrival was never announced cannot have their departure
+        // announced either: the room would learn from the exit line that they had
+        // been there all along.
+        if ($event->hidden) {
+            return;
+        }
+
         $this->announce($event->channel, 'user_left', $event->user->display_name);
     }
 
