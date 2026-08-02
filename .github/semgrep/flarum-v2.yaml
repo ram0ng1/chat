@@ -426,8 +426,16 @@ rules:
     paths:
       include:
         - '*.blade.php'
-    pattern-regex: |-
-      \{!!.*!!\}
+    patterns:
+      - pattern-regex: |-
+          \{!!.*!!\}
+      # A saída do formatter (s9e/TextFormatter) é exatamente o uso que a
+      # mensagem acima autoriza — é o que o core faz em notification.blade.php,
+      # e escapá-la mandaria a marcação como texto visível no e-mail. Excluída
+      # aqui porque em modo `generic` o semgrep não honra `nosemgrep`, então não
+      # há como marcar a linha isolada.
+      - pattern-not-regex: |-
+          \{!!\s*[^!]*(formatContent|formatter[^!]*->render)\s*\([^!]*!!\}
 
   # ---------------------------------------------------------------------------
   # §9.1 — m.trust() no frontend (HTML cru)

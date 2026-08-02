@@ -84,7 +84,6 @@ class Channel extends AbstractModel
 
     public $timestamps = true;
 
-    protected $guarded = [];
 
     protected $casts = [
         'tag_id'                      => 'integer',

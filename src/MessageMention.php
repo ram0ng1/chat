@@ -44,7 +44,6 @@ class MessageMention extends AbstractModel
 
     public $timestamps = false;
 
-    protected $guarded = [];
 
     protected $casts = [
         'message_id' => 'integer',
