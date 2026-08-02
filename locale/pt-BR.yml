@@ -511,6 +511,7 @@ ramon-chat:
 
     permissions:
       use: Usar o chat
+      access_private_channels: Ver e entrar em canais privados
       start_direct: Iniciar mensagens diretas
       create_channel: Criar canais
       edit_channel: Editar canais

@@ -108,12 +108,21 @@ class ScopeChannelVisibility
      * Browse, cannot be joined from there, and its name is never shown to anyone who
      * was not added.
      *
-     * Moderators are exempt, because a private channel they cannot see is one they
-     * cannot moderate — the same trade Flarum makes for private discussions.
+     * Two grants lift that, and both are exemptions from the membership test rather
+     * than from the channel's own rules — someone holding either still cannot post
+     * without joining first (see ChannelPolicy::postMessage):
+     *
+     *  - `accessPrivateChannels`, the dedicated right. It exists so that opening
+     *    private channels to a group — a staff group, a team, a paid tier — costs
+     *    one permission rather than the whole of `moderate`.
+     *  - `moderate`, which keeps it because a private channel a moderator cannot
+     *    see is one they cannot moderate. The same trade Flarum makes for private
+     *    discussions.
      */
     protected function restrictPrivate(Builder $query, User $actor): void
     {
-        if ($actor->hasPermission('ramon-chat.moderate')) {
+        if ($actor->hasPermission('ramon-chat.accessPrivateChannels')
+            || $actor->hasPermission('ramon-chat.moderate')) {
             return;
         }
 
