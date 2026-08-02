@@ -355,9 +355,16 @@ body.ChatFullPage {
     text-transform: uppercase;
     color: var(--avocado-muted-label);
 
-    // The + / pencil affordance for creating a channel or DM.
-    &-action {
+    // The browse / create affordances. Only the first is pushed to the right —
+    // giving every one of them `margin-left: auto` works by accident (the first
+    // absorbs the free space and the rest have none left to take), but it reads
+    // as though each were meant to be pushed, and the gap from the row mixin is
+    // what should separate them.
+    &-action:first-of-type {
       margin-left: auto;
+    }
+
+    &-action {
       color: var(--avocado-muted-icon);
       background: none;
       border: 0;
@@ -2553,6 +2560,25 @@ body.ChatFullPage {
     color: var(--avocado-muted-label);
   }
 
+  // The description box grows downwards only.
+  //
+  // A textarea defaults to `resize: both`, and dragging it wider pushed it past
+  // the card that holds it — the grid track is sized by the dialog, so the
+  // handle was offering a width the layout never agreed to. Height is the axis
+  // that is actually useful here: the field is two rows and a long description
+  // needs more of them.
+  //
+  // The width declarations are not redundant with `resize: vertical`. A drag
+  // writes an inline `width` onto the element, and that style survives the rule
+  // being added later — a box already pulled wide stays wide, which is the state
+  // the screenshot showed. `!important` is what overrides it, since inline
+  // styles otherwise outrank any stylesheet.
+  textarea.FormControl {
+    resize: vertical;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
   // Icon and name on one line. The emoji column is the picker's preview circle
   // plus its clear button; the name takes the rest.
   &-nameRow {
@@ -3881,18 +3907,53 @@ body.ChatFullPage {
   // is a flex line that already spaces its children by 8px, so that margin only
   // applied to one side: 13px before the badge, 8px after it.
   //
-  // Zeroed, then pulled back against the name. A verification mark belongs to the
-  // name the way an accent belongs to a letter — it is not another item in the
-  // row, and at the row's full 8px it floated between the name and the timestamp,
-  // reading as though it stood on its own. The gap *after* it is left alone: that
-  // one separates the identity from the metadata, which is a real boundary.
-  margin: 0 0 0 -@chat-space-xs;
+  // Zeroed, then pulled back on both sides — see the anchor rule below for the
+  // arithmetic. Kept identical to it on purpose: this block and that one style
+  // the two trees VerifiedBadge can render, and which one you get depends on a
+  // setting. Different margins here would move the badge when that setting is
+  // toggled.
+  margin: 0 -@chat-space-xs;
 
   svg,
   img {
-    width: 13px;
-    height: 13px;
+    width: @chat-verified-badge-size;
+    height: @chat-verified-badge-size;
     display: block;
+  }
+}
+
+// The same neutralisation, for the element the badge actually is on a default
+// install.
+//
+// The rule above matches nothing there. `VerifiedBadge` renders one of two
+// trees: with the tooltip off it emits a `.VerifiedBadge` span carrying whatever
+// className it was handed, and with the tooltip on — which is the default, since
+// the setting is read as `!== false` — it returns `<VerifiedPopover>` and drops
+// the className on the way. So `VerifiedBadge--chat` never reaches the DOM for
+// most installs, and what sits in the row is a `.VerifiedPopover-anchor` still
+// carrying the extension's base `margin-left: 5px`.
+//
+// Fixed here rather than in ramon/verified: that 5px is the right default in a
+// post header, where the badge follows the name with no gap of its own. It is
+// only wrong inside this flex row, and this row is ours.
+// Pulled in on both sides, by the same amount. The row's gap is 8px; taking
+// 4px off each edge leaves 4px before the badge and 4px after it, so the mark
+// sits evenly between the name and the timestamp instead of hugging one of
+// them. Negating only the left gave 4px before and 8px after, which read as the
+// badge belonging to the name — true of a post header, where it follows the
+// name with no gap at all, and wrong in a row that spaces every child.
+.ChatMessage-meta .VerifiedPopover-anchor {
+  flex-shrink: 0;
+  margin: 0 -@chat-space-xs;
+
+  // Pinned to the same box the plain badge above uses. The component sets
+  // `--verified-size` inline from a forum setting, so without this the badge is
+  // one size when the tooltip is off and another when it is on — and the arrow
+  // below, which has to be centred under it, has no width it can count on.
+  // Inline styles outrank a stylesheet, hence `!important`.
+  .VerifiedBadge {
+    width: @chat-verified-badge-size !important;
+    height: @chat-verified-badge-size !important;
   }
 }
 
@@ -3911,9 +3972,14 @@ body.ChatFullPage {
   max-width: ~"min(220px, calc(100vw - 32px))";
   font-size: @chat-font-meta;
 
-  // Aligned to the message body rather than centred on the badge, so it grows
-  // rightwards into the panel instead of leftwards out of it.
-  left: 0;
+  // Aligned near the badge rather than centred on it, so it grows rightwards
+  // into the panel instead of leftwards out of it.
+  //
+  // Not flush at 0. The arrow cannot sit closer than 16px to the panel's edge
+  // without meeting the rounded corner, so the panel is shifted left by the
+  // difference between that inset and the badge's midpoint — which puts the
+  // arrow back over the badge while keeping it on a straight run of border.
+  left: (@chat-verified-badge-size / 2) - @chat-verified-arrow-inset;
   transform: none;
 
   // The extension's entry animation hardcodes `translateX(-50%)`, which would
@@ -3941,11 +4007,21 @@ body.ChatFullPage {
   border-bottom: 0;
 }
 
+// Over the badge, which is where it points from now that the panel no longer
+// centres on it.
+//
+// The inset is the arrow's constraint, not the badge's — see the variable. The
+// panel is offset to suit it, so this stays on a straight run of border and
+// still lands over the mark. Aligning the arrow to the badge directly, at half
+// the badge's width, put it inside the panel's 8px corner radius and it read as
+// though it had come loose from the panel.
+//
+// `translateX(-50%)` is restored from the extension's base rule — dropped, it
+// made `left` mean "the arrow's left edge" instead of "its centre", so the two
+// numbers here would not compose.
 .ChatMessage .VerifiedPopover-arrow {
-  // Under the badge, which is where it points from now that the panel no longer
-  // centres on it.
-  left: @chat-space-md;
-  transform: rotate(45deg);
+  left: @chat-verified-arrow-inset;
+  transform: translateX(-50%) rotate(45deg);
 }
 
 // ── Sticker picker ───────────────────────────────────────────────────────────

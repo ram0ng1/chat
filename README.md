@@ -46,9 +46,17 @@ php flarum cache:clear
 
 Then enable Chat on the Extensions page of the admin panel.
 
-Permissions start with moderators only, mirroring how Discourse ships chat
-staff-first. Grant `ramon-chat.use` to Members in **Admin → Permissions** once you
-are ready to open it up.
+Enabling Chat grants `ramon-chat.use`, `ramon-chat.startDirect`,
+`ramon-chat.upload` and `ramon-chat.react` to **Members** — that is, to every
+registered account. Moderation and channel-wide mentions go to Moderators.
+
+To run the chat for a subset of the forum instead, go to **Admin → Permissions**,
+**remove the Members row from `ramon-chat.use`**, and add the group you want.
+Adding a group without removing Members leaves the chat open to everyone, because
+every registered account belongs to Members implicitly.
+
+Those defaults are seeded once, on the migration that installs the extension.
+Upgrades never reapply them, so a permission you revoke stays revoked.
 
 ## Permissions
 

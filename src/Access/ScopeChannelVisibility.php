@@ -35,7 +35,7 @@ class ScopeChannelVisibility
         // One right, not two. A separate `ramon-chat.view` briefly let guests read
         // public channels; it has been withdrawn, so participating and reading are
         // the same permission again.
-        if (! $actor->hasPermissionLike('ramon-chat.use')) {
+        if (! $actor->can('useChat')) {
             $query->whereRaw('1 = 0');
 
             return;

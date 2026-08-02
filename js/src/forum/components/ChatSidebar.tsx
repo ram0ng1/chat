@@ -17,6 +17,13 @@ export interface ChatSidebarAttrs extends ComponentAttrs {
   onSelect?: (channel: Channel) => void;
 }
 
+/** An icon button in a section header. */
+interface SectionAction {
+  icon: string;
+  title: string;
+  action: () => void;
+}
+
 /**
  * Channel navigation: My Threads, Search, then the Channels and Direct Messages
  * sections — the same order and grouping as Discourse's chat sidebar.
@@ -65,23 +72,41 @@ export default class ChatSidebar extends Component<ChatSidebarAttrs> {
               {this.section(
                 "ramon-chat.forum.sidebar.channels",
                 state.categoryChannels(),
-                {
-                  // A magnifying glass, not a pencil: the action is "browse
-                  // channels", and a pencil promises editing.
-                  icon: "fas fa-magnifying-glass",
-                  title: app.translator.trans(
-                    "ramon-chat.forum.sidebar.browse_channels",
-                    {},
-                    true,
-                  ),
-                  action: () => m.route.set(app.route("chat.browse")),
-                },
+                [
+                  {
+                    // A magnifying glass, not a pencil: the action is "browse
+                    // channels", and a pencil promises editing.
+                    icon: "fas fa-magnifying-glass",
+                    title: app.translator.trans(
+                      "ramon-chat.forum.sidebar.browse_channels",
+                      {},
+                      true,
+                    ),
+                    action: () => m.route.set(app.route("chat.browse")),
+                  },
+
+                  // Same permission the browse page draws its own button from,
+                  // so the two agree about who may create a channel.
+                  ...(app.forum.attribute<boolean>("canCreateChatChannel")
+                    ? [
+                        {
+                          icon: "fas fa-plus",
+                          title: app.translator.trans(
+                            "ramon-chat.forum.sidebar.new_channel",
+                            {},
+                            true,
+                          ),
+                          action: () => this.createChannel(),
+                        },
+                      ]
+                    : []),
+                ],
               )}
 
               {this.section(
                 "ramon-chat.forum.sidebar.direct_messages",
                 state.directChannels(),
-                null,
+                [],
               )}
 
               {/* An empty sidebar has to offer a way out, or a fresh install is a
@@ -188,21 +213,31 @@ export default class ChatSidebar extends Component<ChatSidebarAttrs> {
     );
   }
 
+  /**
+   * A labelled group of channels, with any affordances that belong to it.
+   *
+   * Takes a list rather than a single action because the channels header now
+   * carries two — browse and create — and they are not alternatives: the create
+   * button used to be rendered only in the empty state below, so it vanished the
+   * moment you joined your first channel and the only remaining route to it was
+   * through Browse.
+   */
   protected section(
     labelKey: string,
     channels: Channel[],
-    action: { icon: string; title: string; action: () => void } | null,
+    actions: SectionAction[],
   ): Mithril.Children {
     // An empty section with no affordance is pure noise; hide it.
-    if (channels.length === 0 && !action) return null;
+    if (channels.length === 0 && actions.length === 0) return null;
 
     return (
       <div className="ChatSidebar-section">
         <div className="ChatSidebar-sectionHeader">
           <span>{app.translator.trans(labelKey)}</span>
-          {action ? (
+          {actions.map((action) => (
             <button
               type="button"
+              key={action.icon}
               className="ChatSidebar-sectionHeader-action"
               title={action.title}
               aria-label={action.title}
@@ -210,7 +245,7 @@ export default class ChatSidebar extends Component<ChatSidebarAttrs> {
             >
               <i className={action.icon} aria-hidden="true" />
             </button>
-          ) : null}
+          ))}
         </div>
 
         {channels.map((channel) => this.row(channel))}

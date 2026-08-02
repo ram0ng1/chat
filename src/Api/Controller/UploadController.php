@@ -67,7 +67,7 @@ class UploadController implements RequestHandlerInterface
     {
         $actor = RequestUtil::getActor($request);
         $actor->assertRegistered();
-        $actor->assertCan('ramon-chat.use');
+        $actor->assertCan('useChat');
         $actor->assertCan('ramon-chat.upload');
 
         if (! (bool) $this->settings->get('ramon-chat.allow_uploads', true)) {

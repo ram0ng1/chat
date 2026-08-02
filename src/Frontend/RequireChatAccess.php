@@ -33,7 +33,11 @@ class RequireChatAccess
     {
         $actor = RequestUtil::getActor($request);
 
-        if (! $actor->hasPermissionLike('ramon-chat.use')) {
+        // `can('useChat')`, not `hasPermissionLike('ramon-chat.use')`: the latter
+        // matches any permission merely *ending* in that string, and it bypassed
+        // GlobalPolicy — so this route and the `canUseChat` attribute the client
+        // reads were answering from two different gates.
+        if (! $actor->can('useChat')) {
             throw new RouteNotFoundException();
         }
     }

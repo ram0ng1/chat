@@ -202,11 +202,22 @@ rules:
       cwe: "CWE-732: Incorrect Permission Assignment for Critical Resource"
       confidence: MEDIUM
       flarum-playbook: "CLAUDE.md §4"
+    # Só as formas de *atribuição*. A versão anterior casava a constante nua,
+    # que também aparece em toda leitura legítima — `in_array(Group::GUEST_ID,
+    # $groupIds)` para descobrir se a permissão já é pública, ou uma comparação
+    # contra os grupos do ator. Conceder é sempre ligar o grupo a uma permissão,
+    # e isso tem `=>` ou `=` antes da constante.
     pattern-either:
+      # 'minha.permissao' => Group::GUEST_ID   (Migration::addPermissions)
+      # 'group_id'        => Group::GUEST_ID   (insert cru em group_permission)
       - pattern-regex: |-
-          Group::GUEST_ID
+          =>\s*Group::GUEST_ID\b
+      # 'group_id' => 2
       - pattern-regex: |-
           ['"]group_id['"]\s*=>\s*2\b
+      # $row['group_id'] = Group::GUEST_ID;  /  $model->group_id = Group::GUEST_ID;
+      - pattern-regex: |-
+          group_id['"\]]*\s*=\s*Group::GUEST_ID\b
 
   # ---------------------------------------------------------------------------
   # §13 — Filtro ingênuo de path traversal

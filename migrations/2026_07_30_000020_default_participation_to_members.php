@@ -7,28 +7,25 @@
  * file that was distributed with this source code.
  */
 
-use Flarum\Database\Migration;
-use Flarum\Group\Group;
-
 /**
- * Leva o padrão de participação para MEMBRO nas instalações já existentes.
+ * Neutralizada. Era uma migração de re-semeadura, e re-semear é justamente o que
+ * uma extensão não pode fazer.
  *
- * `2026_07_29_000013_add_default_permissions` passou a semear entrar no chat,
- * abrir DM, anexar e reagir para MEMBER, mas ela já consta como executada em
- * quem instalou antes — e num fórum sem o grupo Moderador ela não semeou nada,
- * deixando o chat sem nenhum grupo não-administrador capaz de abri-lo.
+ * A versão anterior reaplicava `ramon-chat.use`, `startDirect`, `upload` e
+ * `react` ao grupo Membro para cobrir instalações antigas que nunca receberam o
+ * padrão de `2026_07_29_000013`. O efeito colateral era que qualquer fórum que
+ * tivesse revogado essas permissões de propósito as recebia de volta na
+ * atualização seguinte — a extensão sobrescrevendo, calada, a decisão do admin.
  *
- * Esta migração aplica o mesmo padrão de novo. `Migration::addPermissions` pula
- * a linha que já existe e pula o grupo que não existe, então rodar em cima de
- * uma instalação que já está correta não faz nada.
+ * Semear o padrão na primeira instalação é legítimo e continua em
+ * `2026_07_29_000013`. Reaplicá-lo depois não é: dali em diante a configuração de
+ * permissões pertence ao fórum, e a extensão só lê.
  *
- * Não remove os grants antigos de MODERADOR: onde eles existem, foram herdados
- * de um padrão anterior e podem já ter virado configuração deliberada do admin —
- * e são inofensivos, porque todo moderador também é membro.
+ * O arquivo fica no lugar em vez de ser apagado: o nome dele já está gravado na
+ * tabela `migrations` de quem atualizou, e removê-lo não desfaz nada — apenas
+ * apagaria o registro de por que ele existiu.
  */
-return Migration::addPermissions([
-    'ramon-chat.use'         => Group::MEMBER_ID,
-    'ramon-chat.startDirect' => Group::MEMBER_ID,
-    'ramon-chat.upload'      => Group::MEMBER_ID,
-    'ramon-chat.react'       => Group::MEMBER_ID,
-]);
+return [
+    'up'   => fn () => null,
+    'down' => fn () => null,
+];
