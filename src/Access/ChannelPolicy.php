@@ -104,12 +104,19 @@ class ChannelPolicy extends AbstractPolicy
         // scope hides it from non-members, and someone who was never invited has no
         // business letting themselves in.
         //
-        // Moderators are the exception, and deliberately so — the request is that a
-        // moderator who left a channel can get back in to moderate it. They can
-        // already read every private channel; being unable to *enter* one only means
-        // moderation has to happen from outside the room.
+        // Two grants let themselves in anyway, and they are the same two that see
+        // the channel at all (ScopeChannelVisibility::restrictPrivate). Seeing and
+        // entering are kept together on purpose: a group that can read a private
+        // channel but cannot join it can never post in it, since posting requires
+        // membership — which would make the grant look broken rather than partial.
+        //
+        //  - `accessPrivateChannels` is the dedicated right, so opening private
+        //    channels to a group does not mean handing them moderation.
+        //  - `moderate` keeps it, so a moderator who left a channel can get back
+        //    in to moderate it.
         if ($channel->isPrivate()
             && $channel->membershipFor($actor) === null
+            && ! $actor->hasPermission('ramon-chat.accessPrivateChannels')
             && ! $actor->hasPermission('ramon-chat.moderate')) {
             return false;
         }
