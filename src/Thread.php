@@ -52,7 +52,6 @@ class Thread extends AbstractModel
 
     public $timestamps = true;
 
-    protected $guarded = [];
 
     protected $casts = [
         'channel_id'          => 'integer',

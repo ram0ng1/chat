@@ -37,7 +37,6 @@ class Draft extends AbstractModel
 
     public $timestamps = true;
 
-    protected $guarded = [];
 
     protected $casts = [
         'user_id'    => 'integer',
