@@ -111,6 +111,13 @@
 
   // Thread indicator strip under a threaded message.
   --chat-thread-strip:       var(--avocado-border-subtle);
+
+  // The chat's own scrollbars. Translucent rather than a fixed grey, so the
+  // thumb tints with whatever surface it is drawn over — the stream, a modal
+  // and the emoji dropdown are three different backgrounds, and one opaque
+  // colour looks wrong on at least one of them.
+  --chat-scrollbar-thumb:       rgba(0, 0, 0, 0.18);
+  --chat-scrollbar-thumb-hover: rgba(0, 0, 0, 0.34);
 }
 
 [data-theme^="dark"] {
@@ -121,4 +128,9 @@
   --chat-reaction-bg-active: rgba(96, 165, 250, 0.18);
   --chat-pinned-bg:          rgba(129, 140, 248, 0.12);
   --chat-pinned-border:      rgba(129, 140, 248, 0.85);
+
+  // Light on dark, at slightly lower alpha: the same opacity that reads as a
+  // soft grey on white reads as a bright stripe on a dark surface.
+  --chat-scrollbar-thumb:       rgba(255, 255, 255, 0.16);
+  --chat-scrollbar-thumb-hover: rgba(255, 255, 255, 0.30);
 }
