@@ -207,6 +207,24 @@ app.initializers.add("ramon-chat", () => {
       "view",
       95,
     )
+    // Also a "who can see what" answer, so it sits under the master switch
+    // rather than with the permissions that make things.
+    //
+    // One row on purpose. Seeing a private channel without being able to enter it
+    // is not a useful state — posting needs membership — so this grants both, and
+    // an admin opening private channels to a group has exactly one box to tick
+    // instead of having to hand out `moderate`.
+    .registerPermission(
+      {
+        icon: "fas fa-lock-open",
+        label: app.translator.trans(
+          "ramon-chat.admin.permissions.access_private_channels",
+        ),
+        permission: "ramon-chat.accessPrivateChannels",
+      },
+      "view",
+      94,
+    )
     // The rest of this group does create something. Priorities descend so it
     // reads in order of how much it grants: starting DMs, then channels.
     .registerPermission(
