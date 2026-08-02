@@ -287,7 +287,10 @@ ramon-chat:
       emoji: Emoji
       image: Imagem
       icon_kind: Emoji ou imagem
-      image_help: Imagens quadradas funcionam melhor — ela é recortada e redimensionada para 128×128.
+      icon_kind_to_image: Usar uma imagem no lugar
+      icon_kind_to_emoji: Usar um emoji no lugar
+      emoji_help: Aparece ao lado do nome do canal, na barra lateral e em Navegar.
+      image_help: Quadrada funciona melhor — é recortada e redimensionada para 128×128.
       image_upload: Enviar imagem
       image_remove: Remover imagem
       image_failed: Não foi possível enviar essa imagem.
