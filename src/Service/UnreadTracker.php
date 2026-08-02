@@ -12,6 +12,7 @@ namespace Ramon\Chat\Service;
 use Carbon\Carbon;
 use Flarum\User\User;
 use Illuminate\Database\ConnectionInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Ramon\Chat\Channel;
 use Ramon\Chat\ChannelUser;
 use Ramon\Chat\Message;
@@ -216,6 +217,38 @@ class UnreadTracker
     }
 
     /**
+     * The actor's live memberships, restricted to channels they can still see.
+     *
+     * Every total below is built on this rather than on `chat_channel_user`
+     * alone. A membership outlives the access that created it: a permission is
+     * revoked, a bound tag is restricted, an earlier AutoJoinUsers wrote rows
+     * for people who never had the chat at all — and the row keeps its
+     * `unread_count` throughout. Counted flat, those rows report unread traffic
+     * in channels the actor cannot open and has no way to clear.
+     *
+     * Re-deriving visibility at read time is what flarum/messages does for its
+     * own badge, where `messageCount` counts through
+     * `Dialog::whereVisibleTo($actor)` instead of reading a stored total. The
+     * scope also fails closed on `ramon-chat.use`, so someone without the chat
+     * at all resolves to nothing here without a separate check.
+     *
+     * @return Builder<ChannelUser>
+     */
+    protected function visibleMemberships(User $user): Builder
+    {
+        $query = ChannelUser::query();
+
+        // Applied as statements rather than chained: the where* methods are
+        // typed as returning a query builder, which would lose the Eloquent one
+        // the callers go on to narrow.
+        $query->where('user_id', $user->id);
+        $query->whereNull('left_at');
+        $query->whereIn('channel_id', Channel::whereVisibleTo($user)->select('chat_channels.id'));
+
+        return $query;
+    }
+
+    /**
      * Total unread channels for a user, used for the header badge.
      */
     public function totalUnreadFor(User $user): int
@@ -224,11 +257,9 @@ class UnreadTracker
             return 0;
         }
 
-        return (int) ChannelUser::query()
-            ->where('user_id', $user->id)
+        return (int) $this->visibleMemberships($user)
             ->where('following', true)
             ->where('muted', false)
-            ->whereNull('left_at')
             ->where('unread_count', '>', 0)
             ->count();
     }
@@ -249,11 +280,9 @@ class UnreadTracker
             return 0;
         }
 
-        return (int) ChannelUser::query()
-            ->where('user_id', $user->id)
+        return (int) $this->visibleMemberships($user)
             ->where('following', true)
             ->where('muted', false)
-            ->whereNull('left_at')
             ->sum('unread_count');
     }
 
@@ -263,9 +292,6 @@ class UnreadTracker
             return 0;
         }
 
-        return (int) ChannelUser::query()
-            ->where('user_id', $user->id)
-            ->whereNull('left_at')
-            ->sum('unread_mentions_count');
+        return (int) $this->visibleMemberships($user)->sum('unread_mentions_count');
     }
 }
