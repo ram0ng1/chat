@@ -41,7 +41,6 @@ class Webhook extends AbstractModel
 
     public $timestamps = true;
 
-    protected $guarded = [];
 
     /**
      * The key authenticates deliveries, so it must never reach a non-admin

@@ -12,6 +12,15 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
+    # Janela de espera antes de adotar uma release recém-publicada. É a defesa
+    # contra a classe de ataque do tj-actions: uma versão comprometida costuma
+    # ser detectada e despublicada em horas ou poucos dias, e a maior parte do
+    # risco está em consumi-la no minuto em que sai. Não atrasa Dependabot
+    # security updates, que vêm de advisory e correm por fora do cooldown.
+    cooldown:
+      default-days: 7
+      semver-patch-days: 3
+      semver-major-days: 30
     labels:
       - dependencias
     groups:
@@ -28,6 +37,15 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
+    # Janela de espera antes de adotar uma release recém-publicada. É a defesa
+    # contra a classe de ataque do tj-actions: uma versão comprometida costuma
+    # ser detectada e despublicada em horas ou poucos dias, e a maior parte do
+    # risco está em consumi-la no minuto em que sai. Não atrasa Dependabot
+    # security updates, que vêm de advisory e correm por fora do cooldown.
+    cooldown:
+      default-days: 7
+      semver-patch-days: 3
+      semver-major-days: 30
     labels:
       - dependencias
     groups:
@@ -44,6 +62,15 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
+    # Mesma janela de espera dos outros ecossistemas — e é aqui que ela mais
+    # importa, já que o ataque que a motiva (tj-actions) foi contra uma action.
+    #
+    # Só `default-days`: os cortes por semver não são suportados para
+    # github-actions, e o Dependabot recusa o arquivo inteiro se eles
+    # aparecerem. Actions são versionadas por tag móvel, não por semver que o
+    # Dependabot possa classificar, então não há major/patch a distinguir.
+    cooldown:
+      default-days: 7
     labels:
       - dependencias
     groups:

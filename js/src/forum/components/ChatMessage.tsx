@@ -288,6 +288,14 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
     return (
       <div className="ChatMessage-content">
         {this.announcementIcon(message)}
+        {/* `contentHtml` is the server's own render: Message uses Flarum's
+            `HasFormattedContent`, so this string came out of the s9e/TextFormatter
+            pipeline that also produces post bodies. Trusting it here is the same
+            move core makes to render a post, and the alternative — re-parsing
+            formatter output into a vnode tree — would have to reimplement the
+            renderer to gain nothing. The raw `content` is never trusted; it is
+            rendered as a text node on the branch below. */}
+        {/* nosemgrep: github.semgrep.flarum-v2-m-trust */}
         {html ? m.trust(html) : message.content()}
         {/* The "edited" marker is the affordance for the history — the same place
             core puts it on a post. A button, not a span, so it is reachable by

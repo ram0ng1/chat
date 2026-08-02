@@ -81,7 +81,6 @@ class Message extends AbstractModel implements Formattable
 
     public $timestamps = true;
 
-    protected $guarded = [];
 
     protected $casts = [
         'channel_id'     => 'integer',
@@ -111,9 +110,18 @@ class Message extends AbstractModel implements Formattable
                 $db = static::getConnectionResolver()->connection();
                 $prefix = $db->getTablePrefix();
 
+                // Raw, and it has to be. The SQL is embedded in an Expression so
+                // that the whole subquery lands inside the INSERT — and an
+                // Expression carries no bindings, so `toSql()` would emit a bare
+                // `?` with nothing to fill it. The two interpolations are
+                // therefore inlined deliberately, and neither can carry input:
+                // the channel id is cast to int, and the prefix comes from the
+                // connection's own config, never from a request.
                 $message->number = new Expression('('.
                     $db->table('chat_messages', 'cm')
+                        // nosemgrep: github.semgrep.flarum-v2-raw-sql-concat
                         ->whereRaw($prefix.'cm.channel_id = '.(int) $message->channel_id)
+                        // nosemgrep: github.semgrep.flarum-v2-raw-sql-concat
                         ->selectRaw('COALESCE(MAX('.$prefix.'cm.number), 0) + 1')
                         ->toSql()
                     .')');
