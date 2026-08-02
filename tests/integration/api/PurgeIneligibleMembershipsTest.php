@@ -68,6 +68,16 @@ class PurgeIneligibleMembershipsTest extends TestCase
                 $this->membership(2, 2),
             ],
         ]);
+
+        // Enabling the extension grants `ramon-chat.use` to MEMBER, and the
+        // harness adds fixture rows on top of that rather than replacing the
+        // table — so a forum restricted to group 100 has to revoke the default
+        // the way a real admin would. Without this every account still holds the
+        // permission and there is nothing ineligible for the migration to find.
+        $this->database()->table('group_permission')
+            ->where('group_id', Group::MEMBER_ID)
+            ->where('permission', 'like', 'ramon-chat.%')
+            ->delete();
     }
 
     private function channel(int $id, string $slug, bool $autoJoin): array
