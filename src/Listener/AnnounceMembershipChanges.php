@@ -29,6 +29,10 @@ use Ramon\Chat\Service\MessageDispatcher;
  * the same fact about who is in the room, and a room that narrates only exits
  * reads as though people keep leaving a channel nobody ever joined.
  *
+ * An arrival is narrated as an arrival or as an addition depending on who caused
+ * it: someone added by another member is reported as "X was added by Y", since
+ * "X joined" would credit them with a decision they did not make.
+ *
  * Two exceptions, and both are about the join not being an event at all:
  *
  *  - a hidden join, and the departure that ends it. The point of joining unseen
@@ -64,7 +68,23 @@ class AnnounceMembershipChanges
             return;
         }
 
-        $this->announce($event->channel, 'user_joined', $event->user->display_name);
+        // Someone put them here, rather than them walking in: the "add members"
+        // endpoint dispatches the event with the actor who did it. Reported as
+        // such, because "X joined the channel" for somebody who was added credits
+        // them with a decision that was not theirs, and leaves the room unable to
+        // tell an arrival from an invitation.
+        if ($this->addedBySomeoneElse($event)) {
+            $this->announce($event->channel, 'user_added', [
+                'username' => $event->user->display_name,
+                'actor'    => $event->actor->display_name,
+            ]);
+
+            return;
+        }
+
+        $this->announce($event->channel, 'user_joined', [
+            'username' => $event->user->display_name,
+        ]);
     }
 
     public function whenLeft(UserLeftChannel $event): void
@@ -76,10 +96,27 @@ class AnnounceMembershipChanges
             return;
         }
 
-        $this->announce($event->channel, 'user_left', $event->user->display_name);
+        $this->announce($event->channel, 'user_left', [
+            'username' => $event->user->display_name,
+        ]);
     }
 
-    protected function announce(Channel $channel, string $key, string $username): void
+    /**
+     * A join carried out by an actor other than the person joining.
+     *
+     * The actor is null on paths that have none, and equal to the user on a
+     * self-join — both of which are arrivals, not additions.
+     */
+    protected function addedBySomeoneElse(UserJoinedChannel $event): bool
+    {
+        return $event->actor !== null
+            && (int) $event->actor->id !== (int) $event->user->id;
+    }
+
+    /**
+     * @param  array<string, string>  $data
+     */
+    protected function announce(Channel $channel, string $key, array $data): void
     {
         // A frozen channel takes no new rows, system or otherwise.
         if (! $channel->acceptsMessages()) {
@@ -87,7 +124,7 @@ class AnnounceMembershipChanges
         }
 
         try {
-            $this->dispatcher->sendSystem($channel, $key, ['username' => $username]);
+            $this->dispatcher->sendSystem($channel, $key, $data);
         } catch (\Throwable $e) {
             // The membership change already committed. Failing to narrate it must
             // not roll that back or surface as an error to the user who left.
