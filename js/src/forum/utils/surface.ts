@@ -1,6 +1,21 @@
 import app from "flarum/forum/app";
 
 /**
+ * The width below which the chat has no room for two panes side by side.
+ *
+ * 767 is `@chat-mobile-breakpoint`, which is core's `@phone` bound. Kept here
+ * rather than repeated as a literal at each call site: the number appeared in
+ * three files and in the stylesheet, and a breakpoint that only *mostly* agrees
+ * with itself produces layouts nobody can reproduce.
+ */
+export const CHAT_MOBILE_BREAKPOINT = 767;
+
+/** Whether the viewport is narrow enough for the chat's single-pane layout. */
+export function isNarrowViewport(): boolean {
+  return window.innerWidth <= CHAT_MOBILE_BREAKPOINT;
+}
+
+/**
  * Where the chat should open: its own drawer, or the full-screen page.
  *
  * Four call sites asked this independently — the header button, the invite
@@ -24,9 +39,10 @@ export function shouldUseChatDrawer(): boolean {
     return false;
   }
 
-  // Below this the drawer goes full-bleed anyway, and a "drawer" that covers the
-  // whole screen while keeping drawer chrome is worse than the page it is
-  // imitating. 767 is `@chat-mobile-breakpoint`, which is core's `@phone` bound —
-  // the stylesheet switches the page to its single-pane layout at the same point.
-  return window.innerWidth > 767;
+  // Below this there is no room for a panel over the page: the drawer would fill
+  // the screen while keeping drawer chrome, which is worse than the full-screen
+  // page it would be imitating. An already-open drawer that ends up here — from a
+  // rotation, or restored from a previous desktop session — becomes the floating
+  // button instead; see ChatDrawer.
+  return !isNarrowViewport();
 }

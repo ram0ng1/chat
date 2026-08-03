@@ -13,52 +13,60 @@ import ChannelView from "./ChannelView";
 import PinnedPanel from "./PinnedPanel";
 import ThreadPanel from "./ThreadPanel";
 import { chatTitle, chatIcon } from "../utils/branding";
+import { isNarrowViewport } from "../utils/surface";
 
 /**
  * The floating chat panel, pinned bottom-right over whatever page is open.
  *
  * Mounted once at the app root rather than per-page, so navigating the forum does
  * not tear down an open conversation — which is the entire point of a drawer.
+ *
+ * Below the mobile breakpoint it is not a panel at all. There is no room for one
+ * over the page: it filled the viewport, covering the header, the phone toolbar
+ * and its drawer toggle, so the forum underneath was unreachable until the chat
+ * was closed. At that width the open drawer renders as a floating button
+ * instead, and tapping it hands the conversation to the full-screen page — the
+ * surface a phone has for the chat anyway (see `shouldUseChatDrawer`).
  */
 export default class ChatDrawer extends Component<ComponentAttrs> {
-  /**
-   * Marks `<body>` while the drawer is open.
-   *
-   * Below the mobile breakpoint the drawer is edge-to-edge and a full `100dvh`
-   * tall, so the page behind it is not something the reader can see or use —
-   * only something they can scroll by accident, dragging a footer into view
-   * under a panel that covers the screen. The stylesheet keys the same
-   * suppression off this class that `ChatPage` gets from `ChatFullPage`, scoped
-   * to the width where the drawer actually fills the viewport.
-   */
-  protected static readonly BODY_CLASS = "ChatDrawerFullscreen";
+  /** Last known answer to `isNarrowViewport()`, so resize only redraws on a change. */
+  private narrow = isNarrowViewport();
 
+  private onResize = () => {
+    const narrow = isNarrowViewport();
+
+    if (narrow === this.narrow) return;
+
+    this.narrow = narrow;
+    m.redraw();
+  };
+
+  /**
+   * Nothing else watches the viewport, and the panel-versus-button choice is made
+   * in `view()` rather than by a media query, so without this a rotation left the
+   * old shape on screen until some other event happened to redraw.
+   */
   oncreate(vnode: Mithril.VnodeDOM<ComponentAttrs, this>): void {
     super.oncreate(vnode);
-    this.syncBodyClass();
-  }
 
-  // The drawer stays mounted and returns null while closed, so opening and
-  // closing it is an update rather than a create or a remove.
-  onupdate(vnode: Mithril.VnodeDOM<ComponentAttrs, this>): void {
-    super.onupdate(vnode);
-    this.syncBodyClass();
+    window.addEventListener("resize", this.onResize);
   }
 
   onremove(vnode: Mithril.VnodeDOM<ComponentAttrs, this>): void {
     super.onremove(vnode);
-    document.body.classList.remove(ChatDrawer.BODY_CLASS);
-  }
 
-  protected syncBodyClass(): void {
-    document.body.classList.toggle(
-      ChatDrawer.BODY_CLASS,
-      chatState.drawerOpen && !chatState.drawerCollapsed,
-    );
+    window.removeEventListener("resize", this.onResize);
   }
 
   view(): Mithril.Children {
     if (!chatState.drawerOpen) return null;
+
+    // Read here as well as in the resize handler: the drawer can be opened at any
+    // width (a restored session, an invite followed on a phone) without a resize
+    // ever firing.
+    this.narrow = isNarrowViewport();
+
+    if (this.narrow) return this.floatingButton();
 
     const channel = chatState.channel(chatState.activeChannelId);
     const title = chatTitle();
@@ -177,6 +185,68 @@ export default class ChatDrawer extends Component<ComponentAttrs> {
             <ErrorBoundary area="drawer">{this.body(channel)}</ErrorBoundary>
           </div>
         )}
+      </div>
+    );
+  }
+
+  /**
+   * The drawer, at a width where a panel over the page would cover the page.
+   *
+   * A bubble in the corner, over the forum rather than instead of it: the header,
+   * the phone toolbar and its drawer toggle all stay reachable, which is the whole
+   * complaint against the full-bleed panel this replaces. Tapping it opens the
+   * full-screen chat, so the button is a way *in* rather than a second chat.
+   *
+   * The dismiss cross is small but present, and deliberately so: `drawerOpen`
+   * survives reloads, so without it a drawer opened once on a desktop would
+   * follow the reader onto their phone with no way to send it away — the header
+   * button only opens the chat.
+   */
+  protected floatingButton(): Mithril.Children {
+    const label = chatTitle();
+    const unread = chatState.unreadSummary();
+    const count = unread.mentions > 0 ? unread.mentions : unread.messages;
+
+    // A bubble with neither icon nor text would be an unlabelled circle, so the
+    // admin's "no icon" setting cannot apply here the way it does to the header
+    // button, which sits beside its own label in the drawer.
+    const icon = chatIcon() ?? "fas fa-comments";
+
+    const close = app.translator.trans(
+      "ramon-chat.forum.drawer.close",
+      {},
+      true,
+    );
+
+    return (
+      <div className="ChatFab">
+        <button
+          className="ChatFab-button"
+          type="button"
+          aria-label={label}
+          title={label}
+          onclick={() => this.goFullScreen()}
+        >
+          <i className={icon} aria-hidden="true" />
+
+          {count > 0 ? (
+            <span
+              className={classList("ChatFab-badge", {
+                "ChatFab-badge--mention": unread.mentions > 0,
+              })}
+            >
+              {count > 99 ? "99+" : count}
+            </span>
+          ) : null}
+        </button>
+
+        <Button
+          className="Button Button--icon ChatFab-dismiss"
+          icon="fas fa-times"
+          title={close}
+          aria-label={close}
+          onclick={() => this.close()}
+        />
       </div>
     );
   }

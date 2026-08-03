@@ -255,25 +255,36 @@ export default class ChannelView extends Component<ChannelViewAttrs> {
           />
         ) : null}
 
+        {/* Name on the first line, description under it — not both on one row.
+            Side by side they competed for the same width and the flex line
+            resolved it by cutting the *name*: "Canal Priva…Apenas um canal …".
+            Stacked, each truncates within its own line and the name is always
+            whole for as long as the header is wide enough to hold it.
+
+            The icon carries its own class rather than being a bare text node.
+            `channelIcon` returns a plain string for an emoji, so the icon slot
+            used to be styled through `> span:first-child` — which, with no span
+            of its own, matched the *name* instead and clipped it with
+            `text-overflow: clip`. That is the missing ellipsis in the report. */}
         <button
           type="button"
           className="ChatChannel-title"
           onclick={() => this.openInfo()}
         >
-          {channelIcon(channel)}
-          <span>{channel.displayName()}</span>
-          {channel.description() ? (
-            <span className="ChatChannel-description">
-              {channel.description()}
-            </span>
-          ) : null}
+          <span className="ChatChannel-icon">{channelIcon(channel)}</span>
+
+          <span className="ChatChannel-titleText">
+            <span className="ChatChannel-name">{channel.displayName()}</span>
+
+            {channel.description() ? (
+              <span className="ChatChannel-description">
+                {channel.description()}
+              </span>
+            ) : null}
+          </span>
         </button>
 
         <div className="ChatChannel-headerActions">
-          {channel.isMuted() ? (
-            <i className="fas fa-bell-slash" title="muted" aria-hidden="true" />
-          ) : null}
-
           {/* Gated on the server-computed flag, so the control is absent rather
               than present-and-rejected. See ChannelPolicy::edit. */}
           {channel.canEdit() && channel.isCategory() ? (

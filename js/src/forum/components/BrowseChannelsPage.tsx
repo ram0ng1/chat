@@ -33,9 +33,19 @@ export default class BrowseChannelsPage<
   oninit(vnode: Mithril.Vnode<CustomAttrs>): void {
     super.oninit(vnode);
 
-    app.setTitle(
-      app.translator.trans("ramon-chat.forum.browse.title", {}, true),
+    const title = app.translator.trans(
+      "ramon-chat.forum.browse.title",
+      {},
+      true,
     );
+
+    app.setTitle(title);
+
+    // What gives the phone toolbar its back arrow: core's `Navigation` draws the
+    // drawer toggle instead whenever `app.history.canGoBack()` is false, and the
+    // stack only grows if a page pushes itself onto it. `TagsPage` does exactly
+    // this one line; see the longer note on `ChatPage.recordHistory`.
+    app.history.push("chat.browse", title);
 
     const routeFilter = m.route.param("filter") as BrowseFilter | undefined;
 

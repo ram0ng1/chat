@@ -293,6 +293,23 @@ export default class ChatSidebar extends Component<ChatSidebarAttrs> {
           />
         ) : null}
 
+        {/* Muting is per-user and its only other sign in the list is the row
+            being dimmed — which reads as "inactive" just as easily as "muted",
+            and reads as nothing at all next to a row that is dim for its own
+            reasons. The padlock's treatment, for the same reason: state that
+            changes what the channel does to you belongs where the channel is. */}
+        {channel.isMuted() ? (
+          <i
+            className="ChatChannelRow-mute fas fa-bell-slash"
+            title={app.translator.trans(
+              "ramon-chat.forum.channel.muted",
+              {},
+              true,
+            )}
+            aria-hidden="true"
+          />
+        ) : null}
+
         {/* A count only for mentions; ambient unreads get a plain dot-less badge. */}
         {mentions > 0 ? (
           <span className="ChatChannelRow-badge ChatChannelRow-badge--mention">
