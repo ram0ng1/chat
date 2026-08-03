@@ -481,20 +481,22 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
               ),
         )}
 
-        {/* Sits beside auto-join-on-reply because both key off the bound
-            category, and both are meaningless without one. */}
-        {this.toggle(
-          this.postDiscussions,
-          "ramon-chat.forum.info.post_discussions",
-          tag
-            ? app.translator.trans(
+        {/* Only with a category chosen. The switch announces discussions *from
+            that category*, so without one it is a control whose label describes
+            something that does not exist — and flipping it would do nothing.
+            Choosing a category above brings it in; clearing the category takes it
+            away and turns it off (see `chooseTag`), so a hidden switch is never
+            left holding a value the reader cannot see. */}
+        {tag
+          ? this.toggle(
+              this.postDiscussions,
+              "ramon-chat.forum.info.post_discussions",
+              app.translator.trans(
                 "ramon-chat.forum.info.post_discussions_help_bound",
                 { category: tag.name() },
-              )
-            : app.translator.trans(
-                "ramon-chat.forum.info.post_discussions_help_none",
               ),
-        )}
+            )
+          : null}
 
         {/* Auto-join is admin-only: it can add every account on the forum. */}
         {app.session.user?.attribute<boolean>("isAdmin") !== false
@@ -1070,7 +1072,7 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
         <select
           className="FormControl"
           value={this.tagId()}
-          onchange={withAttr("value", this.tagId)}
+          onchange={withAttr("value", (id: string) => this.chooseTag(id))}
           disabled={this.loading}
         >
           <option value="">
@@ -1101,6 +1103,20 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
         </div>
       </div>
     );
+  }
+
+  /**
+   * Picks the bound category, or clears it.
+   *
+   * Clearing also switches off "announce new discussions": that toggle is only
+   * rendered while a category is chosen, so leaving it set would submit a value
+   * the reader can no longer see or reach — and the channel would start
+   * announcing the moment someone bound a category to it later.
+   */
+  protected chooseTag(id: string): void {
+    this.tagId(id);
+
+    if (!id) this.postDiscussions(false);
   }
 
   /** The category currently chosen in the picker, if any. */

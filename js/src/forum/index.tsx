@@ -1,8 +1,10 @@
 import app from "flarum/forum/app";
 import { extend } from "flarum/common/extend";
 import HeaderSecondary from "flarum/forum/components/HeaderSecondary";
+import IndexSidebar from "flarum/forum/components/IndexSidebar";
 import UserControls from "flarum/forum/utils/UserControls";
 import Button from "flarum/common/components/Button";
+import LinkButton from "flarum/common/components/LinkButton";
 import type ItemList from "flarum/common/utils/ItemList";
 import type User from "flarum/common/models/User";
 import type Mithril from "mithril";
@@ -46,6 +48,7 @@ import {
 } from "./realtime";
 import { bindShortcuts } from "./utils/shortcuts";
 import { shouldUseChatDrawer } from "./utils/surface";
+import { chatTitle, chatIcon } from "./utils/branding";
 import ChatPageResolver from "./resolvers/ChatPageResolver";
 import bindFlagsIntegration from "./utils/flagsIntegration";
 
@@ -198,6 +201,34 @@ app.initializers.add("ramon-chat", () => {
     if (!canUseChat()) return;
 
     items.add("chat", <ChatNavButton />, 15);
+  });
+
+  // ── Forum navigation ──────────────────────────────────────────────────────
+  // The same list "All Discussions", flarum/tags' "Tags" and flarum/messages'
+  // "Messages" live in: `IndexSidebar#navItems`. On a phone that list is not a
+  // sidebar at all — core wraps it in the `SelectDropdown` it classes
+  // `App-titleControl`, which is the menu in the toolbar beside the drawer
+  // toggle. Adding the entry here is therefore the whole of "put the chat in the
+  // mobile menu"; nothing needs to be positioned or mounted by hand.
+  //
+  // A `LinkButton` to `chat.index`, so it always opens the full-screen page.
+  // Deliberately not routed through `shouldUseChatDrawer()` like the header
+  // button: a navigation item that sometimes navigates and sometimes pops a
+  // panel over the page you are on is two controls wearing one label.
+  //
+  // Priority 90 puts it under core's "All Discussions" (100) and under
+  // flarum/messages' "Messages" (95), which is the order those two already agree
+  // on: core's own list first, then the conversational surfaces.
+  extend(IndexSidebar.prototype, "navItems", function (items) {
+    if (!canUseChat()) return;
+
+    items.add(
+      "chat",
+      <LinkButton href={app.route("chat.index")} icon={chatIcon() ?? undefined}>
+        {chatTitle()}
+      </LinkButton>,
+      90,
+    );
   });
 
   // ── "Chat" on a user's profile and controls dropdown ──────────────────────
