@@ -1,3 +1,5 @@
+import app from "flarum/forum/app";
+import Button from "flarum/common/components/Button";
 import type Mithril from "mithril";
 
 /**
@@ -30,5 +32,46 @@ export function mobileTitleControl(title: string): Mithril.Children {
     <span className="App-titleControl App-titleControl--text ChatToolbarTitle">
       {title}
     </span>
+  );
+}
+
+/**
+ * The way out of a chat section on a phone, in the toolbar's right-hand slot.
+ *
+ * The left slot is not available: core mounts its own `Navigation` into
+ * `#app-navigation` with `App-backControl`, and on `/chat/search` — reached from
+ * the channel list, with no page before it in this tab — that renders the drawer
+ * toggle rather than a back arrow. So the section had a hamburger, a title, and
+ * nothing that returned to the list the user came from.
+ *
+ * `App-primaryControl` is the remaining slot, and core positions whatever carries
+ * it at the right of the bar (`less/common/App.less`). It is the same slot core's
+ * own `IndexSidebar` puts "Start a Discussion" in, so a control sitting there on a
+ * chat page is not an arrangement invented here.
+ *
+ * `fa-xmark`, not a left chevron: an arrow pointing left, drawn on the right-hand
+ * edge, points away from where tapping it takes you. The cross reads as "close
+ * this section", which is exactly what it does — the channel list is underneath.
+ */
+export function mobileBackControl(onclick: () => void): Mithril.Children {
+  const label = app.translator.trans(
+    "ramon-chat.forum.sidebar.back_to_channels",
+    {},
+    true,
+  );
+
+  // A wrapper element, because core styles `.App-primaryControl > .Button` — the
+  // class has to be on the parent for the button inside it to be sized and
+  // coloured like the drawer toggle opposite.
+  return (
+    <div className="App-primaryControl ChatToolbarBack">
+      <Button
+        className="Button Button--icon"
+        icon="fas fa-xmark"
+        title={label}
+        aria-label={label}
+        onclick={onclick}
+      />
+    </div>
   );
 }

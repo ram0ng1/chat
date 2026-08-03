@@ -94,6 +94,7 @@ ramon-chat:
       browse_channels: Navegar por canais
       new_channel: Novo canal
       no_channels: Você ainda não entrou em nenhum canal.
+      back_to_channels: Voltar aos canais
 
     channel:
       threading_enabled: Tópicos habilitados
@@ -118,6 +119,7 @@ ramon-chat:
       join_hidden: Entrar sem ser percebido
       joined_hidden: Você entrou sem aparecer na lista de membros.
       join_failed: Não foi possível entrar no canal.
+      muted: Silenciado
 
     message:
       edited: editada
@@ -155,6 +157,7 @@ ramon-chat:
       delete_failed: Não foi possível excluir a mensagem.
       system:
         user_joined: "{username} entrou no canal."
+        user_added: "{username} foi adicionado por {actor}."
         user_left: "{username} saiu do canal."
         channel_closed: O canal foi fechado.
         channel_reopened: O canal foi reaberto.
@@ -390,7 +393,6 @@ ramon-chat:
       auto_join_on_reply_help_none: Só tem efeito depois que o canal for ligado a uma categoria.
       auto_join_on_reply_help_bound: "O usuário entra na primeira vez que responde a uma discussão em {category}, e não é readicionado se sair depois."
       post_discussions: Anunciar novas discussões desta categoria
-      post_discussions_help_none: Só tem efeito depois que o canal for ligado a uma categoria.
       post_discussions_help_bound: "Cada nova discussão aberta em {category} é anunciada no canal."
       threading: Habilitar tópicos
       close_channel: Fechar canal

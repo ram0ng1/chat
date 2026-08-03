@@ -786,6 +786,30 @@ class ChannelAccessMatrixTest extends TestCase
         );
     }
 
+    public function test_being_added_by_someone_else_is_announced_as_an_addition(): void
+    {
+        $response = $this->send(
+            $this->request('POST', '/api/chat-channels/'.self::CH_PUBLIC.'/members', [
+                'authenticatedAs' => self::MODERATOR,
+                'json'            => ['data' => ['attributes' => ['userIds' => [self::PLAIN]]]],
+            ])
+        );
+
+        $this->assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+
+        // Not `user_joined`: the same membership row arrives by two different
+        // routes, and narrating both as an arrival credits the added member with
+        // a decision that was someone else's.
+        $this->assertSame(['user_added'], $this->systemKeysIn(self::CH_PUBLIC));
+
+        // Both names, because the sentence needs both. A row that says only who
+        // was added leaves the room unable to tell an invitation from a join.
+        $this->assertSame(
+            ['actor' => 'moderator', 'username' => 'normal'],
+            $this->systemDataIn(self::CH_PUBLIC)
+        );
+    }
+
     /** @return string[] */
     private function systemKeysIn(int $channel): array
     {
@@ -795,5 +819,28 @@ class ChannelAccessMatrixTest extends TestCase
             ->orderBy('id')
             ->pluck('system_key')
             ->all();
+    }
+
+    /**
+     * The interpolation data of the single system row in a channel.
+     *
+     * Sorted by key so the assertion states what has to be there rather than the
+     * order it happens to be written in.
+     *
+     * @return array<string, string>
+     */
+    private function systemDataIn(int $channel): array
+    {
+        $raw = $this->database()->table('chat_messages')
+            ->where('channel_id', $channel)
+            ->where('type', 'system')
+            ->orderBy('id')
+            ->value('system_data');
+
+        $data = json_decode((string) $raw, true) ?: [];
+
+        ksort($data);
+
+        return $data;
     }
 }
