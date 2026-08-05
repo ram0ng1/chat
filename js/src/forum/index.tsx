@@ -494,4 +494,126 @@ function poll(): void {
       m.redraw();
     })
     .catch(() => {});
+
+  pollChanges(`channel:${activeId}`, { channel: activeId }, stream.messages);
+
+  // The thread panel renders from its own stream, and nothing above reaches it:
+  // the channel filter drops thread replies by design, so an open thread was
+  // never polled at all. Its replies, and every reaction and edit inside it,
+  // waited for a reload.
+  const threadId = chatState.activeThreadId;
+
+  if (threadId === null) return;
+
+  const threadStream = chatState.threadStreams[threadId];
+
+  if (!threadStream || threadStream.loading) return;
+
+  const newestReply = threadStream.messages[threadStream.messages.length - 1];
+
+  app.store
+    .find<Message[]>("chat-messages", {
+      filter: {
+        thread: threadId,
+        ...(newestReply ? { greaterThan: Number(newestReply.id()) } : {}),
+      },
+      sort: "id",
+      page: { limit: 50 },
+    })
+    .then((results) => {
+      for (const message of (Array.isArray(results)
+        ? results
+        : []) as Message[]) {
+        chatState.upsertMessage(message);
+      }
+
+      m.redraw();
+    })
+    .catch(() => {});
+
+  pollChanges(
+    `thread:${threadId}`,
+    { thread: threadId },
+    threadStream.messages,
+  );
+}
+
+/**
+ * How far each stream's change cursor has advanced, keyed by stream.
+ *
+ * Kept here rather than derived from the loaded window on every tick, because
+ * the window is the wrong place to read it from: an edit to a message that has
+ * scrolled out of the window never lands in it, so a cursor recomputed from the
+ * window would sit still and re-request that same edit on every poll for the
+ * rest of the session.
+ */
+const changeCursors = new Map<string, number>();
+
+/**
+ * Re-reads the messages of a stream that *changed* rather than arrived.
+ *
+ * The polls above only ever reach forward from the newest id, which is the right
+ * shape for arrivals and cannot see anything else: a reaction, an edit, a
+ * deletion or a pin lands on a row they have already gone past. On a forum
+ * running the websocket that gap is covered by the push handlers in realtime.ts,
+ * and on a forum without one — or with one the server cannot reach — nothing
+ * covered it, so those changes appeared only after a reload.
+ *
+ * Nothing is inserted into the stream from the result. Flarum's store keeps one
+ * record per id and updates it in place, and the stream holds those same
+ * objects, so re-reading a row is enough to redraw it. Appending would be
+ * actively wrong: a changed message from outside the loaded window would be
+ * spliced into the middle of it as though the gap between them did not exist.
+ */
+function pollChanges(
+  key: string,
+  filter: Record<string, unknown>,
+  messages: Message[],
+): void {
+  const since = changeCursors.get(key) ?? newestChange(messages);
+
+  if (since === null) return;
+
+  app.store
+    .find<Message[]>("chat-messages", {
+      filter: { ...filter, updatedSince: since },
+      sort: "id",
+      page: { limit: 50 },
+    })
+    .then((results) => {
+      const advanced = newestChange(
+        (Array.isArray(results) ? results : []) as Message[],
+      );
+
+      // Only ever forwards. A page truncated at the limit can come back with a
+      // lower maximum than the cursor already holds, and moving backwards would
+      // re-request the same rows indefinitely.
+      if (advanced !== null && advanced > since) {
+        changeCursors.set(key, advanced);
+      } else {
+        changeCursors.set(key, since);
+      }
+
+      m.redraw();
+    })
+    .catch(() => {});
+}
+
+/**
+ * The most recent `updatedAt` across a set of messages, as a unix timestamp.
+ *
+ * A server-issued value rather than the browser's own clock: a client whose
+ * clock runs fast would ask for changes from a moment that has not happened yet
+ * and never see any, and the skew needed to break it is a few seconds.
+ */
+function newestChange(messages: Message[]): number | null {
+  let newest = 0;
+
+  for (const message of messages) {
+    const at = message.updatedAt()?.getTime();
+
+    if (at && at > newest) newest = at;
+  }
+
+  return newest > 0 ? Math.floor(newest / 1000) : null;
 }

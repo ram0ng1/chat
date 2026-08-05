@@ -329,6 +329,14 @@ class MessageResource extends AbstractDatabaseResource
 
                     $message->unsetRelation('reactions');
 
+                    // A reaction lives in its own table, so nothing about the
+                    // message row changes when one is added or removed — and the
+                    // polling fallback reconciles on exactly that column. Without
+                    // the touch, a forum with no websocket showed reactions only
+                    // to whoever left them, and to everyone else only after a
+                    // reload. See Search\Filter\MessageChangedFilter.
+                    $message->touch();
+
                     $this->events->dispatch(new ReactionToggled($message, $actor, $emoji, $added));
 
                     return $message;
@@ -474,6 +482,13 @@ class MessageResource extends AbstractDatabaseResource
             Schema\DateTime::make('createdAt'),
             Schema\DateTime::make('editedAt')->nullable(),
             Schema\DateTime::make('deletedAt')->nullable(),
+
+            // The cursor the polling fallback reconciles against. Every change a
+            // message can undergo — an edit, a deletion, a pin, a reaction —
+            // advances this column, so the client can ask for "whatever moved
+            // since" in one filter instead of needing a separate poll per kind of
+            // change. See Search\Filter\MessageChangedFilter.
+            Schema\DateTime::make('updatedAt'),
 
             Schema\Boolean::make('isDeleted')
                 ->get(fn (Message $m) => $m->isDeleted()),

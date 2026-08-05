@@ -6,7 +6,7 @@ ramon-chat:
     message_too_long: "As mensagens não podem passar de {max} caracteres."
     rate_limited: Você está enviando mensagens rápido demais. Aguarde um instante.
     invalid_reaction: Essa não é uma reação de emoji válida.
-    slow_mode_wait: "O modo lento está ativo neste canal. Você poderá publicar de novo em {seconds}s."
+    slow_mode_wait: "O modo lento está ativo neste canal. Você poderá enviar outra mensagem em {seconds}s."
     flag_reason_invalid: Esse não é um motivo válido para denunciar uma mensagem.
     flag_detail_required: Diga o que há de errado com esta mensagem.
     invalid_reply_target: Você não pode responder a uma mensagem de outro canal.
@@ -24,20 +24,20 @@ ramon-chat:
     upload_too_large: Esse arquivo é muito grande.
     upload_unsupported: "Tipo de arquivo não suportado: {type}"
 
-    direct_needs_participant: Escolha ao menos uma pessoa para conversar.
-    direct_too_many: "Uma conversa em grupo aceita no máximo {max} participantes."
+    direct_needs_participant: Escolha ao menos um usuário para conversar.
+    direct_too_many: "{max, plural, one {Uma conversa em grupo aceita no máximo # participante.} other {Uma conversa em grupo aceita no máximo # participantes.}}"
     direct_unknown_user: Um desses usuários não existe.
     stickers_not_allowed: Você não tem permissão para enviar stickers.
-    members_empty: Escolha ao menos uma pessoa para adicionar.
-    members_too_many: "Você pode adicionar no máximo {max} pessoas por vez."
+    members_empty: Escolha ao menos um usuário para adicionar.
+    members_too_many: "{max, plural, one {Você pode adicionar no máximo # usuário por vez.} other {Você pode adicionar no máximo # usuários por vez.}}"
     cannot_remove_self: Use "Sair do canal" para se remover.
-    not_a_member: Essa pessoa não está neste canal.
+    not_a_member: Esse usuário não está neste canal.
 
     transcript_empty: Nenhuma mensagem foi selecionada, ou você não pode lê-las.
-    transcript_too_many: "Você pode citar no máximo {max} mensagens por vez."
+    transcript_too_many: "{max, plural, one {Você pode citar no máximo # mensagem por vez.} other {Você pode citar no máximo # mensagens por vez.}}"
 
     move_empty: Nenhuma mensagem selecionada, ou já estão nesse canal.
-    move_too_many: "Você pode mover no máximo {max} mensagens por vez."
+    move_too_many: "{max, plural, one {Você pode mover no máximo # mensagem por vez.} other {Você pode mover no máximo # mensagens por vez.}}"
     move_target_frozen: Você não pode mover mensagens para um canal fechado ou arquivado.
 
     webhook_channel_unavailable: O canal desse webhook está fechado ou indisponível.
@@ -61,7 +61,7 @@ ramon-chat:
 
   notifications:
     chat_mention: "{username} mencionou você em {channel}"
-    chat_message: "{username} publicou em {channel}"
+    chat_message: "{username} enviou uma mensagem em {channel}"
     chat_channel_invite: "{username} adicionou você a {channel}"
 
   lib:
@@ -73,9 +73,9 @@ ramon-chat:
   forum:
     nav:
       chat: Chat
-      unread_channels: "{count} canais com mensagens não lidas"
-      unread_messages: "{count} mensagens não lidas"
-      unread_mentions: "{count} menções não lidas"
+      unread_channels: "{count, plural, one {# canal com mensagens não lidas} other {# canais com mensagens não lidas}}"
+      unread_messages: "{count, plural, one {# mensagem não lida} other {# mensagens não lidas}}"
+      unread_mentions: "{count, plural, one {# menção não lida} other {# menções não lidas}}"
 
     drawer:
       title: Chat
@@ -105,7 +105,7 @@ ramon-chat:
       archived_link: Ver a transcrição arquivada
       no_messages: Nenhuma mensagem ainda. Diga algo.
       scroll_to_latest: Ir para a mensagem mais recente
-      members: "{count} membros"
+      members: "{count, plural, one {# membro} other {# membros}}"
       view_info: Detalhes do canal
       search_in_channel: Buscar neste canal
       pinned_messages: Mensagens fixadas
@@ -223,7 +223,7 @@ ramon-chat:
     thread:
       title: Tópico
       untitled: Tópico sem título
-      replies: "{count} respostas"
+      replies: "{count, plural, one {# resposta} other {# respostas}}"
       set_title: Definir título do tópico
       tracking: Notificações
       tracking_always: Acompanhando
@@ -261,7 +261,7 @@ ramon-chat:
 
     typing:
       one: "{username} está digitando…"
-      several: "{count} pessoas estão digitando…"
+      several: "{count, plural, one {# membro está digitando…} other {# membros estão digitando…}}"
 
     stream:
       new_messages: Novas mensagens
@@ -278,17 +278,17 @@ ramon-chat:
       threading_help: As respostas podem virar um tópico próprio em vez de interromper o canal.
       channel_wide_mentions_help: Permite que os membros usem @channel e @here para avisar todo mundo de uma vez.
       message_length: Tamanho da mensagem
-      message_length_inherit: "Padrão do fórum ({count} caracteres)"
-      message_length_chars: "{count} caracteres"
+      message_length_inherit: "{count, plural, one {Padrão do fórum (# caractere)} other {Padrão do fórum (# caracteres)}}"
+      message_length_chars: "{count, plural, one {# caractere} other {# caracteres}}"
       message_length_custom: Personalizado…
-      message_length_help_inherit: "As mensagens aqui podem ter até {count} caracteres, igual ao resto do fórum. Se você mudar a configuração do fórum, este canal acompanha."
-      message_length_help_own: "As mensagens aqui podem ter até {count} caracteres, independente do que o resto do fórum permite."
-      message_length_help_empty: "Deixe vazio para seguir o padrão do fórum, de {count} caracteres."
-      message_length_help_clamped: "Fora da faixa — será salvo como {count} caracteres."
+      message_length_help_inherit: "{count, plural, one {As mensagens aqui podem ter até # caractere, igual ao resto do fórum.} other {As mensagens aqui podem ter até # caracteres, igual ao resto do fórum.}} Se você mudar a configuração do fórum, este canal acompanha."
+      message_length_help_own: "{count, plural, one {As mensagens aqui podem ter até # caractere, independente do que o resto do fórum permite.} other {As mensagens aqui podem ter até # caracteres, independente do que o resto do fórum permite.}}"
+      message_length_help_empty: "{count, plural, one {Deixe vazio para seguir o padrão do fórum, de # caractere.} other {Deixe vazio para seguir o padrão do fórum, de # caracteres.}}"
+      message_length_help_clamped: "{count, plural, one {Fora da faixa — será salvo como # caractere.} other {Fora da faixa — será salvo como # caracteres.}}"
       slow_mode: Modo lento
       slow_mode_off: "Desligado"
       slow_mode_help_off: Os membros podem enviar mensagens uma atrás da outra, sem espera.
-      slow_mode_help_on: "Cada pessoa espera {duration} entre uma mensagem e outra. Moderadores são isentos."
+      slow_mode_help_on: "Cada membro espera {duration} entre uma mensagem e outra. Moderadores são isentos."
       name: Nome do canal
       name_placeholder: "ex.: geral"
       description: Descrição
@@ -310,13 +310,13 @@ ramon-chat:
       public_help: Quem a categoria permite encontra o canal em Navegar e entra por conta própria.
       private: Privado
       private_help: Somente por convite. Não aparece em Navegar e só os membros o enxergam.
-      post_permission: Quem pode enviar mensagem
+      post_permission: Quem pode enviar mensagens
       post_all: Todos no canal
       post_moderators: Apenas moderadores
       post_all_help: Todos os membros do canal podem enviar mensagens.
-      post_moderators_help: O canal é um mural de avisos — todos leem, só moderadores escrevem.
-      category_help_none: O canal vale para todo o fórum. Qualquer pessoa que use o chat pode vê-lo.
-      category_help_bound: "O canal herda as permissões de {category}: só quem enxerga essa categoria enxerga o canal."
+      post_moderators_help: O canal é um mural de avisos — todos leem, só moderadores enviam mensagens.
+      category_help_none: O canal vale para todo o fórum. Qualquer usuário que use o chat pode vê-lo.
+      category_help_bound: "O canal herda as permissões de {category}: só os usuários que enxergam essa categoria enxergam o canal."
       submit: Criar canal
       failed: Não foi possível criar o canal.
 
@@ -332,16 +332,16 @@ ramon-chat:
 
     add_members:
       title: Adicionar membros
-      hint: Digite ao menos duas letras para encontrar alguém.
-      empty: Ninguém encontrado, ou quem corresponde já está aqui.
-      search_placeholder: Buscar pessoas pelo nome
+      hint: Digite ao menos duas letras para encontrar um usuário.
+      empty: Nenhum usuário encontrado, ou quem corresponde já é membro.
+      search_placeholder: Buscar usuários
       searching: Buscando…
-      search_failed: Não foi possível buscar essas pessoas agora.
+      search_failed: Não foi possível buscar usuários agora.
       deselect: "Tirar {username} da seleção"
       submit: Adicionar
       submit_count: "Adicionar {count}"
-      added: "{count} adicionados ao canal."
-      failed: Não foi possível adicionar essas pessoas.
+      added: "{count, plural, one {# usuário adicionado ao canal.} other {# usuários adicionados ao canal.}}"
+      failed: Não foi possível adicionar esses usuários.
 
     emoji_picker:
       placeholder: Buscar emoji
@@ -370,7 +370,7 @@ ramon-chat:
       no_description: Sem descrição.
       open: Abrir
       new_channel: Novo canal
-      messages: "{count} mensagens"
+      messages: "{count, plural, one {# mensagem} other {# mensagens}}"
 
     info:
       tab_settings: Configurações
@@ -411,10 +411,10 @@ ramon-chat:
       count: "{count} selecionadas"
       cancel: Cancelar
       move_to: Mover para…
-      moved: "{count} mensagens movidas."
+      moved: "{count, plural, one {# mensagem movida.} other {# mensagens movidas.}}"
       copied: Copiado para a área de transferência.
       copy_failed: Seu navegador não permitiu a cópia.
-      omitted: "{count} mensagens ficaram de fora porque você não pode lê-las."
+      omitted: "{count, plural, one {# mensagem ficou de fora porque você não pode lê-la.} other {# mensagens ficaram de fora porque você não pode lê-las.}}"
       failed: Não foi possível concluir a ação.
 
     search:
@@ -435,7 +435,7 @@ ramon-chat:
       channel_invite: "{username} adicionou você a {channel}"
       someone: Alguém
 
-    # Rótulo de autoria do próprio chat, nas mensagens que ele publica.
+    # Rótulo de autoria do próprio chat, nas mensagens que ele envia.
     bot:
       default_name: Bot
       tag: BOT
@@ -480,7 +480,7 @@ ramon-chat:
       icon_help: "Uma classe do Font Awesome, ex.: fas fa-comments."
       show_icon_label: Exibir o ícone do chat
       bot_name_label: Nome do bot
-      bot_name_help: O autor exibido nas mensagens que o próprio chat publica, como os anúncios de novas discussões.
+      bot_name_help: O autor exibido nas mensagens que o próprio chat envia, como os anúncios de novas discussões.
       bot_avatar_label: Imagem do bot
       bot_avatar_help: URL da imagem do bot. Em branco, mostra a inicial do nome.
       show_icon_help: Desligue para mostrar apenas o nome.
@@ -498,11 +498,11 @@ ramon-chat:
       sound_alert: Alerta
 
       webhooks_title: Webhooks de entrada
-      webhooks_help: Endpoints compatíveis com Slack que publicam em um canal.
+      webhooks_help: Endpoints compatíveis com Slack que enviam mensagens em um canal.
       webhook_new: Novo webhook de entrada
       webhook_name: Nome
       webhook_description: Descrição
-      webhook_username: Publica como
+      webhook_username: Envia como
       webhook_emoji: Emoji
       webhook_channel: Canal
       webhook_url: URL
@@ -527,22 +527,22 @@ ramon-chat:
       pin_message: Fixar e desfixar mensagens
       mention_channel_wide: Usar @here e @all
 
-    # Quem o chat usa como autor quando publica algo por conta própria.
+    # Quem o chat usa como autor quando envia algo por conta própria.
     bot:
       title: Anunciante
-      intro: Novas discussões em uma categoria vinculada são anunciadas no canal. Escolha quem as publica.
+      intro: Novas discussões em uma categoria vinculada são anunciadas no canal. Escolha quem as envia.
       upload: Enviar imagem
       remove_upload: Remover imagem
       upload_failed: Não foi possível enviar essa imagem.
-      user_label: Publicar como um membro
+      user_label: Enviar como um membro
       user_help: Escolha uma conta e os anúncios viram mensagens comuns desse membro — sem nome de bot, sem imagem, sem etiqueta BOT.
-      user_search: Buscar membros
-      user_active: Os anúncios são publicados como este membro.
+      user_search: Buscar usuários
+      user_active: Os anúncios são enviados como este membro.
       use_bot: Usar o bot
 
     webhooks:
       title: Webhooks de entrada
-      help: Um serviço externo pode publicar uma mensagem em um canal usando uma URL secreta. A URL é exibida uma única vez, ao criar ou ao rotacionar.
+      help: Um serviço externo pode enviar uma mensagem em um canal usando uma URL secreta. A URL é exibida uma única vez, ao criar ou ao rotacionar.
       name: Nome do webhook
       pick_channel: Escolha um canal
       create: Criar webhook
@@ -552,6 +552,6 @@ ramon-chat:
       rotate_confirm: Rotacionar a chave quebra quem estiver usando a URL antiga. Continuar?
       delete: Excluir
       delete_confirm: Excluir este webhook? Quem usa a URL dele vai parar de funcionar.
-      deliveries: "{count} entregas"
+      deliveries: "{count, plural, one {# entrega} other {# entregas}}"
       url_once: Copie esta URL agora — ela não é exibida de novo.
       failed: Não foi possível salvar a alteração.

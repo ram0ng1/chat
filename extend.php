@@ -358,6 +358,12 @@ return [
         ->addFilter(Search\MessageSearcher::class, Search\Filter\MessageThreadFilter::class)
         ->addFilter(Search\MessageSearcher::class, Search\Filter\MessageBeforeFilter::class)
         ->addFilter(Search\MessageSearcher::class, Search\Filter\MessageAfterFilter::class)
+        // The other half of the polling fallback's cursor. `greaterThan` reaches
+        // forward from the newest id and so can only carry arrivals; this one
+        // carries changes to rows the poll has already gone past — reactions,
+        // edits, deletions and pins, none of which were visible without a reload
+        // on a forum that has no websocket.
+        ->addFilter(Search\MessageSearcher::class, Search\Filter\MessageChangedFilter::class)
         ->addFilter(Search\MessageSearcher::class, Search\Filter\MessageBookmarkedFilter::class)
         ->addFilter(Search\MessageSearcher::class, Search\Filter\MessagePinnedFilter::class)
         ->addFilter(Search\MessageSearcher::class, Search\Filter\MessageTextFilter::class)

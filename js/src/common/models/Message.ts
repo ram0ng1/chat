@@ -38,6 +38,13 @@ export default class Message extends Model {
   editedAt = Model.attribute("editedAt", Model.transformDate);
   deletedAt = Model.attribute("deletedAt", Model.transformDate);
 
+  /**
+   * Advanced by every change the row can undergo — an edit, a deletion, a pin,
+   * a reaction. The polling fallback reconciles against it; see pollChanges()
+   * in forum/index.tsx.
+   */
+  updatedAt = Model.attribute("updatedAt", Model.transformDate);
+
   isDeleted = Model.attribute<boolean>("isDeleted");
 
   /**
