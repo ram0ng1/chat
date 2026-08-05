@@ -213,10 +213,15 @@ return [
         // continuously — see Realtime\ChatBroadcaster. Never serialised to the
         // forum: it changes nothing the client can see or act on.
         ->default('ramon-chat.queue_realtime', false)
-        // Which keystroke sends. Off (the default) keeps the chat convention —
-        // Enter sends, Shift+Enter breaks the line. On, Enter breaks the line and
-        // the message only leaves on Ctrl+Enter, for forums whose members write
-        // long multi-line messages and lose them to a stray Enter.
+        // Which keystroke sends, as the forum *default*. Off keeps the chat
+        // convention — Enter sends, Shift+Enter breaks the line. On, Enter breaks
+        // the line and the message only leaves on Ctrl+Enter, for forums whose
+        // members write long multi-line messages and lose them to a stray Enter.
+        //
+        // Which of the two suits someone is a fact about how that person types,
+        // not about the forum, so this is only where the answer starts: each
+        // member overrides it from the channel panel via the
+        // `ramon-chat.sendWithCtrlEnter` preference below.
         ->default('ramon-chat.send_with_ctrl_enter', false)
         // Notification sound. 'none' disables it; the others name a file under
         // assets/sounds, published to public/assets/extensions/ramon-chat.
@@ -261,7 +266,15 @@ return [
         ->registerPreference('ramon-chat.allowChannelWideMentions', 'boolVal', true)
         ->registerPreference('ramon-chat.sound', 'strVal', 'default')
         ->registerPreference('ramon-chat.emailNotifications', 'boolVal', false)
-        ->registerPreference('ramon-chat.openInDrawer', 'boolVal', true),
+        ->registerPreference('ramon-chat.openInDrawer', 'boolVal', true)
+
+        // Which keystroke sends, for this member. Three states, not two, and the
+        // third is the point: 'default' means "whatever the forum is set to", so
+        // a member who has never touched it follows `send_with_ctrl_enter` and an
+        // admin who had turned that on does not have it silently undone for
+        // everyone the moment this preference exists. 'enter' and 'ctrl' are the
+        // two explicit answers. See sendsOnCtrlEnter() in utils/shortcuts.ts.
+        ->registerPreference('ramon-chat.sendWithCtrlEnter', 'strVal', 'default'),
 
     // ── Non-JSON:API routes ──────────────────────────────────────────────────
     // These carry payloads JSON:API cannot express (multipart uploads) or are

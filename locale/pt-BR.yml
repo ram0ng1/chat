@@ -387,6 +387,20 @@ ramon-chat:
       level_never_help: Este canal nunca notifica você. Ele continua marcando mensagens não lidas na barra lateral.
       mute: Silenciar este canal
       mute_help: Canais silenciados não exibem contadores de não lidas.
+
+      # A tecla de envio. É uma configuração da pessoa, não do canal, então toda
+      # linha de ajuda diz isso — o painel em volta é por canal e seria lido como
+      # o alcance da opção.
+      composer: Caixa de mensagem
+      send_key: Enviar mensagem com
+      send_key_default: Seguir o padrão do fórum
+      send_key_enter: Enter envia
+      send_key_ctrl: Ctrl+Enter envia
+      send_key_help_default_enter: Neste fórum o Enter envia, e o Shift+Enter quebra a linha. Vale em todos os canais.
+      send_key_help_default_ctrl: Neste fórum o Ctrl+Enter (Cmd+Enter no macOS) envia, e o Enter quebra a linha. Vale em todos os canais.
+      send_key_help_enter: O Enter envia sua mensagem, e o Shift+Enter quebra a linha. Vale em todos os canais.
+      send_key_help_ctrl: O Ctrl+Enter (Cmd+Enter no macOS) envia sua mensagem, e o Enter quebra a linha. Vale em todos os canais.
+
       auto_join: Adicionar todos os usuários automaticamente
       auto_join_help: Todos os usuários atuais e futuros serão adicionados a este canal.
       auto_join_on_reply: Adicionar quem responder nesta categoria
@@ -489,8 +503,8 @@ ramon-chat:
       allow_archiving_channels: Permitir arquivar canais
       queue_realtime: Entregar eventos em tempo real pela fila
       queue_realtime_help: "Desligado por padrão: os envios acontecem na própria requisição, então as mensagens chegam na hora. Ligue apenas se o fórum mantém um worker de fila rodando continuamente, ou se o servidor web não alcança o daemon do websocket. Com o driver de fila 'database' do Flarum o worker roda uma vez por minuto, o que atrasa cada mensagem em até esse tempo."
-      send_with_ctrl_enter: Enviar mensagens com Ctrl+Enter
-      send_with_ctrl_enter_help: Quando ativado, o Enter quebra a linha e apenas o Ctrl+Enter (Cmd+Enter no macOS) envia a mensagem. Quando desativado, o Enter envia e o Shift+Enter quebra a linha.
+      send_with_ctrl_enter: Enviar mensagens com Ctrl+Enter por padrão
+      send_with_ctrl_enter_help: Quando ativado, o Enter quebra a linha e apenas o Ctrl+Enter (Cmd+Enter no macOS) envia a mensagem. Quando desativado, o Enter envia e o Shift+Enter quebra a linha. Isto é apenas o padrão — cada membro pode escolher o outro modo pelo painel de detalhes de um canal.
       sound: Som de notificação
       sound_help: Tocado quando chega mensagem em um canal que você não está olhando.
       sound_none: Desligado
