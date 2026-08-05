@@ -413,6 +413,20 @@ ramon-chat:
       level_never_help: This channel never notifies you. It still shows unread messages in the sidebar.
       mute: Mute this channel
       mute_help: Muted channels do not show unread badges.
+
+      # The send key. A setting for the person rather than the channel, so every
+      # help line says so — the panel around it is per-channel and would
+      # otherwise read as the scope.
+      composer: Composer
+      send_key: Sending a message
+      send_key_default: Follow the forum default
+      send_key_enter: Enter sends
+      send_key_ctrl: Ctrl+Enter sends
+      send_key_help_default_enter: This forum sends on Enter, and Shift+Enter starts a new line. Applies in every channel.
+      send_key_help_default_ctrl: This forum sends on Ctrl+Enter (Cmd+Enter on macOS), and Enter starts a new line. Applies in every channel.
+      send_key_help_enter: Enter sends your message, and Shift+Enter starts a new line. Applies in every channel.
+      send_key_help_ctrl: Ctrl+Enter (Cmd+Enter on macOS) sends your message, and Enter starts a new line. Applies in every channel.
+
       auto_join: Automatically add all users
       auto_join_help: Every existing and future user will be added to this channel.
       auto_join_on_reply: Add users who reply in this category
@@ -518,8 +532,8 @@ ramon-chat:
       allow_archiving_channels: Allow archiving channels
       queue_realtime: Deliver realtime events through the queue
       queue_realtime_help: "Off by default: pushes run in the request, so messages arrive immediately. Turn this on only if your forum runs a continuous queue worker, or if the web server cannot reach the websocket daemon. With Flarum's database queue driver the worker runs once a minute, which will delay every message by up to that long."
-      send_with_ctrl_enter: Send messages with Ctrl+Enter
-      send_with_ctrl_enter_help: When enabled, Enter inserts a line break and only Ctrl+Enter (Cmd+Enter on macOS) sends the message. When disabled, Enter sends and Shift+Enter inserts a line break.
+      send_with_ctrl_enter: Send messages with Ctrl+Enter by default
+      send_with_ctrl_enter_help: When enabled, Enter inserts a line break and only Ctrl+Enter (Cmd+Enter on macOS) sends the message. When disabled, Enter sends and Shift+Enter inserts a line break. This is only the default — each member can choose the other from a channel's details panel.
       sound: Notification sound
       sound_help: Played when a message arrives in a channel you are not looking at.
       sound_none: "Off"

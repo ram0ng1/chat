@@ -17,6 +17,11 @@ import chatState from "../state/chat";
 import { isOnline } from "../utils/presence";
 import { MembersSkeleton } from "./Skeletons";
 import { channelIcon } from "../utils/channelIcon";
+import {
+  forumSendsOnCtrlEnter,
+  sendKeyPreference,
+  type SendKey,
+} from "../utils/shortcuts";
 import AddMembersModal from "./AddMembersModal";
 
 export interface ChannelInfoModalAttrs extends IInternalModalAttrs {
@@ -168,7 +173,85 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
           </div>
         </div>
 
+        {this.composerSection()}
+
         {this.moderation()}
+      </div>
+    );
+  }
+
+  /**
+   * How this member's own composer behaves.
+   *
+   * Its own section rather than a row under NOTIFICATIONS, and worth being
+   * explicit about why it is in a per-channel panel at all: which key sends is a
+   * setting for the person, not for the channel, and it applies everywhere. The
+   * section sits here because this is the panel a member already opens to adjust
+   * the chat for themselves — but the help line says "every channel" so nobody
+   * reads the surrounding modal as the scope.
+   *
+   * Guests never reach this: the chat requires an account, and `savePreferences`
+   * needs a user to save against.
+   */
+  protected composerSection(): Mithril.Children {
+    if (!app.session.user) return null;
+
+    const preference = sendKeyPreference();
+
+    return (
+      <div className="ChatChannelInfo-section">
+        <div className="ChatChannelInfo-section-label">
+          {app.translator.trans("ramon-chat.forum.info.composer")}
+        </div>
+
+        <label>
+          {app.translator.trans("ramon-chat.forum.info.send_key")}
+          <select
+            className="FormControl"
+            value={preference}
+            disabled={this.working}
+            onchange={(e: Event) =>
+              this.saveSendKey((e.target as HTMLSelectElement).value as SendKey)
+            }
+          >
+            <option value="default">
+              {app.translator.trans(
+                "ramon-chat.forum.info.send_key_default",
+                {},
+                true,
+              )}
+            </option>
+            <option value="enter">
+              {app.translator.trans(
+                "ramon-chat.forum.info.send_key_enter",
+                {},
+                true,
+              )}
+            </option>
+            <option value="ctrl">
+              {app.translator.trans(
+                "ramon-chat.forum.info.send_key_ctrl",
+                {},
+                true,
+              )}
+            </option>
+          </select>
+        </label>
+
+        {/* Which of the two "default" currently means is named rather than left
+            to be discovered by choosing it: the option is the only one whose
+            effect the label does not already state. */}
+        <div className="helpText">
+          {app.translator.trans(
+            preference === "default"
+              ? forumSendsOnCtrlEnter()
+                ? "ramon-chat.forum.info.send_key_help_default_ctrl"
+                : "ramon-chat.forum.info.send_key_help_default_enter"
+              : preference === "ctrl"
+                ? "ramon-chat.forum.info.send_key_help_ctrl"
+                : "ramon-chat.forum.info.send_key_help_enter",
+          )}
+        </div>
       </div>
     );
   }
@@ -503,6 +586,49 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
         },
       });
     } catch {
+      app.alerts.show(
+        { type: "error" },
+        app.translator.trans("ramon-chat.forum.info.save_failed"),
+      );
+    } finally {
+      this.working = false;
+      m.redraw();
+    }
+  }
+
+  /**
+   * Stores the send-key choice on the user.
+   *
+   * Optimistic like `saveNotifications`, and for a sharper reason: the composer
+   * reads the preference off the same record on every keystroke, so the change
+   * has to be in place before the next one — waiting for the round trip would
+   * mean the first Enter after choosing still did the old thing.
+   *
+   * The rollback is not the redundant belt-and-braces it looks like. `Model.save`
+   * does snapshot and restore on failure, but `savePreferences` mutates the
+   * preferences object *in place* before calling it, so the snapshot is taken
+   * with the new value already in it and core's revert restores that. Undoing it
+   * here is the only thing that stops a rejected save from leaving the select —
+   * and the composer — agreeing with a server that never accepted it.
+   */
+  protected async saveSendKey(value: SendKey): Promise<void> {
+    const user = app.session.user;
+
+    if (!user) return;
+
+    const previous = sendKeyPreference();
+
+    if (value === previous) return;
+
+    this.working = true;
+
+    try {
+      await user.savePreferences({ "ramon-chat.sendWithCtrlEnter": value });
+    } catch {
+      await user
+        .savePreferences({ "ramon-chat.sendWithCtrlEnter": previous })
+        .catch(() => {});
+
       app.alerts.show(
         { type: "error" },
         app.translator.trans("ramon-chat.forum.info.save_failed"),
