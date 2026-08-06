@@ -15,6 +15,7 @@ import ChannelInfoModal from "./ChannelInfoModal";
 import ChatSelectionBar from "./ChatSelectionBar";
 import { MessageStreamSkeleton } from "./Skeletons";
 import { channelIcon } from "../utils/channelIcon";
+import { jumpToMessage } from "../utils/jumpToMessage";
 import { messagePreview } from "../../common/utils/preview";
 
 export interface ChannelViewAttrs extends ComponentAttrs {
@@ -209,37 +210,7 @@ export default class ChannelView extends Component<ChannelViewAttrs> {
   }
 
   protected jumpToPinned(pinned: Message): void {
-    const scroller = this.scroller;
-    const node = scroller?.querySelector<HTMLElement>(
-      `[data-id="${pinned.id()}"]`,
-    );
-
-    if (!scroller || !node) return;
-
-    // Deliberately not `scrollIntoView`: it scrolls *every* scrollable ancestor
-    // of the node, the document included. On a phone that dragged the whole
-    // page down — header off the top, whatever the forum draws under the chat
-    // into view — to move a row inside a container that was already on screen.
-    //
-    // Measured from the rects rather than `offsetTop`, which is relative to the
-    // nearest positioned ancestor and only equals the scroller's coordinate
-    // space by accident of the current CSS.
-    const nodeRect = node.getBoundingClientRect();
-    const scrollerRect = scroller.getBoundingClientRect();
-    const centred =
-      nodeRect.top -
-      scrollerRect.top -
-      (scroller.clientHeight - nodeRect.height) / 2;
-
-    scroller.scrollTo({
-      top: Math.max(0, scroller.scrollTop + centred),
-      behavior: "smooth",
-    });
-
-    // Briefly re-assert the highlight, so it is obvious which row was meant when
-    // several are pinned.
-    node.classList.add("ChatMessage--flash");
-    window.setTimeout(() => node.classList.remove("ChatMessage--flash"), 1200);
+    jumpToMessage(pinned.id()!, this.scroller);
   }
 
   protected header(): Mithril.Children {

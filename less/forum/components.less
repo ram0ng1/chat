@@ -948,10 +948,13 @@ body.ChatFullPage {
     box-shadow: inset 3px 0 0 var(--chat-pinned-border);
   }
 
-  // Applied briefly by the pinned bar when it jumps to a row, so it is obvious
-  // which message was meant when more than one is pinned.
+  // Applied while the stream jumps to a row — from the pinned bar or from a
+  // reply preview — so it is obvious which message was meant once the scroll
+  // settles. O fundo e a barra lateral vivem os dois dentro do keyframe: numa
+  // linha já tingida (menção, fixada) só o fundo quase não se move, e fora da
+  // animação a barra sobreviveria ao fundo.
   &--flash {
-    animation: chat-flash 1.2s ease-out;
+    animation: chat-flash @chat-jump-highlight ease-out;
   }
 
   &-pinMark {
@@ -1114,14 +1117,30 @@ body.ChatFullPage {
     color: var(--chat-tombstone-color);
   }
 
-  // Inline reply preview above the message body.
+  // Inline reply preview above the message body. It is a button — clicking it
+  // jumps to the message being answered — so the browser's own button chrome is
+  // stripped and the quote look is kept.
   &-replyTo {
     .chat-flex-row(6px);
+    width: fit-content;
+    max-width: 100%;
     margin-bottom: 3px;
-    padding-left: 8px;
+    padding: 0 0 0 8px;
+    border: 0;
     border-left: 2px solid var(--avocado-border-subtle);
+    border-radius: 0;
+    background: none;
     font-size: @chat-font-meta;
+    text-align: left;
     color: var(--avocado-muted-label);
+    cursor: pointer;
+    transition: border-color var(--avocado-t-fast), color var(--avocado-t-fast);
+
+    &:hover,
+    &:focus-visible {
+      border-left-color: var(--primary-color);
+      color: var(--avocado-body-color, inherit);
+    }
 
     &-content {
       .chat-truncate();
@@ -1572,11 +1591,27 @@ body.ChatFullPage {
   30%           { opacity: 1;    transform: translateY(-2px); }
 }
 
-// The jump-to-pinned highlight. Fades out rather than toggling, so it reads as
-// "here" instead of as a state the row is now stuck in.
+// The jump-to-message highlight. Holds for most of its life and only then fades:
+// the scroll is smooth, so a highlight that starts fading immediately is already
+// half gone by the time the row settles under the eye. Fading at all — rather
+// than toggling off — keeps it reading as "here" instead of as a state the row
+// is now stuck in.
+// A barra e o fundo esvaem juntos. Deixar a barra fora da animação — só na
+// classe — fazia ela ficar acesa até o timer do JS tirar a classe, ou seja mais
+// tempo que o fundo, e a linha terminava com um traço roxo sozinho.
 @keyframes chat-flash {
-  0%   { background: var(--chat-pinned-bg); }
-  100% { background: transparent; }
+  0% {
+    background: var(--chat-pinned-bg);
+    box-shadow: inset 3px 0 0 var(--chat-pinned-border);
+  }
+  80% {
+    background: var(--chat-pinned-bg);
+    box-shadow: inset 3px 0 0 var(--chat-pinned-border);
+  }
+  100% {
+    background: transparent;
+    box-shadow: inset 3px 0 0 transparent;
+  }
 }
 
 // ── Thread panel ─────────────────────────────────────────────────────────────

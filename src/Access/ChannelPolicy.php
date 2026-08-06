@@ -28,13 +28,23 @@ use Ramon\Chat\Channel;
 class ChannelPolicy extends AbstractPolicy
 {
     public function __construct(
-        protected SettingsRepositoryInterface $settings
+        protected SettingsRepositoryInterface $settings,
+        protected VisibilityCache $cache
     ) {
     }
 
+    /**
+     * Memoised per request: nine capability fields are resolved for every channel
+     * the sidebar lists, and most of them reach this. Without the cache a fifty
+     * channel list ran this `EXISTS` — which carries the whole visibility scope,
+     * tag joins included — several hundred times for an answer that is the same
+     * every time.
+     */
     public function view(User $actor, Channel $channel): ?bool
     {
-        return Channel::whereVisibleTo($actor)->whereKey($channel->id)->exists() ?: null;
+        // Null rather than false when denied: the Gate only applies its admin
+        // fallback when no policy reached a decision — see the class docblock.
+        return ScopeChannelVisibility::visibleTo($actor, $channel, $this->cache) ?: null;
     }
 
     /**

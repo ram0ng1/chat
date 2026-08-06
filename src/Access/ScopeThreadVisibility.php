@@ -12,12 +12,25 @@ namespace Ramon\Chat\Access;
 use Flarum\User\User;
 use Illuminate\Database\Eloquent\Builder;
 use Ramon\Chat\Channel;
+use Ramon\Chat\Thread;
 
 /**
  * Threads inherit their channel's visibility.
  */
 class ScopeThreadVisibility
 {
+    /**
+     * The row-level half of the scope, for a thread already loaded.
+     *
+     * Written twice — as SQL below, in PHP here — and the two must stay in step;
+     * they share this file for that reason. See ScopeMessageVisibility, which
+     * carries the same pair for the same reason.
+     */
+    public static function rowVisibleTo(Thread $thread, bool $channelVisible): bool
+    {
+        return $channelVisible && $thread->deleted_at === null;
+    }
+
     public function __invoke(User $actor, Builder $query): void
     {
         $query

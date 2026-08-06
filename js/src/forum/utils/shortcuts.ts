@@ -113,39 +113,29 @@ function handleEscape(): boolean {
   return false;
 }
 
-/** The three states of the send-key preference. */
-export type SendKey = "default" | "enter" | "ctrl";
+/** Which key sends. Enter unless the member asked for Ctrl+Enter. */
+export type SendKey = "enter" | "ctrl";
 
-/** This member's own answer, or "default" when they have not given one. */
+/**
+ * This member's own answer, defaulting to Enter.
+ *
+ * Anything that is not "ctrl" reads as Enter, which also absorbs the "default"
+ * value stored while the preference had a third "follow the forum" state: those
+ * rows resolve to Enter without needing to be rewritten.
+ */
 export function sendKeyPreference(): SendKey {
-  const value =
-    app.session.user?.preferences()?.["ramon-chat.sendWithCtrlEnter"];
-
-  return value === "enter" || value === "ctrl" ? value : "default";
-}
-
-/** What "default" resolves to — the forum-wide setting the admin chose. */
-export function forumSendsOnCtrlEnter(): boolean {
-  return Boolean(app.forum.attribute<boolean>("ramon-chat.sendWithCtrlEnter"));
+  return app.session.user?.preferences()?.["ramon-chat.sendWithCtrlEnter"] ===
+    "ctrl"
+    ? "ctrl"
+    : "enter";
 }
 
 /**
  * Whether the composer sends on Ctrl/Cmd+Enter instead of on a bare Enter.
  *
- * The member's own preference wins, and falls through to the forum setting when
- * they have not expressed one. Which key sends is a fact about how a person
- * types rather than about the forum, so an admin's choice is a default here, not
- * a rule — but it stays the default, which is why the preference has a third
- * "follow the forum" state instead of being a plain boolean that would have
- * quietly reset every member of a forum that had turned the setting on.
- *
  * Read per call rather than cached: a cached copy would keep the old behaviour
- * for the rest of the session after either side of it changed.
+ * for the rest of the session after the member changed it.
  */
 export function sendsOnCtrlEnter(): boolean {
-  const preference = sendKeyPreference();
-
-  if (preference !== "default") return preference === "ctrl";
-
-  return forumSendsOnCtrlEnter();
+  return sendKeyPreference() === "ctrl";
 }
