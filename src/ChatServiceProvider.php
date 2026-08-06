@@ -23,6 +23,11 @@ class ChatServiceProvider extends AbstractServiceProvider
         $this->container->when(RateLimiter::class)
             ->needs(Store::class)
             ->give(fn () => $this->container->make(CacheRepository::class)->getStore());
+
+        // One instance, so both policies memoise into the same map. Resolved fresh
+        // per request in php-fpm; in a long-lived worker it survives, which is why
+        // it keys on the User object rather than on the id — see VisibilityCache.
+        $this->container->singleton(Access\VisibilityCache::class);
     }
 
     public function boot(): void

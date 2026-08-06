@@ -78,7 +78,8 @@ class MessageResource extends AbstractDatabaseResource
                 // collection to anyone, which is a slower way of saying no.
                 ->authenticated()
                 ->defaultInclude(['user', 'user.groups', 'replyTo', 'replyTo.user', 'uploads', 'thread', 'thread.lastMessage', 'deletedBy'])
-                ->eagerLoad(['user.groups', 'reactions', 'uploads', 'mentions', 'flags']),
+                ->eagerLoad(['user.groups', 'reactions', 'uploads', 'mentions', 'flags', 'channel'])
+                ->eagerLoadWhere('bookmarks', fn ($query, Context $context) => $query->where('user_id', $context->getActor()->id)),
 
             Endpoint\Index::make()
                 ->authenticated()
@@ -100,7 +101,16 @@ class MessageResource extends AbstractDatabaseResource
                 // included: without it the serialiser reads the relation once per
                 // row, which is fifty queries on a full page of messages.
                 ->defaultInclude(['user', 'user.groups', 'replyTo', 'replyTo.user', 'uploads', 'thread', 'thread.lastMessage', 'deletedBy'])
-                ->eagerLoad(['user.groups', 'reactions', 'uploads', 'mentions', 'thread', 'flags'])
+                // `channel` because every capability flag resolves a policy that
+                // reads it, and `bookmarks` because `isBookmarked` does — both were
+                // lazy-loading once per row, which is a hundred queries on a full
+                // page before a single one of them answered anything.
+                //
+                // Bookmarks are narrowed to the actor: the field only ever asks
+                // whether *they* bookmarked it, and a popular message can carry a
+                // row per member otherwise.
+                ->eagerLoad(['user.groups', 'reactions', 'uploads', 'mentions', 'thread', 'flags', 'channel'])
+                ->eagerLoadWhere('bookmarks', fn ($query, Context $context) => $query->where('user_id', $context->getActor()->id))
                 ->paginate(50),
 
             // Creation goes through MessageDispatcher rather than Create's own

@@ -213,16 +213,6 @@ return [
         // continuously — see Realtime\ChatBroadcaster. Never serialised to the
         // forum: it changes nothing the client can see or act on.
         ->default('ramon-chat.queue_realtime', false)
-        // Which keystroke sends, as the forum *default*. Off keeps the chat
-        // convention — Enter sends, Shift+Enter breaks the line. On, Enter breaks
-        // the line and the message only leaves on Ctrl+Enter, for forums whose
-        // members write long multi-line messages and lose them to a stray Enter.
-        //
-        // Which of the two suits someone is a fact about how that person types,
-        // not about the forum, so this is only where the answer starts: each
-        // member overrides it from the channel panel via the
-        // `ramon-chat.sendWithCtrlEnter` preference below.
-        ->default('ramon-chat.send_with_ctrl_enter', false)
         // Notification sound. 'none' disables it; the others name a file under
         // assets/sounds, published to public/assets/extensions/ramon-chat.
         ->default('ramon-chat.notification_sound', 'chime')
@@ -236,7 +226,6 @@ return [
         ->serializeToForum('ramon-chat.maxUploadSize', 'ramon-chat.max_upload_size', 'intval')
         ->serializeToForum('ramon-chat.allowUploads', 'ramon-chat.allow_uploads', 'boolval')
         ->serializeToForum('ramon-chat.threadingDefault', 'ramon-chat.threading_default', 'boolval')
-        ->serializeToForum('ramon-chat.sendWithCtrlEnter', 'ramon-chat.send_with_ctrl_enter', 'boolval')
         ->serializeToForum('ramon-chat.notificationSound', 'ramon-chat.notification_sound')
         ->serializeToForum('ramon-chat.title', 'ramon-chat.title')
         ->serializeToForum('ramon-chat.icon', 'ramon-chat.icon')
@@ -274,7 +263,7 @@ return [
         // admin who had turned that on does not have it silently undone for
         // everyone the moment this preference exists. 'enter' and 'ctrl' are the
         // two explicit answers. See sendsOnCtrlEnter() in utils/shortcuts.ts.
-        ->registerPreference('ramon-chat.sendWithCtrlEnter', 'strVal', 'default'),
+        ->registerPreference('ramon-chat.sendWithCtrlEnter', 'strVal', 'enter'),
 
     // ── Non-JSON:API routes ──────────────────────────────────────────────────
     // These carry payloads JSON:API cannot express (multipart uploads) or are

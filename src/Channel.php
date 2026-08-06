@@ -20,6 +20,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
 
 /**
@@ -83,6 +84,14 @@ class Channel extends AbstractModel
     protected $table = 'chat_channels';
 
     public $timestamps = true;
+
+    /**
+     * Memberships already looked up on this instance, by user id. Per-instance
+     * and not static: a static would survive between actors in a queue worker.
+     *
+     * @var array<int, ChannelUser|null>
+     */
+    protected array $membershipCache = [];
 
 
     protected $casts = [
@@ -274,6 +283,22 @@ class Channel extends AbstractModel
             ->where('chat_channel_user.hidden', false);
     }
 
+    /**
+     * The same set as `participants`, for the endpoints that label direct
+     * channels.
+     *
+     * A relation of its own rather than eager-loading `participants`: that one is
+     * what `?include=participants` serves, and constraining it to direct channels
+     * would hand the members tab of a category channel an empty list. The
+     * constraint lives at eager-load time (`eagerLoadWhere`), because loading
+     * every member of every listed channel to label the handful of direct ones is
+     * the cost this exists to avoid.
+     */
+    public function directParticipants(): BelongsToMany
+    {
+        return $this->participants();
+    }
+
     public function memberships(): HasMany
     {
         return $this->hasMany(ChannelUser::class, 'channel_id');
@@ -296,16 +321,78 @@ class Channel extends AbstractModel
         return $this->belongsTo(\Flarum\Tags\Tag::class, 'tag_id');
     }
 
+    /**
+     * The membership of whoever is asking, for the endpoints that eager-load it.
+     *
+     * Deliberately unconstrained here: the constraint is applied at eager-load
+     * time (`eagerLoadWhere`), because only the endpoint knows the actor. Reading
+     * it directly off a model would give you an arbitrary member's row, which is
+     * why nothing but `membershipFor()` — which checks whose row it got — touches
+     * it.
+     */
+    public function actorMembership(): HasOne
+    {
+        return $this->hasOne(ChannelUser::class, 'channel_id');
+    }
+
+    /**
+     * Memoised on the instance, including the misses.
+     *
+     * ChannelPolicy reaches this from `postMessage`, `join` and `edit`, and the
+     * resource resolves all three for every channel the sidebar lists — so a
+     * fifty channel list ran the same lookup several times per row. Model
+     * instances do not outlive the request, so the cache cannot leak between
+     * actors; `forgetMembership()` covers the one case where the answer changes
+     * while the request is still running.
+     *
+     * `array_key_exists` rather than `isset`, so a cached "not a member" is not
+     * re-queried on every ask.
+     */
     public function membershipFor(?User $user): ?ChannelUser
     {
         if ($user === null || ! $user->exists) {
             return null;
         }
 
-        return $this->memberships()
+        $id = (int) $user->id;
+
+        if (array_key_exists($id, $this->membershipCache)) {
+            return $this->membershipCache[$id];
+        }
+
+        // The eager-loaded row, but only once it has proved it belongs to the user
+        // being asked about. A null there is ambiguous — it could mean "this actor
+        // is not a member" or "the relation was constrained to somebody else" — so
+        // it falls through to the query rather than answering wrongly.
+        if ($this->relationLoaded('actorMembership')) {
+            $loaded = $this->getRelation('actorMembership');
+
+            if ($loaded instanceof ChannelUser && (int) $loaded->user_id === $id) {
+                return $this->membershipCache[$id] = $loaded;
+            }
+        }
+
+        return $this->membershipCache[$id] = $this->memberships()
             ->where('user_id', $user->id)
             ->whereNull('left_at')
             ->first();
+    }
+
+    /**
+     * Drops a memoised membership after joining, leaving, or being added or
+     * removed — the mutation happens mid-request and the next read must see it.
+     *
+     * Passing null clears the lot, for a bulk change.
+     */
+    public function forgetMembership(?User $user = null): void
+    {
+        if ($user === null) {
+            $this->membershipCache = [];
+
+            return;
+        }
+
+        unset($this->membershipCache[(int) $user->id]);
     }
 
     /**

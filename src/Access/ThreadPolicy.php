@@ -18,9 +18,43 @@ use Ramon\Chat\Thread;
  */
 class ThreadPolicy extends AbstractPolicy
 {
+    public function __construct(
+        protected VisibilityCache $cache
+    ) {
+    }
+
+    /**
+     * Answered from the thread in hand wherever possible, and memoised either way
+     * — the same shape as MessagePolicy::view, and for the same reason: the thread
+     * list resolves capability fields per row, and asking the database whether a
+     * row you are holding exists is one `EXISTS` per thread on every draw.
+     *
+     * A thread is visible when its channel is and it is not deleted. Channel
+     * visibility is one memoised answer for the whole list.
+     *
+     * The query stays the fallback for a thread whose channel is not loaded.
+     */
     public function view(User $actor, Thread $thread): ?bool
     {
-        return Thread::whereVisibleTo($actor)->whereKey($thread->id)->exists() ?: null;
+        $visible = $this->cache->remember(
+            $actor,
+            'thread',
+            (int) $thread->id,
+            function () use ($actor, $thread) {
+                $channel = $thread->channel;
+
+                if ($channel === null) {
+                    return Thread::whereVisibleTo($actor)->whereKey($thread->id)->exists();
+                }
+
+                return ScopeThreadVisibility::rowVisibleTo(
+                    $thread,
+                    ScopeChannelVisibility::visibleTo($actor, $channel, $this->cache)
+                );
+            }
+        );
+
+        return $visible ?: null;
     }
 
     public function postMessage(User $actor, Thread $thread): ?bool

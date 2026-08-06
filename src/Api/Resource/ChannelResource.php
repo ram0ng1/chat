@@ -157,12 +157,52 @@ class ChannelResource extends AbstractDatabaseResource
                 // without the gate these endpoints would answer 200 with an empty
                 // collection to anyone, which is a slower way of saying no.
                 ->authenticated()
-                ->eagerLoad(['creator', 'lastMessage.user']),
+                ->eagerLoad(['creator', 'lastMessage.user'])
+                ->eagerLoadWhere(
+                    'actorMembership',
+                    fn ($query, Context $context) => $query
+                        ->where('user_id', $context->getActor()->id)
+                        ->whereNull('left_at')
+                )
+                // Restricted to direct channels: a category channel's label comes
+                // from its own name, and loading its whole membership to find that
+                // out is exactly the query this is meant to save.
+                ->eagerLoadWhere(
+                    'directParticipants',
+                    fn ($query) => $query->whereIn(
+                        'chat_channel_user.channel_id',
+                        Channel::query()
+                            ->where('type', Channel::TYPE_DIRECT)
+                            ->select('chat_channels.id')
+                    )
+                ),
 
             Endpoint\Index::make()
                 ->authenticated()
                 ->defaultSort('-lastMessageAt')
                 ->eagerLoad(['creator', 'lastMessage.user'])
+                // Seven fields on every row read the actor's membership, and the
+                // posting and joining policies read it again. Loaded once for the
+                // page instead of once per channel — `membershipFor()` checks the
+                // row belongs to the actor before trusting it.
+                ->eagerLoadWhere(
+                    'actorMembership',
+                    fn ($query, Context $context) => $query
+                        ->where('user_id', $context->getActor()->id)
+                        ->whereNull('left_at')
+                )
+                // Restricted to direct channels: a category channel's label comes
+                // from its own name, and loading its whole membership to find that
+                // out is exactly the query this is meant to save.
+                ->eagerLoadWhere(
+                    'directParticipants',
+                    fn ($query) => $query->whereIn(
+                        'chat_channel_user.channel_id',
+                        Channel::query()
+                            ->where('type', Channel::TYPE_DIRECT)
+                            ->select('chat_channels.id')
+                    )
+                )
                 ->paginate(50),
 
             // visible() is invoked as (model, context) when the context carries a
@@ -798,7 +838,13 @@ class ChannelResource extends AbstractDatabaseResource
             return $channel->name;
         }
 
-        $others = $channel->participants
+        // The eager-loaded set when the endpoint provided one, so a sidebar of
+        // direct channels costs one query rather than one per conversation.
+        $members = $channel->relationLoaded('directParticipants')
+            ? $channel->getRelation('directParticipants')
+            : $channel->participants;
+
+        $others = $members
             ->reject(fn (User $u) => $u->id === $actor->id)
             ->map(fn (User $u) => $u->display_name)
             ->values();

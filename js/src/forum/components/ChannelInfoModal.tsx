@@ -17,11 +17,7 @@ import chatState from "../state/chat";
 import { isOnline } from "../utils/presence";
 import { MembersSkeleton } from "./Skeletons";
 import { channelIcon } from "../utils/channelIcon";
-import {
-  forumSendsOnCtrlEnter,
-  sendKeyPreference,
-  type SendKey,
-} from "../utils/shortcuts";
+import { sendKeyPreference, type SendKey } from "../utils/shortcuts";
 import AddMembersModal from "./AddMembersModal";
 
 export interface ChannelInfoModalAttrs extends IInternalModalAttrs {
@@ -214,13 +210,6 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
               this.saveSendKey((e.target as HTMLSelectElement).value as SendKey)
             }
           >
-            <option value="default">
-              {app.translator.trans(
-                "ramon-chat.forum.info.send_key_default",
-                {},
-                true,
-              )}
-            </option>
             <option value="enter">
               {app.translator.trans(
                 "ramon-chat.forum.info.send_key_enter",
@@ -238,18 +227,11 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
           </select>
         </label>
 
-        {/* Which of the two "default" currently means is named rather than left
-            to be discovered by choosing it: the option is the only one whose
-            effect the label does not already state. */}
         <div className="helpText">
           {app.translator.trans(
-            preference === "default"
-              ? forumSendsOnCtrlEnter()
-                ? "ramon-chat.forum.info.send_key_help_default_ctrl"
-                : "ramon-chat.forum.info.send_key_help_default_enter"
-              : preference === "ctrl"
-                ? "ramon-chat.forum.info.send_key_help_ctrl"
-                : "ramon-chat.forum.info.send_key_help_enter",
+            preference === "ctrl"
+              ? "ramon-chat.forum.info.send_key_help_ctrl"
+              : "ramon-chat.forum.info.send_key_help_enter",
           )}
         </div>
       </div>
