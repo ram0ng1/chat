@@ -94,6 +94,13 @@
 @chat-font-meta:            12px;
 @chat-font-label:           13px;
 
+// ── Timings ──────────────────────────────────────────────────────────────────
+// How long a row stays lit after the stream jumps to it. Long enough to find
+// the row with your eyes after the smooth scroll settles, short enough that it
+// never reads as a state the message is stuck in. `jumpToMessage` removes the
+// class on the same schedule — keep the two in step.
+@chat-jump-highlight:       3s;
+
 // ── Chat-only semantic colours ───────────────────────────────────────────────
 :root {
   // The unread divider — Discourse's red "new messages" rule. Kept independent

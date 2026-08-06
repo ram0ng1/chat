@@ -816,11 +816,24 @@ export default class ChatState {
    *
    * Fire-and-forget: a failed read receipt is not worth surfacing, and the next
    * call will carry a newer marker anyway.
+   *
+   * Deliberately *not* gated on `hasUnread()`. A message arriving in the channel
+   * you are looking at is marked read without ever being badged — realtime's
+   * `bumpChannel` calls straight through here for the active channel — so the
+   * badge is already zero and that guard turned every one of those calls into a
+   * no-op. The marker then stopped at whatever was newest when the channel was
+   * opened. Nothing showed it while the marker only drove a badge that was
+   * correct anyway; read receipts read the marker directly, which is how it
+   * surfaced as "seen" never reaching the newest message.
+   *
+   * The comparison below is the honest guard: it stops exactly when the marker
+   * is already at or past the newest loaded message, which is also the condition
+   * the server uses to decide whether the move is worth broadcasting.
    */
   markRead(channelId: number): void {
     const channel = this.channel(channelId);
 
-    if (!channel || !channel.hasUnread()) return;
+    if (!channel) return;
 
     const stream = this.streams[channelId];
     const newest = stream?.messages[stream.messages.length - 1];

@@ -93,6 +93,11 @@ class MembershipManager
                 }
             }
 
+            // The instance memoises its lookups, and the endpoint that called this
+            // serialises the same instance straight afterwards — a stale miss here
+            // is a member told they are not one.
+            $channel->forgetMembership($user);
+
             return $membership;
         });
     }
@@ -128,6 +133,8 @@ class MembershipManager
             if (! $wasHidden && $channel->user_count > 0) {
                 $channel->decrement('user_count');
             }
+
+            $channel->forgetMembership($user);
 
             return $membership;
         });
@@ -167,6 +174,11 @@ class MembershipManager
         }
 
         $membership->save();
+
+        // This row was loaded by its own query, so the instance may be holding a
+        // different object for the same membership — drop it rather than let the
+        // next read answer with the pre-change preferences.
+        $channel->forgetMembership($user);
 
         return $membership;
     }

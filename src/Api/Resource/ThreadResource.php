@@ -64,7 +64,9 @@ class ThreadResource extends AbstractDatabaseResource
                 // collection to anyone, which is a slower way of saying no.
                 ->authenticated()
                 ->defaultInclude(['creator', 'originalMessage', 'originalMessage.user'])
-                ->eagerLoad(['lastMessage.user']),
+                // `channel` because every policy on a thread reads it, visibility
+                // included — the Index already loads it for the same reason.
+                ->eagerLoad(['lastMessage.user', 'channel']),
 
             Endpoint\Index::make()
                 ->authenticated()

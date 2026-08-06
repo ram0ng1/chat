@@ -21,13 +21,49 @@ use Ramon\Chat\Message;
 class MessagePolicy extends AbstractPolicy
 {
     public function __construct(
-        protected SettingsRepositoryInterface $settings
+        protected SettingsRepositoryInterface $settings,
+        protected VisibilityCache $cache
     ) {
     }
 
+    /**
+     * Answered from the message in hand wherever possible, and memoised either way.
+     *
+     * `edit`, `delete`, `react`, `flag`, `bookmark` and `viewRevisions` all fall
+     * through to here, and the message resource resolves every one of them for
+     * every row. Asking the database whether a row you are already holding is
+     * visible was fifty `EXISTS` queries — each carrying the channel visibility
+     * subquery — on every page of a channel.
+     *
+     * A message is visible when its channel is and the row-level rule allows it
+     * (ScopeMessageVisibility). Channel visibility is one memoised answer for the
+     * whole page, so the derived path costs nothing per message.
+     *
+     * The query remains the fallback for a message whose channel is not loaded —
+     * it is the authority, and guessing would be worse than the query it saves.
+     */
     public function view(User $actor, Message $message): ?bool
     {
-        return Message::whereVisibleTo($actor)->whereKey($message->id)->exists() ?: null;
+        $visible = $this->cache->remember(
+            $actor,
+            'message',
+            (int) $message->id,
+            function () use ($actor, $message) {
+                $channel = $message->channel;
+
+                if ($channel === null) {
+                    return Message::whereVisibleTo($actor)->whereKey($message->id)->exists();
+                }
+
+                return ScopeMessageVisibility::rowVisibleTo(
+                    $actor,
+                    $message,
+                    ScopeChannelVisibility::visibleTo($actor, $channel, $this->cache)
+                );
+            }
+        );
+
+        return $visible ?: null;
     }
 
     /**

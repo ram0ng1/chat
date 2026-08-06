@@ -13,6 +13,7 @@ use Flarum\Extension\ExtensionManager;
 use Flarum\Tags\Tag;
 use Flarum\User\User;
 use Illuminate\Database\Eloquent\Builder;
+use Ramon\Chat\Channel;
 
 /**
  * Restricts channel queries to what the actor may see.
@@ -24,6 +25,25 @@ use Illuminate\Database\Eloquent\Builder;
  */
 class ScopeChannelVisibility
 {
+    /**
+     * Whether this channel is inside the actor's visible set, memoised.
+     *
+     * Deliberately *not* `$actor->can('view', $channel)`. That answer goes through
+     * the Gate, which applies its `isAdmin() || hasPermission()` fallback whenever
+     * a policy abstains — so an administrator is told they can view a channel the
+     * scope excludes. Anything reasoning about what the *scope* would return has to
+     * ask the scope, or it grants access the query never would.
+     */
+    public static function visibleTo(User $actor, Channel $channel, VisibilityCache $cache): bool
+    {
+        return $cache->remember(
+            $actor,
+            'channel',
+            (int) $channel->id,
+            fn () => Channel::whereVisibleTo($actor)->whereKey($channel->id)->exists()
+        );
+    }
+
     public function __construct(protected ExtensionManager $extensions)
     {
     }

@@ -15,6 +15,7 @@ import { displayEmoji } from "../utils/emoji";
 import { isOnline } from "../utils/presence";
 import { authorAvatar, authorLink } from "../utils/bot";
 import { safeFileUrl } from "../utils/url";
+import { jumpToMessage } from "../utils/jumpToMessage";
 import { verifiedBadge } from "../utils/integrations";
 import FlagMessageModal from "./FlagMessageModal";
 import ImageLightbox from "./ImageLightbox";
@@ -434,19 +435,51 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
     );
   }
 
+  /**
+   * A prévia da mensagem respondida, acima do corpo.
+   *
+   * Clicar nela leva à original — é o que a citação já sugere, e sem isso o
+   * leitor precisa rolar procurando um trecho de 120 caracteres. Quando a
+   * original está fora da janela carregada o clique avisa em vez de não fazer
+   * nada, para o silêncio não parecer um botão quebrado.
+   *
+   * O elemento é um `button` e não a `div` de antes: só assim chega pelo teclado
+   * e é anunciado como algo acionável. O nome do autor continua sendo um link
+   * para o perfil, então o clique nele é deixado passar em vez de virar salto.
+   */
   protected replyPreview(message: Message): Mithril.Children {
     const target = message.replyTo();
 
     if (!target) return null;
 
     return (
-      <div className="ChatMessage-replyTo">
+      <button
+        type="button"
+        className="ChatMessage-replyTo"
+        title={app.translator.trans(
+          "ramon-chat.forum.message.reply_jump",
+          {},
+          true,
+        )}
+        onclick={(e: MouseEvent) => {
+          e.stopPropagation();
+
+          if ((e.target as HTMLElement | null)?.closest("a")) return;
+
+          if (!jumpToMessage(target.id()!, e.currentTarget as HTMLElement)) {
+            app.alerts.show(
+              { type: "error" },
+              app.translator.trans("ramon-chat.forum.message.reply_not_loaded"),
+            );
+          }
+        }}
+      >
         <i className="fas fa-reply" aria-hidden="true" />
         <span>{authorLink(target)}</span>
         <span className="ChatMessage-replyTo-content">
           {messagePreview(target, 120)}
         </span>
-      </div>
+      </button>
     );
   }
 
