@@ -14,6 +14,7 @@ use Flarum\User\User;
 use Mockery;
 use Ramon\Chat\Tests\unit\QueryTestCase;
 use Ramon\Chat\Access\MessagePolicy;
+use Ramon\Chat\Access\VisibilityCache;
 use Ramon\Chat\Channel;
 use Ramon\Chat\Message;
 
@@ -39,7 +40,10 @@ class MessagePolicyTest extends QueryTestCase
         $settings = Mockery::mock(SettingsRepositoryInterface::class);
         $settings->shouldReceive('get')->andReturn(0);
 
-        return new MessagePolicy($settings);
+        // A real cache, not a mock: it is a memo with no collaborators, and a
+        // mock would have to be told the answer to every `remember()` — which is
+        // the thing under test in the branches that reach visibility.
+        return new MessagePolicy($settings, new VisibilityCache());
     }
 
     protected function channel(bool $threading = true): Channel
