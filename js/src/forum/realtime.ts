@@ -496,15 +496,66 @@ function onMessageChanged(data: MessagePayload): void {
   // drawn from was false when the row was pushed and nothing had refreshed it.
   //
   // Only on a flip: an edit or a pin shares this event and moves none of them.
-  if (Boolean(data.isDeleted) !== wasDeleted) {
+  //
+  // And only for someone the answer can still be fetched for. A deleted message
+  // stays visible to its author and to moderators, and to nobody else — so for
+  // every other member in the channel this refetch is a request that can only
+  // 404. One deletion in a fifty-member channel meant fifty of them, each
+  // resolving the full message resource server-side to be refused.
+  if (Boolean(data.isDeleted) !== wasDeleted && mayStillRead(data)) {
     refreshMessageCapabilities(data.id);
   }
 
   m.redraw();
 }
 
+/**
+ * Whether this actor could still read the message once it is deleted.
+ *
+ * Mirrors ScopeMessageVisibility, whose row-level rule keeps a deleted message
+ * for its author and for holders of `ramon-chat.moderate`. Deliberately
+ * conservative: it answers false only when both are decidably untrue, so an
+ * unknown author means the refetch still happens and the server decides. Being
+ * wrong in that direction costs one request; the other direction would leave a
+ * moderator without the controls the refetch exists to deliver.
+ */
+function mayStillRead(data: MessagePayload): boolean {
+  if (app.forum.attribute<boolean>("canModerateChat")) return true;
+
+  const actorId = app.session.user?.id();
+
+  if (actorId === undefined || data.userId === null) return true;
+
+  return String(data.userId) === String(actorId);
+}
+
 /** Messages with a capability refetch already in flight. */
 const refetchingMessages = new Set<number>();
+
+/**
+ * Keeps core quiet about a refetch that was always allowed to come back empty.
+ *
+ * These refetches ask "what may *I* do with this now?" after something changed
+ * it. A 403 or a 404 is one of the answers — the row has become invisible to
+ * this actor, so the answer is "nothing" — and that is a state to record, not a
+ * failure to report. Deleting a message is the everyday case: the scope keeps a
+ * deleted message visible to its author and to moderators only, so every other
+ * member in the channel refetches a row they can no longer see.
+ *
+ * A `.catch()` on the promise does not help. `Application.requestErrorCatch`
+ * builds and shows the alert itself and only *then* rejects, so by the time a
+ * downstream catch runs the user has already been told the resource was not
+ * found. Suppressing it means supplying an `errorHandler` in the request
+ * options, which is the hook core checks before falling back to that default.
+ *
+ * Returning `false` for anything else hands those back to the default handler:
+ * a 500 here is a real failure and should still surface.
+ */
+const ignoreNoLongerVisible = (error: { status?: number }): false | void => {
+  if (error?.status === 403 || error?.status === 404) return;
+
+  return false;
+};
 
 /**
  * Re-reads one message so the actor's own capability flags are the server's.
@@ -523,9 +574,18 @@ export function refreshMessageCapabilities(id: number): void {
   refetchingMessages.add(id);
 
   app.store
-    .find("chat-messages", String(id))
-    // A purge racing the refetch leaves nothing to read. The row is being
-    // removed anyway, so there is nothing to report.
+    .find(
+      "chat-messages",
+      String(id),
+      {},
+      {
+        errorHandler: ignoreNoLongerVisible,
+      },
+    )
+    // Reaching here means the row is gone or no longer ours to see — a purge
+    // racing the refetch, or the ordinary case of a deleted message that only
+    // its author and moderators may still read. Either way there is nothing to
+    // report and nothing to change: the broadcast already applied the state.
     .catch(() => {})
     .then(() => {
       refetchingMessages.delete(id);
@@ -734,7 +794,14 @@ function refreshCapabilities(channelId: number): void {
   refetching.add(channelId);
 
   app.store
-    .find("chat-channels", String(channelId))
+    .find(
+      "chat-channels",
+      String(channelId),
+      {},
+      {
+        errorHandler: ignoreNoLongerVisible,
+      },
+    )
     .catch(() => {
       // The channel may have become invisible to us — a private channel we were
       // removed from. Leaving the stale record is better than throwing; the next
