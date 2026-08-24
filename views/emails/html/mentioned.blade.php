@@ -15,8 +15,21 @@
             shape. The post formatter is deliberately not involved: it is the
             pipeline for user content, and pointing it at our own template made the
             output depend on which formatting extensions the admin had enabled.
+
+            Substitution is done here rather than by the translator, and that is
+            load bearing. Core gives email views a MailTranslator that replaces
+            every parameter with an opaque marker, to be put back — escaped — by
+            the MailFormatter afterwards. That pairing only completes for a body
+            rendered through `$formatter->convert()`, and this one deliberately is
+            not: the markers had nothing to restore them and reached the inbox as
+            `flarumsafevalue…` in place of the author's name.
+
+            Passing no parameters leaves the placeholders in the string for
+            `strtr` to fill, which keeps this template's own escaping as the whole
+            of its defence — the same guarantee it always had, and one that does
+            not depend on how core happens to hand values to a translator.
         --}}
-        <p>{!! $translator->trans('ramon-chat.email.mentioned.html.intro', [
+        <p>{!! strtr($translator->trans('ramon-chat.email.mentioned.html.intro'), [
             '{author}'  => e($author),
             '{channel}' => e($channel),
         ]) !!}</p>
