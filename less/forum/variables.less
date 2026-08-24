@@ -117,6 +117,16 @@
   --chat-pinned-bg:          rgba(99, 102, 241, 0.10);
   --chat-pinned-border:      rgba(99, 102, 241, 0.75);
 
+  // The hover behind a destructive text control. A tint rather than a fill: the
+  // control is an offer, and a solid red block reads as an error state.
+  //
+  // Core's own `@error-color` (#d83e3e) at low alpha, so it sits under a label
+  // painted `--error-color` and the two read as one control. Note that the
+  // token that *sounds* right for that label — `--alert-error-color` — is #fff:
+  // it colours text on a red alert background, and using it here would paint
+  // the label white on a white dialog.
+  --chat-danger-tint:        rgba(216, 62, 62, 0.10);
+
   // Row states.
   --chat-row-hover-bg:       rgba(0, 0, 0, 0.035);
   --chat-row-selected-bg:    rgba(59, 130, 246, 0.10);
@@ -143,6 +153,7 @@
 
 [data-theme^="dark"] {
   --chat-unread-line:        #ff6b6b;
+  --chat-danger-tint:        rgba(255, 107, 107, 0.18);
   --chat-mention-bg:         rgba(255, 196, 0, 0.10);
   --chat-row-hover-bg:       rgba(255, 255, 255, 0.04);
   --chat-row-selected-bg:    rgba(96, 165, 250, 0.14);

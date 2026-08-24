@@ -2343,6 +2343,13 @@ body.ChatFullPage {
       }
     }
 
+    // "Close channel" and "Archive channel". Same controls, same defect, as the
+    // pair in ChannelFormModal: core's default `.Button` grey had no edge to
+    // read against on a tinted panel and looked disabled.
+    > .Button {
+      .chat-action-btn();
+    }
+
     .FormControl {
       width: 100%;
       margin-top: @chat-space-sm;
@@ -2407,7 +2414,9 @@ body.ChatFullPage {
 
     &-remove:hover:not(:disabled),
     &-remove:focus-visible {
-      color: var(--alert-error-color, #c0392b);
+      // `--error-color`, not `--alert-error-color`. The latter is #fff — the
+      // text colour for content sitting *on* a red alert background, not a red.
+      color: var(--error-color, #d83e3e);
     }
   }
 
@@ -2416,40 +2425,15 @@ body.ChatFullPage {
     padding: @chat-space-lg;
   }
 
-  // Deleting a channel is irreversible, so the control has to look like a
-  // control — it previously carried core's `Button--text`, which zeroes the
-  // padding and forces the background transparent, leaving a bare red string
-  // that read as a caption rather than something clickable.
-  //
-  // It is drawn as a button, sized and stacked like the routine actions above
-  // it so the modal keeps one rhythm, but tinted rather than filled: a solid
-  // red block next to the neutral buttons reads as an error state, and this is
-  // an offer, not a warning. The fill only arrives on hover, at the moment the
-  // pointer is actually on it.
-  &-deleteButton {
-    display: block;
-    width: 100%;
-    color: var(--alert-error-color, #c0392b);
-    background: transparent;
-    border: 1px solid var(--alert-error-color, #c0392b);
+  // Deleting a channel is irreversible. Shared with ChannelFormModal, which
+  // offers the same action from the channel's settings — see `.chat-danger-btn()`
+  // for why the colour is `--error-color` and not the token that sounds right.
+  &-danger &-deleteButton {
+    .chat-danger-btn();
 
-    &:hover:not(:disabled),
-    &:focus-visible:not(:disabled) {
-      color: #fff;
-      background-color: var(--alert-error-color, #c0392b);
-    }
-
-    // Core drives a `.Button`'s active/disabled background from --button-bg-*,
-    // which would repaint this one grey mid-click and undo the tint above.
-    &:active:not(:disabled) {
-      color: #fff;
-      background-color: var(--alert-error-color, #c0392b);
-    }
-
-    &:disabled,
-    &.disabled {
-      background: transparent;
-    }
+    // Optical: pulls the label back to the section's own left edge, past the
+    // padding the mixin adds for the hit area.
+    margin-left: -@chat-space-sm;
   }
 }
 
@@ -3201,7 +3185,27 @@ body.ChatFullPage {
   &-lifecycleActions {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: @chat-space-sm;
+
+    // The section is unfilled, so a default `.Button` — light grey on light grey
+    // — had no edge to read against and looked disabled.
+    > .Button {
+      .chat-action-btn();
+    }
+  }
+
+  // Destructive, so it gets its own line rather than a fourth slot in the row
+  // above — and the quiet text treatment rather than the surface the reversible
+  // actions carry. Same control, same look, as the one in ChannelInfoModal.
+  &-lifecycleDanger {
+    margin-top: @chat-space-md;
+  }
+
+  &-lifecycleDanger &-deleteButton {
+    .chat-danger-btn();
+
+    margin-left: -@chat-space-sm;
   }
 
   &-footer {
@@ -3440,7 +3444,9 @@ body.ChatFullPage {
     &-warning {
       margin-right: auto;
       font-size: @chat-font-meta;
-      color: var(--alert-error-color, #d83e3e);
+      // `--error-color`, not `--alert-error-color`: the latter is #fff, which
+      // rendered this warning white on the dialog's white footer.
+      color: var(--error-color, #d83e3e);
     }
   }
 }

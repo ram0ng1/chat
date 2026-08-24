@@ -56,6 +56,20 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
   private uploadingImage = false;
 
   /**
+   * Which immediate action is running, or null.
+   *
+   * Distinct from `loading`, and both are needed. `loading` is core's form-wide
+   * gate — it answers "is anything in flight", which is what every field and
+   * every button reads to disable itself, and that part was right.
+   *
+   * What it cannot answer is *which* action is running, and a spinner is a claim
+   * about one control rather than about the form. Driving four buttons from the
+   * one flag meant pressing Save spun Close, Archive and Delete along with it,
+   * as though the dialog had started four things at once.
+   */
+  private pending: "status" | "archive" | "delete" | null = null;
+
+  /**
    * A picture chosen on the create form, held until the channel exists.
    *
    * The upload route is addressed to a channel id, so on create there is nothing
@@ -586,7 +600,7 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
         <Button
           className="Button Button--primary"
           type="submit"
-          loading={this.loading}
+          loading={this.loading && this.pending === null}
           disabled={this.loading || this.name().trim() === ""}
         >
           {app.translator.trans(
@@ -952,7 +966,8 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
         <Button
           className="Button"
           icon={closed ? "fas fa-lock-open" : "fas fa-lock"}
-          loading={this.loading}
+          loading={this.pending === "status"}
+          disabled={this.loading}
           onclick={() => this.setStatus(closed ? "open" : "closed")}
         >
           {app.translator.trans(
@@ -969,7 +984,8 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
         <Button
           className="Button"
           icon="fas fa-box-archive"
-          loading={this.loading}
+          loading={this.pending === "archive"}
+          disabled={this.loading}
           onclick={() => this.archive()}
         >
           {app.translator.trans("ramon-chat.forum.info.archive_channel")}
@@ -977,25 +993,107 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
       );
     }
 
-    if (items.length === 0) return null;
+    // Deleting is offered from here as well as from the channel's info panel:
+    // this dialog is where "the channel's settings" live, and an irreversible
+    // action that exists only behind another surface reads as missing.
+    const canDelete = channel.canDelete();
+
+    if (items.length === 0 && !canDelete) return null;
 
     return (
       <div className="ChannelFormModal-lifecycle ChannelFormModal-section ChannelFormModal-section--wide">
         <label className="ChannelFormModal-sectionTitle">
           {app.translator.trans("ramon-chat.forum.edit_channel.lifecycle")}
         </label>
-        <div className="ChannelFormModal-lifecycleActions">{items}</div>
+
+        {items.length > 0 ? (
+          <div className="ChannelFormModal-lifecycleActions">{items}</div>
+        ) : null}
+
         <div className="helpText">
           {app.translator.trans("ramon-chat.forum.edit_channel.lifecycle_help")}
         </div>
+
+        {canDelete ? (
+          <div className="ChannelFormModal-lifecycleDanger">
+            <Button
+              className="Button ChannelFormModal-deleteButton"
+              icon="fas fa-trash"
+              loading={this.pending === "delete"}
+              disabled={this.loading}
+              onclick={() => this.destroy()}
+            >
+              {app.translator.trans("ramon-chat.forum.info.delete_channel")}
+            </Button>
+          </div>
+        ) : null}
       </div>
     );
   }
 
+  /**
+   * Deletes the channel and closes the dialog.
+   *
+   * Its own path rather than `act()`: that one posts to an endpoint and then
+   * hands the saved channel to `onSaved`, and neither makes sense once the
+   * record is gone. The callers that pass `onSaved` on the *edit* path use it to
+   * refresh a list, which is exactly what should happen here too — the create
+   * path cannot reach this code, because a channel that does not exist yet has
+   * no `canDelete()` to be true.
+   */
+  protected async destroy(): Promise<void> {
+    const channel = this.attrs.channel;
+
+    if (!channel) return;
+
+    if (
+      !confirm(
+        app.translator.trans("ramon-chat.forum.info.delete_confirm", {}, true),
+      )
+    )
+      return;
+
+    this.pending = "delete";
+    this.loading = true;
+    m.redraw();
+
+    try {
+      await channel.delete();
+
+      chatState.channels = chatState.channels.filter(
+        (c) => c.id() !== channel.id(),
+      );
+
+      // Leaving the active channel pointing at a deleted record strands the
+      // stream on something that can no longer be fetched.
+      if (chatState.activeChannelId === Number(channel.id())) {
+        chatState.setActiveChannel(null);
+      }
+
+      this.hide();
+
+      afterModalClosed(() => this.attrs.onSaved?.(channel));
+    } catch (e: any) {
+      app.alerts.show(
+        { type: "error" },
+        e?.response?.errors?.[0]?.detail ??
+          app.translator.trans("ramon-chat.forum.edit_channel.failed"),
+      );
+    } finally {
+      this.pending = null;
+      this.loading = false;
+      m.redraw();
+    }
+  }
+
   protected async setStatus(status: "open" | "closed"): Promise<void> {
-    await this.act(`/chat-channels/${this.attrs.channel!.id()}/status`, {
-      status,
-    });
+    await this.act(
+      "status",
+      `/chat-channels/${this.attrs.channel!.id()}/status`,
+      {
+        status,
+      },
+    );
   }
 
   protected async archive(): Promise<void> {
@@ -1010,13 +1108,25 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
     )
       return;
 
-    await this.act(`/chat-channels/${this.attrs.channel!.id()}/archive`, {});
+    await this.act(
+      "archive",
+      `/chat-channels/${this.attrs.channel!.id()}/archive`,
+      {},
+    );
   }
 
+  /**
+   * Runs one immediate state change.
+   *
+   * `action` names the button that owns the spinner for the duration; `loading`
+   * still gates the rest of the form, so nothing else can be started meanwhile.
+   */
   protected async act(
+    action: "status" | "archive",
     path: string,
     attributes: Record<string, unknown>,
   ): Promise<void> {
+    this.pending = action;
     this.loading = true;
     m.redraw();
 
@@ -1041,6 +1151,7 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
           app.translator.trans("ramon-chat.forum.edit_channel.failed"),
       );
     } finally {
+      this.pending = null;
       this.loading = false;
       m.redraw();
     }

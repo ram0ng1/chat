@@ -134,7 +134,7 @@ export default class ChatDrawer extends Component<ComponentAttrs> {
           <div className="ChatDrawer-actions">
             <Button
               className="Button Button--icon Button--flat"
-              icon="fas fa-up-right-and-down-left-from-center"
+              icon="fas fa-expand"
               title={app.translator.trans(
                 "ramon-chat.forum.drawer.full_screen",
                 {},
