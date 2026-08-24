@@ -221,14 +221,24 @@ class MentionEmailTest extends TestCase
     }
 
     /**
-     * Plain text is not an HTML context: a hostile name belongs in it verbatim,
-     * and `&lt;` would be the literal characters the reader sees.
+     * A hostile display name reaches the plain body inert.
+     *
+     * Core's plain layout runs the slot through `strip_tags()` and then Blade's
+     * escaping braces, so the tags are removed rather than escaped and the name
+     * arrives as its text alone. That is core's doing, not this template's —
+     * which is the point of asserting it here: this view hands the name over raw,
+     * on the understanding that the layout neutralises it, and a change to either
+     * side of that arrangement should fail loudly.
+     *
+     * The inner text is asserted as well as the absence of the tag. Without it
+     * the test would still pass if substitution stopped happening altogether and
+     * the name never appeared at all.
      */
-    public function test_the_plain_body_does_not_html_escape(): void
+    public function test_a_hostile_display_name_is_inert_in_the_plain_body(): void
     {
         $plain = $this->renderPlain(2);
 
-        $this->assertStringNotContainsString('&lt;', $plain);
-        $this->assertStringContainsString('<script>alert(1)</script>', $plain);
+        $this->assertStringNotContainsString('<script', $plain);
+        $this->assertStringContainsString('alert(1)', $plain);
     }
 }

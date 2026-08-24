@@ -7,9 +7,15 @@
     goes through `$formatter->convert()`. This one does not, so the markers
     reached the inbox verbatim.
 
-    The restoring half would be wrong here even if it ran — it escapes for HTML,
-    and this is the plain-text alternative, where `&lt;` is the literal text the
-    reader sees. Nothing is escaped in this template, and nothing should be.
+    The restoring half would be wrong here even if it ran: it escapes for HTML,
+    and core's plain layout escapes the slot again on the way out, so a name
+    holding `<` would reach the reader as the literal text `&lt;`.
+
+    Values are handed over raw for the same reason. Neutralising them is the
+    layout's job and it already does it — `x-mail::plain` runs the slot through
+    `strip_tags()` before Blade's braces escape what is left, so markup arrives
+    as its text alone. Escaping here as well would only add the entities that
+    layout is there to avoid.
 --}}
 {!! strtr($translator->trans('ramon-chat.email.mentioned.plain.body'), [
 '{author}'  => $blueprint->message->user?->display_name ?? $translator->trans('ramon-chat.email.mentioned.unknown_author'),
