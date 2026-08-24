@@ -96,6 +96,34 @@ class MessageFlagResource extends AbstractDatabaseResource
         // is the client's to state, through `filter[resolved]`.
     }
 
+    /**
+     * What each reported message needs loaded before it is serialised.
+     *
+     * The reports' own relations are not here and do not need to be: `user`,
+     * `message` and `resolvedBy` are declared relationships, so EloquentBuffer
+     * batches them across the whole page. What it does not cover is a relation
+     * read from inside a field getter or a policy, and that is all of these.
+     *
+     * They are the *included message's* relations rather than this resource's.
+     * Every reported message is serialised by MessageResource, which resolves
+     * nine capability flags — each running a policy that reads `channel` — plus
+     * the reaction, mention, bookmark and flag summaries. None of that goes
+     * through the buffer, so unloaded it was about seven queries per report, and
+     * this endpoint pages fifty at a time.
+     *
+     * The `message.` prefix is what carries them across: when the buffer loads
+     * the reported messages, `Endpoint::getEagerLoadsFor('message')` hands it
+     * everything named here beneath that relation.
+     */
+    protected const EAGER_LOAD = [
+        'message.user.groups',
+        'message.channel',
+        'message.reactions',
+        'message.uploads',
+        'message.mentions',
+        'message.flags',
+    ];
+
     public function endpoints(): array
     {
         return [
@@ -104,12 +132,22 @@ class MessageFlagResource extends AbstractDatabaseResource
                 ->can('ramon-chat.moderate')
                 ->defaultSort('-createdAt')
                 ->defaultInclude(['user', 'message', 'message.user', 'message.channel', 'resolvedBy'])
+                ->eagerLoad(self::EAGER_LOAD)
+                ->eagerLoadWhere(
+                    'message.bookmarks',
+                    fn ($query, Context $context) => $query->where('user_id', $context->getActor()->id)
+                )
                 ->paginate(50),
 
             Endpoint\Show::make()
                 ->authenticated()
                 ->can('ramon-chat.moderate')
-                ->defaultInclude(['user', 'message', 'message.user', 'message.channel', 'resolvedBy']),
+                ->defaultInclude(['user', 'message', 'message.user', 'message.channel', 'resolvedBy'])
+                ->eagerLoad(self::EAGER_LOAD)
+                ->eagerLoadWhere(
+                    'message.bookmarks',
+                    fn ($query, Context $context) => $query->where('user_id', $context->getActor()->id)
+                ),
 
             // Filing a report. Not a plain Create with writable fields: the message
             // has to be resolved and authorised before anything is written, and the

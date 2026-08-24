@@ -2414,9 +2414,41 @@ body.ChatFullPage {
   // Destructive actions are separated so they are not adjacent to routine ones.
   &-danger {
     padding: @chat-space-lg;
+  }
 
-    .Button {
-      color: var(--alert-error-color, #c0392b);
+  // Deleting a channel is irreversible, so the control has to look like a
+  // control — it previously carried core's `Button--text`, which zeroes the
+  // padding and forces the background transparent, leaving a bare red string
+  // that read as a caption rather than something clickable.
+  //
+  // It is drawn as a button, sized and stacked like the routine actions above
+  // it so the modal keeps one rhythm, but tinted rather than filled: a solid
+  // red block next to the neutral buttons reads as an error state, and this is
+  // an offer, not a warning. The fill only arrives on hover, at the moment the
+  // pointer is actually on it.
+  &-deleteButton {
+    display: block;
+    width: 100%;
+    color: var(--alert-error-color, #c0392b);
+    background: transparent;
+    border: 1px solid var(--alert-error-color, #c0392b);
+
+    &:hover:not(:disabled),
+    &:focus-visible:not(:disabled) {
+      color: #fff;
+      background-color: var(--alert-error-color, #c0392b);
+    }
+
+    // Core drives a `.Button`'s active/disabled background from --button-bg-*,
+    // which would repaint this one grey mid-click and undo the tint above.
+    &:active:not(:disabled) {
+      color: #fff;
+      background-color: var(--alert-error-color, #c0392b);
+    }
+
+    &:disabled,
+    &.disabled {
+      background: transparent;
     }
   }
 }

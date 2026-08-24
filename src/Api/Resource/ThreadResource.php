@@ -54,6 +54,30 @@ class ThreadResource extends AbstractDatabaseResource
         $query->whereVisibleTo($context->getActor());
     }
 
+    /**
+     * What a page of threads has to have in hand before it is serialised.
+     *
+     * `creator` and `originalMessage` were included but never loaded, and an
+     * include only decides what ends up in the response — the serialiser still
+     * reaches for the relation per row. At thirty threads a page that was a
+     * query per thread for each of them.
+     *
+     * The root message is the costly one: it is serialised by MessageResource,
+     * which resolves nine capability flags and four relation-backed summaries,
+     * so an unloaded root cost another seven or so queries per thread on its own.
+     */
+    protected const EAGER_LOAD = [
+        'channel',
+        'creator',
+        'lastMessage.user',
+        'originalMessage.user.groups',
+        'originalMessage.channel',
+        'originalMessage.reactions',
+        'originalMessage.uploads',
+        'originalMessage.mentions',
+        'originalMessage.flags',
+    ];
+
     public function endpoints(): array
     {
         return [
@@ -66,13 +90,34 @@ class ThreadResource extends AbstractDatabaseResource
                 ->defaultInclude(['creator', 'originalMessage', 'originalMessage.user'])
                 // `channel` because every policy on a thread reads it, visibility
                 // included — the Index already loads it for the same reason.
-                ->eagerLoad(['lastMessage.user', 'channel']),
+                ->eagerLoad(self::EAGER_LOAD)
+                ->eagerLoadWhere(
+                    'actorMembership',
+                    fn ($query, Context $context) => $query->where('user_id', $context->getActor()->id)
+                )
+                ->eagerLoadWhere(
+                    'originalMessage.bookmarks',
+                    fn ($query, Context $context) => $query->where('user_id', $context->getActor()->id)
+                ),
 
             Endpoint\Index::make()
                 ->authenticated()
                 ->defaultSort('-lastMessageAt')
                 ->defaultInclude(['creator', 'originalMessage', 'originalMessage.user'])
-                ->eagerLoad(['lastMessage.user', 'channel'])
+                ->eagerLoad(self::EAGER_LOAD)
+                // Four fields on every row read the actor's membership, and the
+                // renaming, posting and closing policies read it again. Loaded
+                // once for the page instead of once per thread —
+                // `membershipFor()` checks the row belongs to the actor before
+                // trusting it.
+                ->eagerLoadWhere(
+                    'actorMembership',
+                    fn ($query, Context $context) => $query->where('user_id', $context->getActor()->id)
+                )
+                ->eagerLoadWhere(
+                    'originalMessage.bookmarks',
+                    fn ($query, Context $context) => $query->where('user_id', $context->getActor()->id)
+                )
                 ->paginate(30),
 
             // ->can() rather than visible(): it resolves the ability against
@@ -144,6 +189,13 @@ class ThreadResource extends AbstractDatabaseResource
 
                     $membership->notification_level = $level;
                     $membership->save();
+
+                    // The response serialises this same thread, and four of its
+                    // fields read the membership back. Handing over the row just
+                    // saved keeps the memoised lookup from answering with what it
+                    // knew before the write.
+                    $thread->forgetMembership($actor);
+                    $thread->setRelation('actorMembership', $membership);
 
                     return $thread;
                 }),

@@ -53,6 +53,27 @@ export default class ChatState {
   channelsLoading = false;
   channelsLoaded = false;
 
+  /**
+   * The in-flight channel request, so concurrent callers share one round trip.
+   *
+   * The old guard returned `this.channels` the moment a request was already
+   * running, which is not the same thing: on a cold start that array is still
+   * empty, so whichever caller arrived second was handed `[]` and carried on as
+   * though the chat had no channels. Mount and the full-screen page's boot both
+   * fire on a direct visit to /chat, so the two raced on every such visit.
+   */
+  private channelsRequest: Promise<Channel[]> | null = null;
+
+  /**
+   * Whether drafts have been fetched this session.
+   *
+   * Drafts are written back by the composer as they change, so once fetched the
+   * in-memory copy is the newer of the two — refetching would at best confirm
+   * what is already held and at worst overwrite it with a slower round trip.
+   */
+  private draftsLoaded = false;
+  private draftsRequest: Promise<void> | null = null;
+
   /** Loaded message windows, keyed by channel id. */
   streams: Record<number, ChannelStream> = {};
 
@@ -291,26 +312,63 @@ export default class ChatState {
   // Channels
   // ───────────────────────────────────────────────────────────────────────────
 
-  async loadChannels(): Promise<Channel[]> {
-    if (this.channelsLoading) return this.channels;
+  /**
+   * Fetches the sidebar's channel list, at most once per session.
+   *
+   * Entering the chat used to refetch the whole list every time, which is what
+   * made the page flash its skeleton and rebuild itself on each visit: nothing
+   * distinguished "never asked" from "asked a moment ago", so leaving the chat
+   * and coming back paid for a full round trip before anything could render.
+   *
+   * The list does not need refetching, because nothing else lets it go stale.
+   * New messages, joins, leaves and channel edits all arrive over the websocket
+   * and are applied to these same objects; the poller is the backstop when the
+   * socket is down. A refetch on entry would duplicate work realtime has already
+   * done — which is the definition of the reload the user sees.
+   *
+   * `force` exists for the cases where that is not true: signing in or out
+   * changes whose channels these are, and the browse page can join one behind
+   * the list's back.
+   */
+  async loadChannels(force = false): Promise<Channel[]> {
+    // Join a request already in flight rather than issuing a second one.
+    if (this.channelsRequest) return this.channelsRequest;
+
+    if (this.channelsLoaded && !force) return this.channels;
 
     this.channelsLoading = true;
 
-    try {
-      const results = (await app.store.find("chat-channels", {
-        filter: { following: true },
-        sort: "-lastMessageAt",
-        page: { limit: 50 },
-      })) as unknown as Channel[];
+    this.channelsRequest = (async () => {
+      try {
+        const results = (await app.store.find("chat-channels", {
+          filter: { following: true },
+          sort: "-lastMessageAt",
+          page: { limit: 50 },
+        })) as unknown as Channel[];
 
-      this.channels = Array.isArray(results) ? results : [];
-      this.channelsLoaded = true;
+        this.channels = Array.isArray(results) ? results : [];
+        this.channelsLoaded = true;
 
-      return this.channels;
-    } finally {
-      this.channelsLoading = false;
-      m.redraw();
-    }
+        return this.channels;
+      } finally {
+        this.channelsLoading = false;
+        this.channelsRequest = null;
+        m.redraw();
+      }
+    })();
+
+    return this.channelsRequest;
+  }
+
+  /**
+   * Drops the cached channel list so the next read refetches.
+   *
+   * For the changes that invalidate the whole list rather than one row — an
+   * account change, or joining a channel from somewhere that does not already
+   * hold the model.
+   */
+  invalidateChannels(): void {
+    this.channelsLoaded = false;
   }
 
   channel(id: number | null): Channel | null {
@@ -574,7 +632,27 @@ export default class ChatState {
   // Pinned
   // ───────────────────────────────────────────────────────────────────────────
 
-  async loadPinnedPreview(channelId: number): Promise<void> {
+  /**
+   * Fetches the newest pin that sits above the loaded window, once per channel.
+   *
+   * `latestPinned()` already answers from the loaded window whenever it can, so
+   * this only exists for a pin far enough back that the stream has not reached
+   * it — which is a fixed fact about the channel's history, not something that
+   * needs re-asking on every visit. It was being refetched on every channel
+   * open, and each one is a full message read: the resource resolves nine
+   * capability policies and four relation-backed summaries to return one row.
+   *
+   * `channelId in this.pinnedPreviews` rather than a truthiness check, because
+   * `null` here means "asked, nothing pinned" and must not be re-asked; only
+   * `undefined` means "never asked".
+   *
+   * Realtime keeps the answer honest: a pin or unpin on a message this client
+   * already holds updates that model in place, and a pin on one it does not
+   * drops this cache — see `onMessageChanged`.
+   */
+  async loadPinnedPreview(channelId: number, force = false): Promise<void> {
+    if (!force && channelId in this.pinnedPreviews) return;
+
     try {
       const results = (await app.store.find("chat-messages", {
         filter: {
@@ -594,6 +672,17 @@ export default class ChatState {
     } finally {
       m.redraw();
     }
+  }
+
+  /**
+   * Drops a channel's cached pin, so the next open asks the server again.
+   *
+   * For the one case realtime cannot reconcile on its own: a message pinned
+   * above the loaded window, which this client is not holding and therefore
+   * cannot update in place.
+   */
+  invalidatePinnedPreview(channelId: number): void {
+    delete this.pinnedPreviews[channelId];
   }
 
   /**
@@ -989,6 +1078,14 @@ export default class ChatState {
     }, 1200);
   }
 
+  /**
+   * Restores saved composer drafts, at most once per session.
+   *
+   * Cached for the same reason the channel list is, and one more: this is the
+   * only reader of a value the composer is continuously writing. Refetching on
+   * every visit to the chat raced a save that had not yet landed, so a draft
+   * typed just before navigating away could come back as its previous revision.
+   */
   async loadDrafts(): Promise<void> {
     // Drafts belong to an account, and the endpoint is authenticated. Guarded here
     // rather than at each of the three call sites: a guest asking for them gets a
@@ -996,6 +1093,17 @@ export default class ChatState {
     // working, and a fourth call site would reintroduce it.
     if (!app.session.user) return;
 
+    if (this.draftsRequest) return this.draftsRequest;
+    if (this.draftsLoaded) return;
+
+    this.draftsRequest = this.fetchDrafts().finally(() => {
+      this.draftsRequest = null;
+    });
+
+    return this.draftsRequest;
+  }
+
+  private async fetchDrafts(): Promise<void> {
     try {
       const payload = await app.request<{ data: any[] }>({
         method: "GET",
@@ -1011,8 +1119,11 @@ export default class ChatState {
           ] = content;
         }
       }
+
+      this.draftsLoaded = true;
     } catch {
       // Drafts are a convenience; failing to restore them must not block the UI.
+      // Deliberately not marked loaded, so the next visit retries.
     }
   }
 

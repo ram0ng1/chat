@@ -17,6 +17,7 @@ use Flarum\User\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * A threaded sub-conversation hanging off one channel message.
@@ -38,6 +39,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property-read Message|null $lastMessage
  * @property-read User|null $creator
  * @property-read Collection<int, Message> $messages
+ * @property-read ThreadUser|null $actorMembership
  */
 class Thread extends AbstractModel
 {
@@ -51,6 +53,14 @@ class Thread extends AbstractModel
     protected $table = 'chat_threads';
 
     public $timestamps = true;
+
+    /**
+     * Memberships already looked up on this instance, by user id. Per-instance
+     * and not static: a static would survive between actors in a queue worker.
+     *
+     * @var array<int, ThreadUser|null>
+     */
+    protected array $membershipCache = [];
 
 
     protected $casts = [
@@ -116,18 +126,86 @@ class Thread extends AbstractModel
         return $this->hasMany(Message::class, 'thread_id');
     }
 
+    /**
+     * @return HasMany<ThreadUser, $this>
+     */
     public function memberships(): HasMany
     {
         return $this->hasMany(ThreadUser::class, 'thread_id');
     }
 
+    /**
+     * The membership of whoever is asking, for the endpoints that eager-load it.
+     *
+     * Deliberately unconstrained here: the constraint is applied at eager-load
+     * time (`eagerLoadWhere`), because only the endpoint knows the actor. Reading
+     * it directly off a model would give you an arbitrary member's row, which is
+     * why nothing but `membershipFor()` — which checks whose row it got — touches
+     * it.
+     *
+     * The same shape Channel uses, and for the same reason: four fields on every
+     * thread read this membership, and a page of threads was asking the database
+     * once per row.
+     */
+    /**
+     * @return HasOne<ThreadUser, $this>
+     */
+    public function actorMembership(): HasOne
+    {
+        return $this->hasOne(ThreadUser::class, 'thread_id');
+    }
+
+    /**
+     * Memoised on the instance, including the misses.
+     *
+     * `array_key_exists` rather than `isset`, so a cached "not a member" is not
+     * re-queried on every ask. Model instances do not outlive the request, so the
+     * cache cannot leak between actors.
+     */
     public function membershipFor(?User $user): ?ThreadUser
     {
         if ($user === null || ! $user->exists) {
             return null;
         }
 
-        return $this->memberships()->where('user_id', $user->id)->first();
+        $id = (int) $user->id;
+
+        if (array_key_exists($id, $this->membershipCache)) {
+            return $this->membershipCache[$id];
+        }
+
+        // The eager-loaded row, but only once it has proved it belongs to the user
+        // being asked about. A null there is ambiguous — it could mean "this actor
+        // is not a member" or "the relation was constrained to somebody else" — so
+        // it falls through to the query rather than answering wrongly.
+        if ($this->relationLoaded('actorMembership')) {
+            $loaded = $this->getRelation('actorMembership');
+
+            if ($loaded instanceof ThreadUser && (int) $loaded->user_id === $id) {
+                return $this->membershipCache[$id] = $loaded;
+            }
+        }
+
+        return $this->membershipCache[$id] = $this->memberships()
+            ->where('user_id', $user->id)
+            ->first();
+    }
+
+    /**
+     * Drops a memoised membership after joining or leaving — the mutation happens
+     * mid-request and the next read must see it.
+     *
+     * Passing null clears the lot, for a bulk change.
+     */
+    public function forgetMembership(?User $user = null): void
+    {
+        if ($user === null) {
+            $this->membershipCache = [];
+
+            return;
+        }
+
+        unset($this->membershipCache[(int) $user->id]);
     }
 
     /**

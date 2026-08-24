@@ -15,6 +15,8 @@ use Flarum\Notification\MailableInterface;
 use Flarum\Notification\NotificationSyncer;
 use Flarum\User\User;
 use Psr\Log\LoggerInterface;
+use Ramon\Chat\Access\PermissionSetVisibility;
+use Ramon\Chat\Access\ScopeMessageVisibility;
 use Ramon\Chat\ChannelUser;
 use Ramon\Chat\Event\MessageWasSent;
 use Ramon\Chat\Message;
@@ -176,10 +178,23 @@ class SendChatNotifications
 
         $recipients = [];
 
+        // One resolved answer per distinct permission set, shared across every
+        // chunk. A channel-wide mention used to run the visibility `EXISTS` — the
+        // one carrying the whole tag subquery — once per member, inside the
+        // request that sent the message; in a large channel that was the single
+        // slowest thing about posting an @here.
+        $visibility = new PermissionSetVisibility();
+        $channelId = (int) $message->channel_id;
+
         // Chunked so a channel-wide mention in a large channel does not load every
-        // member at once.
+        // member at once. `groups` eager-loaded because the bucket key reads it.
+        //
+        // `whereKey` rather than `whereIn('id', ...)`: the two do the same thing,
+        // but `whereIn` is reached through Eloquent's mixin onto the query builder
+        // and comes back typed as that builder, which loses the model type — and
+        // with it `with()`, and the User type every filter below depends on.
         foreach (array_chunk($userIds, 200) as $chunk) {
-            $users = User::query()->whereIn('id', $chunk)->get();
+            $users = User::query()->whereKey($chunk)->with('groups')->get();
 
             foreach ($users as $user) {
                 if ($user->getPreference('ramon-chat.enabled') === false) {
@@ -190,9 +205,17 @@ class SendChatNotifications
                     continue;
                 }
 
-                // The authoritative check. Cheaper filters above exist only to
-                // avoid running this one more often than needed.
-                if (! Message::whereVisibleTo($user)->whereKey($message->id)->exists()) {
+                // The authoritative check, in the form that costs no query for a
+                // message already in hand. Channel visibility is the only half
+                // that has to reach the database, and it is bucketed; the row-level
+                // half — moderators, and the author of a deleted message — is per
+                // user and decided in PHP. ScopeMessageVisibility keeps the two
+                // forms of this rule in step.
+                if (! ScopeMessageVisibility::rowVisibleTo(
+                    $user,
+                    $message,
+                    $visibility->channelVisible($user, $channelId)
+                )) {
                     continue;
                 }
 

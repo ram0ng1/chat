@@ -301,7 +301,7 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
         {channel.canDelete() ? (
           <div className="ChatChannelInfo-danger">
             <Button
-              className="Button Button--text"
+              className="Button ChatChannelInfo-deleteButton"
               icon="fas fa-trash"
               onclick={() => this.destroy()}
             >
