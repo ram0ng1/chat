@@ -41,6 +41,16 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
   private memberFilter = "";
   private working = false;
 
+  /**
+   * Which immediate action is running, or null.
+   *
+   * `working` answers "is anything in flight", which is what every control reads
+   * to disable itself. A spinner is a narrower claim — it says *this* button
+   * started something — and driving them all from the one flag meant changing
+   * the notification level spun Close and Archive along with it.
+   */
+  private pending: "status" | "archive" | "delete" | null = null;
+
   className(): string {
     return "ChatModal ChatChannelInfoModal Modal--medium";
   }
@@ -265,7 +275,8 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
         <Button
           className="Button"
           icon={closed ? "fas fa-lock-open" : "fas fa-lock"}
-          loading={this.working}
+          loading={this.pending === "status"}
+          disabled={this.working}
           onclick={() => this.setStatus(closed ? "open" : "closed")}
         >
           {app.translator.trans(
@@ -282,7 +293,8 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
         <Button
           className="Button"
           icon="fas fa-box-archive"
-          loading={this.working}
+          loading={this.pending === "archive"}
+          disabled={this.working}
           onclick={() => this.archive()}
         >
           {app.translator.trans("ramon-chat.forum.info.archive_channel")}
@@ -301,8 +313,10 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
         {channel.canDelete() ? (
           <div className="ChatChannelInfo-danger">
             <Button
-              className="Button Button--text"
+              className="Button ChatChannelInfo-deleteButton"
               icon="fas fa-trash"
+              loading={this.pending === "delete"}
+              disabled={this.working}
               onclick={() => this.destroy()}
             >
               {app.translator.trans("ramon-chat.forum.info.delete_channel")}
@@ -622,13 +636,21 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
   }
 
   protected async setStatus(status: "open" | "closed"): Promise<void> {
-    await this.act(`/chat-channels/${this.attrs.channel.id()}/status`, {
-      status,
-    });
+    await this.act(
+      "status",
+      `/chat-channels/${this.attrs.channel.id()}/status`,
+      {
+        status,
+      },
+    );
   }
 
   protected async archive(): Promise<void> {
-    await this.act(`/chat-channels/${this.attrs.channel.id()}/archive`, {});
+    await this.act(
+      "archive",
+      `/chat-channels/${this.attrs.channel.id()}/archive`,
+      {},
+    );
   }
 
   protected async destroy(): Promise<void> {
@@ -639,6 +661,7 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
     )
       return;
 
+    this.pending = "delete";
     this.working = true;
 
     try {
@@ -659,15 +682,24 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
         app.translator.trans("ramon-chat.forum.info.save_failed"),
       );
     } finally {
+      this.pending = null;
       this.working = false;
       m.redraw();
     }
   }
 
+  /**
+   * Runs one immediate state change.
+   *
+   * `action` names the button that owns the spinner for the duration; `working`
+   * still gates every other control, so nothing else can be started meanwhile.
+   */
   protected async act(
+    action: "status" | "archive",
     path: string,
     attributes: Record<string, unknown>,
   ): Promise<void> {
+    this.pending = action;
     this.working = true;
     m.redraw();
 
@@ -688,6 +720,7 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
           app.translator.trans("ramon-chat.forum.info.save_failed"),
       );
     } finally {
+      this.pending = null;
       this.working = false;
       m.redraw();
     }

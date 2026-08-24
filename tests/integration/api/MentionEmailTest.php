@@ -96,6 +96,16 @@ class MentionEmailTest extends TestCase
      */
     private function renderHtml(int $messageId): string
     {
+        return $this->render('html', $messageId);
+    }
+
+    private function renderPlain(int $messageId): string
+    {
+        return $this->render('plain', $messageId);
+    }
+
+    private function render(string $variant, int $messageId): string
+    {
         $container = $this->app()->getContainer();
 
         // `Extend\Locales` hooks `$container->resolving(LocaleManager::class, …)`, and
@@ -128,7 +138,7 @@ class MentionEmailTest extends TestCase
         $view = $container->make(Factory::class);
         $view->share($data);
 
-        return $view->make('ramon-chat::emails.html.mentioned', $data)->render();
+        return $view->make("ramon-chat::emails.{$variant}.mentioned", $data)->render();
     }
 
     public function test_the_body_is_real_html_not_escaped_markup(): void
@@ -165,5 +175,70 @@ class MentionEmailTest extends TestCase
 
         $this->assertStringNotContainsString('<script>alert(1)</script>', $html);
         $this->assertStringContainsString('&lt;script&gt;', $html);
+    }
+
+    /**
+     * Core hands email views a translator that swaps every parameter for an
+     * opaque marker, to be put back by the formatter afterwards. These templates
+     * deliberately do not render through that formatter — the locale string
+     * carries their markup and they escape their own values — so a marker that
+     * reaches the output has nothing left to restore it and ships as
+     * `flarumsafevalue…` where a name should be.
+     *
+     * Asserted on both variants and on the hostile account, because the leak is
+     * in how values reach the translator, not in any one string.
+     *
+     * @dataProvider renderedBodies
+     */
+    public function test_no_substitution_marker_survives_into_the_body(string $variant, int $messageId): void
+    {
+        $body = $this->render($variant, $messageId);
+
+        $this->assertStringNotContainsString('flarumsafevalue', $body);
+    }
+
+    public static function renderedBodies(): array
+    {
+        return [
+            'html'         => ['html', 1],
+            'plain'        => ['plain', 1],
+            'html hostile' => ['html', 2],
+            'plain hostile'=> ['plain', 2],
+        ];
+    }
+
+    /**
+     * The plain-text alternative is the half nothing covered, and it is where a
+     * leaked marker is most visible: there is no markup for a reader to blame it
+     * on, just the wrong word in the sentence.
+     */
+    public function test_the_plain_body_names_the_author_and_the_channel(): void
+    {
+        $plain = $this->renderPlain(1);
+
+        $this->assertStringContainsString('Ramon', $plain);
+        $this->assertStringContainsString('Geral', $plain);
+    }
+
+    /**
+     * A hostile display name reaches the plain body inert.
+     *
+     * Core's plain layout runs the slot through `strip_tags()` and then Blade's
+     * escaping braces, so the tags are removed rather than escaped and the name
+     * arrives as its text alone. That is core's doing, not this template's —
+     * which is the point of asserting it here: this view hands the name over raw,
+     * on the understanding that the layout neutralises it, and a change to either
+     * side of that arrangement should fail loudly.
+     *
+     * The inner text is asserted as well as the absence of the tag. Without it
+     * the test would still pass if substitution stopped happening altogether and
+     * the name never appeared at all.
+     */
+    public function test_a_hostile_display_name_is_inert_in_the_plain_body(): void
+    {
+        $plain = $this->renderPlain(2);
+
+        $this->assertStringNotContainsString('<script', $plain);
+        $this->assertStringContainsString('alert(1)', $plain);
     }
 }

@@ -462,7 +462,11 @@ function poll(): void {
   if (document.hidden) return;
   if (!chatState.channelsLoaded) return;
 
-  chatState.loadChannels().catch(() => {});
+  // Forced, because this is the one caller that genuinely wants a refetch: the
+  // list is cached for the session precisely so navigation does not re-fetch it,
+  // and the poller is the backstop that keeps it current when the websocket is
+  // not delivering. A cached read here would poll for nothing.
+  chatState.loadChannels(true).catch(() => {});
 
   const activeId = chatState.activeChannelId;
 

@@ -154,12 +154,28 @@ function userChannel(): any | null {
 export function bindRealtime(): boolean {
   if (!("flarum-realtime" in (flarum.extensions ?? {}))) return false;
 
+  // The sanctioned hand-off, and the fast one.
+  //
+  // flarum/realtime creates its client inside its own `mount` extender, so
+  // whether the channel exists when we ask depends on extension load order —
+  // which is why this used to poll. It registers `RealtimeState` eagerly at the
+  // top level of its forum bundle (not inside an initializer, and not as a
+  // lazily loaded chunk) precisely so extensions do not have to: the state
+  // object runs our callback the moment the user channel is subscribed, or
+  // immediately if it already is.
+  //
+  // That removes up to 4 seconds of the chat sitting on the polling fallback at
+  // startup, and with it the window where a message that arrived during boot was
+  // only picked up by the next poll.
+  if (bindViaRealtimeState()) return true;
+
   bindTo(userChannel());
 
   if (bound) return true;
 
-  // Realtime has not set up its client yet. Retry on a short schedule; the window
-  // is generous because the cost of giving up is a 15× slower chat.
+  // Realtime is present but older than the RealtimeState hand-off, or has not set
+  // up its client yet. Retry on a short schedule; the window is generous because
+  // the cost of giving up is a 15× slower chat.
   let attempts = 0;
 
   const timer = window.setInterval(() => {
@@ -186,6 +202,36 @@ export function bindRealtime(): boolean {
   // Reported as bound: the retry either succeeds or starts polling itself, and
   // returning false here would start a second poller.
   return true;
+}
+
+/**
+ * Registers the handlers through flarum/realtime's own readiness callback.
+ *
+ * Returns whether the hand-off was available at all — not whether the channel
+ * was ready. A registered callback that has not fired yet is still a success:
+ * it will fire, and starting the retry loop alongside it would race it.
+ *
+ * Read through `flarum.reg` because this is another extension's module. The
+ * registry is normally the fragile path — an `addChunkModule` entry resolves to
+ * `undefined` until its chunk executes — but this particular entry is added by a
+ * bare `flarum.reg.add()` at the top level of realtime's forum bundle, so it is
+ * present as soon as that bundle has run.
+ */
+function bindViaRealtimeState(): boolean {
+  try {
+    const state = flarum.reg.get("flarum-realtime", "forum/RealtimeState") as
+      { onUserChannelReady?: (cb: (channel: any) => void) => void } | undefined;
+
+    if (typeof state?.onUserChannelReady !== "function") return false;
+
+    state.onUserChannelReady((channel: any) => bindTo(channel));
+
+    return true;
+  } catch {
+    // An older realtime, or a registry that does not hold it. The caller falls
+    // back to reading the channel off the app instance.
+    return false;
+  }
 }
 
 /** Set by index.tsx so the retry can start polling without a circular import. */
@@ -402,7 +448,17 @@ function onMessageChanged(data: MessagePayload): void {
 
   // Only reconcile messages already on this client. A change to something never
   // loaded is not worth materialising.
-  if (!existing) return;
+  if (!existing) {
+    // With one exception. A pin on a message we are not holding is precisely
+    // what the pinned bar's fetched preview exists to show — it sits above the
+    // loaded window — and there is no model here to update in place. Dropping
+    // the cached preview makes the next open of the channel ask again.
+    if (data.isPinned) {
+      chatState.invalidatePinnedPreview(data.channelId);
+    }
+
+    return;
+  }
 
   const wasDeleted = Boolean(existing.isDeleted());
 
@@ -896,6 +952,14 @@ function bumpChannel(data: MessagePayload): void {
   // still have to move or the user is never told anything arrived.
   if (!channel) {
     chatState.bumpUnreadCounters(1, 0, true);
+
+    // Traffic in a channel the list has never heard of means the list is behind
+    // — an invite accepted elsewhere, or a direct message opened by someone
+    // else. The list is otherwise fetched once per session and kept current by
+    // these same events, so nothing would ever correct it; dropping the cache
+    // makes the next read go to the server instead of returning a list that is
+    // missing the channel the user was just told about.
+    chatState.invalidateChannels();
 
     return;
   }

@@ -2343,6 +2343,13 @@ body.ChatFullPage {
       }
     }
 
+    // "Close channel" and "Archive channel". Same controls, same defect, as the
+    // pair in ChannelFormModal: core's default `.Button` grey had no edge to
+    // read against on a tinted panel and looked disabled.
+    > .Button {
+      .chat-action-btn();
+    }
+
     .FormControl {
       width: 100%;
       margin-top: @chat-space-sm;
@@ -2407,17 +2414,26 @@ body.ChatFullPage {
 
     &-remove:hover:not(:disabled),
     &-remove:focus-visible {
-      color: var(--alert-error-color, #c0392b);
+      // `--error-color`, not `--alert-error-color`. The latter is #fff — the
+      // text colour for content sitting *on* a red alert background, not a red.
+      color: var(--error-color, #d83e3e);
     }
   }
 
   // Destructive actions are separated so they are not adjacent to routine ones.
   &-danger {
     padding: @chat-space-lg;
+  }
 
-    .Button {
-      color: var(--alert-error-color, #c0392b);
-    }
+  // Deleting a channel is irreversible. Shared with ChannelFormModal, which
+  // offers the same action from the channel's settings — see `.chat-danger-btn()`
+  // for why the colour is `--error-color` and not the token that sounds right.
+  &-danger &-deleteButton {
+    .chat-danger-btn();
+
+    // Optical: pulls the label back to the section's own left edge, past the
+    // padding the mixin adds for the hit area.
+    margin-left: -@chat-space-sm;
   }
 }
 
@@ -3169,7 +3185,27 @@ body.ChatFullPage {
   &-lifecycleActions {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: @chat-space-sm;
+
+    // The section is unfilled, so a default `.Button` — light grey on light grey
+    // — had no edge to read against and looked disabled.
+    > .Button {
+      .chat-action-btn();
+    }
+  }
+
+  // Destructive, so it gets its own line rather than a fourth slot in the row
+  // above — and the quiet text treatment rather than the surface the reversible
+  // actions carry. Same control, same look, as the one in ChannelInfoModal.
+  &-lifecycleDanger {
+    margin-top: @chat-space-md;
+  }
+
+  &-lifecycleDanger &-deleteButton {
+    .chat-danger-btn();
+
+    margin-left: -@chat-space-sm;
   }
 
   &-footer {
@@ -3408,7 +3444,9 @@ body.ChatFullPage {
     &-warning {
       margin-right: auto;
       font-size: @chat-font-meta;
-      color: var(--alert-error-color, #d83e3e);
+      // `--error-color`, not `--alert-error-color`: the latter is #fff, which
+      // rendered this warning white on the dialog's white footer.
+      color: var(--error-color, #d83e3e);
     }
   }
 }

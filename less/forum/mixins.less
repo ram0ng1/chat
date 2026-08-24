@@ -76,6 +76,72 @@
     opacity var(--avocado-t-fast);
 }
 
+// A state-changing action inside a dialog — "Close channel", "Archive channel".
+//
+// Core's plain `.Button` draws itself from `--button-bg`, which is a very light
+// grey. That is legible on the white body of a page and disappears against the
+// panels these dialogs are built from: light-grey control on a light-grey card,
+// with no edge to separate them. The buttons were there and read as disabled.
+//
+// So: an explicit surface and a real border, which is what makes a control look
+// pressable when the thing behind it is already tinted.
+.chat-action-btn() {
+  border: 1px solid var(--avocado-border-subtle);
+  background: var(--body-bg);
+  color: var(--avocado-text-dark);
+  font-weight: 600;
+
+  // Core paints hover, focus, active and disabled from the --button-bg-*
+  // variables, all of which would undo the surface above.
+  &:hover:not(:disabled),
+  &:focus-visible:not(:disabled) {
+    background-color: var(--avocado-surface-1);
+    border-color: var(--avocado-border-chip);
+    color: var(--avocado-text-dark);
+  }
+
+  &:active:not(:disabled) {
+    background-color: var(--avocado-surface-1);
+  }
+}
+
+// A destructive text control — "Delete channel".
+//
+// Deliberately lighter than `.chat-action-btn()`: deleting is irreversible, and
+// the restraint that suits it is a text control rather than another button
+// competing with the reversible actions beside it. It carries only what makes it
+// a control — a hit area, its own line box, and a hover the pointer can land on.
+//
+// The colour is `--error-color`. `--alert-error-color` reads like the obvious
+// token and is not one: core defines it as `#fff`, because it colours text
+// sitting *on* a red alert background. Naming it here paints the label white on
+// a white dialog — drawn, sized, clickable, and invisible.
+.chat-danger-btn() {
+  display: inline-flex;
+  width: auto;
+  padding: @chat-space-xs @chat-space-sm;
+  border: 0;
+  border-radius: @chat-radius-sm;
+  font-weight: 600;
+  line-height: 20px;
+  vertical-align: middle;
+  color: var(--error-color, #d83e3e);
+  background: transparent;
+
+  &:hover:not(:disabled),
+  &:focus-visible:not(:disabled),
+  &:active:not(:disabled) {
+    color: var(--error-color, #d83e3e);
+    background-color: var(--chat-danger-tint);
+    text-decoration: none;
+  }
+
+  &:disabled,
+  &.disabled {
+    background: transparent;
+  }
+}
+
 .chat-surface(@radius: @chat-radius-md) {
   border: 1px solid var(--avocado-border-subtle);
   border-radius: @radius;

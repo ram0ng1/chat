@@ -15,6 +15,7 @@ use Illuminate\Contracts\Container\Container;
 use Illuminate\Support\Collection;
 use Psr\Log\LoggerInterface;
 use Pusher\Pusher;
+use Ramon\Chat\Access\PermissionSetVisibility;
 use Ramon\Chat\Channel;
 use Ramon\Chat\ChannelUser;
 
@@ -129,16 +130,27 @@ class SendChatEventJob extends AbstractJob
 
         // A tag-bound channel inherits the tag's `viewForum`, and a membership row
         // outlives a permission change — so someone who joined before the category
-        // was restricted must not keep receiving pushes. This costs one query per
-        // member, which is why it is confined to the case that actually needs it.
+        // was restricted must not keep receiving pushes.
+        //
         // `whereKey` rather than `whereIn('id', ...)`: the two do the same thing,
         // but `whereIn` is reached through Eloquent's mixin onto the query builder
         // and comes back typed as that builder, which loses the model type and
         // turns the collection below into one of anonymous rows.
-        $users = User::query()->whereKey($memberIds->all())->get();
+        //
+        // `groups` eager-loaded because `permissionGroupIds()` reads it, and this
+        // runs inside the send request — leaving it lazy put the per-member query
+        // back in by another door.
+        $users = User::query()->whereKey($memberIds->all())->with('groups')->get();
+
+        // Decided once per distinct permission set rather than once per member.
+        // This runs inside the request that sent the message, so every query is
+        // latency the sender waits on, and the answer is the same for everyone
+        // whose permissions are the same. See PermissionSetVisibility.
+        $visibility = new PermissionSetVisibility();
+        $channelId = (int) $channel->id;
 
         return $users
-            ->filter(fn (User $user) => Channel::whereVisibleTo($user)->whereKey($channel->id)->exists())
+            ->filter(fn (User $user) => $visibility->channelVisible($user, $channelId))
             ->map(fn (User $user) => (int) $user->id)
             ->values();
     }
