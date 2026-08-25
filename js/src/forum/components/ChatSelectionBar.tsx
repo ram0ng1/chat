@@ -2,6 +2,7 @@ import app from "flarum/forum/app";
 import Component from "flarum/common/Component";
 import type { ComponentAttrs } from "flarum/common/Component";
 import Button from "flarum/common/components/Button";
+import Dropdown from "flarum/common/components/Dropdown";
 import type Mithril from "mithril";
 
 import type Channel from "../../common/models/Channel";
@@ -33,7 +34,6 @@ interface TranscriptResponse {
  */
 export default class ChatSelectionBar extends Component<ChatSelectionBarAttrs> {
   private working = false;
-  private moveTarget: string = "";
 
   view(): Mithril.Children {
     const { state } = this.attrs;
@@ -99,38 +99,35 @@ export default class ChatSelectionBar extends Component<ChatSelectionBarAttrs> {
 
     if (targets.length === 0) return null;
 
-    return (
-      <>
-        <select
-          className="FormControl ChatSelectionBar-target"
-          value={this.moveTarget}
-          onchange={(e: Event) => {
-            this.moveTarget = (e.target as HTMLSelectElement).value;
-          }}
-        >
-          <option value="">
-            {app.translator.trans(
-              "ramon-chat.forum.selection.move_to",
-              {},
-              true,
-            )}
-          </option>
-          {targets.map((target) => (
-            <option key={target.id()} value={String(target.id())}>
-              {target.displayName()}
-            </option>
-          ))}
-        </select>
+    const blocked = count === 0 || this.working;
 
-        <Button
-          className="Button Button--text"
-          icon="fas fa-right-left"
-          disabled={count === 0 || this.working || this.moveTarget === ""}
-          onclick={() => this.move()}
-        >
-          {app.translator.trans("ramon-chat.forum.message.move")}
-        </Button>
-      </>
+    // One control rather than a <select> plus a Move button. The pair cost two
+    // slots in a bar that has to fit a drawer, and the button sat disabled until
+    // a target was picked — dead UI for the whole time the menu was closed.
+    // Picking a channel here is the action; there is nothing left to confirm.
+    //
+    // The menu is positioned in components.less rather than through
+    // `menuClassName`: core strips its own placement classes on every open and
+    // recomputes them against the window, which is the wrong box for a bar
+    // pinned to the bottom of a drawer.
+    return (
+      <Dropdown
+        className="ChatSelectionBar-move"
+        buttonClassName="Button Button--text"
+        icon="fas fa-right-left"
+        label={app.translator.trans("ramon-chat.forum.selection.move_to")}
+        buttonAttrs={blocked ? { disabled: "true" } : {}}
+      >
+        {targets.map((target) => (
+          <Button
+            key={target.id()}
+            icon="fas fa-hashtag"
+            onclick={() => this.move(String(target.id()))}
+          >
+            {target.displayName()}
+          </Button>
+        ))}
+      </Dropdown>
     );
   }
 
@@ -231,7 +228,7 @@ export default class ChatSelectionBar extends Component<ChatSelectionBarAttrs> {
     }
   }
 
-  protected async move(): Promise<void> {
+  protected async move(target: string): Promise<void> {
     const { state, channel } = this.attrs;
     const ids = [...state.selected];
 
@@ -244,7 +241,7 @@ export default class ChatSelectionBar extends Component<ChatSelectionBarAttrs> {
         url: `${app.forum.attribute("apiUrl")}/chat/messages/move`,
         body: {
           data: {
-            attributes: { messageIds: ids, channelId: Number(this.moveTarget) },
+            attributes: { messageIds: ids, channelId: Number(target) },
           },
         },
       });
@@ -280,7 +277,6 @@ export default class ChatSelectionBar extends Component<ChatSelectionBarAttrs> {
 
     state.selecting = false;
     state.selected.clear();
-    this.moveTarget = "";
     m.redraw();
   }
 }

@@ -3,8 +3,9 @@
     Lucide "messages-square", recoloured to the Avocado palette.
 
     Avocado's own icon.svg uses #9EEA6C (highlight leaf), #89BA4F (leaf) and
-    #337D63 (deep green). The back bubble takes the deep green and the front one
-    the highlight, so the two read as distinct shapes at 24px without an outline.
+    #337D63 (deep green). The tile background is white, so the back bubble takes
+    the deep green and the front one the mid leaf: both hold contrast on white,
+    where the highlight leaf would wash out.
 
     Stroked rather than filled, matching Lucide, and `vector-effect` keeps the
     stroke weight honest if Flarum scales the icon in the extensions list.
@@ -15,7 +16,7 @@
       d="M20 9a2 2 0 0 1 2 2v10.286a.71.71 0 0 1-1.212.502l-2.202-2.202A2 2 0 0 0 17.172 19H10a2 2 0 0 1-2-2v-1"
     />
     <path
-      stroke="#9EEA6C"
+      stroke="#89BA4F"
       d="M16 10a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 14.286V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"
     />
   </g>

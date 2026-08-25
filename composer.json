@@ -20,8 +20,8 @@
         }
     ],
     "support": {
-        "issues": "https://github.com/ram0ng1/flarum-chat/issues",
-        "source": "https://github.com/ram0ng1/flarum-chat"
+        "issues": "https://github.com/ram0ng1/chat/issues",
+        "source": "https://github.com/ram0ng1/chat"
     },
     "require": {
         "php": "^8.3",
@@ -67,7 +67,7 @@
             ],
             "icon": {
                 "image": "icon.svg",
-                "backgroundColor": "#244C4E",
+                "backgroundColor": "#fff",
                 "backgroundSize": "58%",
                 "backgroundPosition": "center",
                 "backgroundRepeat": "no-repeat"
