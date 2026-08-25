@@ -1868,9 +1868,27 @@ body.ChatFullPage {
 }
 
 // ── Selection bar target picker ───────────────────────────────────────────────
-.ChatSelectionBar-target {
-  width: auto;
-  max-width: 180px;
+// Positioning is decided here, not by core's auto-flip. Core measures the menu
+// against the window on open (Dropdown.oncreate) and, crucially, strips
+// `--top`/`--right` first and re-adds them from its own arithmetic — so passing
+// those classes through `menuClassName` does not survive the open, and a short
+// menu near the bottom edge lands just inside the "it fits below" branch and
+// opens downward out of the panel. The bar is pinned to the bottom of the
+// channel in both the drawer and the full page, so downward is never right.
+// Winning on specificity (0,2,0) settles it for every open.
+.ChatSelectionBar-move {
+  .Dropdown-menu {
+    top: auto;
+    bottom: 100%;
+    left: auto;
+    right: 0;
+    margin-bottom: 4px;
+
+    // A big forum has more channels than fit on screen; the menu scrolls rather
+    // than growing past the top edge and pushing its first item out of reach.
+    max-height: 260px;
+    overflow-y: auto;
+  }
 }
 
 // ── Browse channels ──────────────────────────────────────────────────────────
@@ -2441,6 +2459,11 @@ body.ChatFullPage {
 // Bulk bar for "Quote in discussion" / "Copy" / "Move".
 .ChatSelectionBar {
   .chat-flex-row(8px);
+  // The bar lives in the drawer as well as the full page, so it has to survive
+  // ~320px of width. It breaks between the count and the actions before it
+  // breaks between two actions, and never inside one.
+  flex-wrap: wrap;
+  row-gap: 6px;
   position: sticky;
   bottom: 0;
   z-index: var(--avocado-z-sidebar);
@@ -2453,12 +2476,27 @@ body.ChatFullPage {
     font-size: @chat-font-label;
     font-weight: 800;
     color: var(--avocado-text-dark);
+    // "1 selected" was wrapping to two lines and dragging the bar's height with
+    // it. It is the one label here that must never break.
+    flex-shrink: 0;
+    white-space: nowrap;
   }
 
   &-actions {
     .chat-flex-row(6px);
     margin-left: auto;
     flex-wrap: wrap;
+    justify-content: flex-end;
+    row-gap: 4px;
+
+    // Buttons keep their own label on one line; the row breaks between them.
+    > * {
+      flex-shrink: 0;
+    }
+
+    .Button {
+      white-space: nowrap;
+    }
   }
 }
 

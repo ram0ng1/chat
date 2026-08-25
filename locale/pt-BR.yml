@@ -148,7 +148,6 @@ ramon-chat:
       purge: Excluir definitivamente
       purge_confirm: "Remover esta mensagem e o registro dela para sempre? Isso não pode ser desfeito."
       purge_failed: Não foi possível remover a mensagem.
-      move: Mover para canal
       quote_in_discussion: Citar em discussão
       select: Selecionar
       replying_to: "Respondendo a {username}"
