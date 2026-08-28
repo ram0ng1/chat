@@ -244,7 +244,7 @@ export default class BrowseChannelsPage<
         key={channel.id()}
       >
         <div className="ChatBrowseCard-head">
-          <div className="ChatBrowseCard-icon">{channelIcon(channel)}</div>
+          {channelIcon(channel, "ChatBrowseCard-icon")}
 
           <div className="ChatBrowseCard-headText">
             <div className="ChatBrowseCard-name">

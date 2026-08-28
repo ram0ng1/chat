@@ -60,7 +60,7 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
 
     return (
       <>
-        <span className="ChatChannelInfo-icon">{channelIcon(channel)}</span>
+        {channelIcon(channel, "ChatChannelInfo-icon")}
         {channel.displayName()}
       </>
     );

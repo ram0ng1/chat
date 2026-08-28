@@ -1,3 +1,4 @@
+import app from "flarum/common/app";
 import Model from "flarum/common/Model";
 import type User from "flarum/common/models/User";
 import type Message from "./Message";
@@ -107,6 +108,15 @@ export default class Channel extends Model {
   lastMessage = Model.hasOne<Message | null>("lastMessage");
   participants = Model.hasMany<User>("participants");
 
+  /**
+   * The other side of a conversation, default-included on the channel list.
+   *
+   * `participants` is only populated once something asks for it explicitly — the
+   * members tab — so the sidebar cannot read its avatars from there. Use
+   * `others()` rather than either relation directly.
+   */
+  directParticipants = Model.hasMany<User>("directParticipants");
+
   // ── Derived helpers ────────────────────────────────────────────────────────
 
   isDirect(): boolean {
@@ -139,6 +149,24 @@ export default class Channel extends Model {
 
   hasUnreadMentions(): boolean {
     return (this.unreadMentionsCount() ?? 0) > 0;
+  }
+
+  /**
+   * Everyone in the channel except the reader, for the avatars a direct channel
+   * shows in place of an icon.
+   *
+   * Reads the default-included `directParticipants` first and falls back to
+   * `participants`, which is present once the members tab has been opened. Both
+   * return `false` from `hasMany` when the relationship was never included, so
+   * neither can be trusted on its own.
+   */
+  others(): User[] {
+    const loaded = this.directParticipants() || this.participants() || [];
+    const actorId = app.session.user?.id();
+
+    return (loaded as (User | null)[]).filter(
+      (user): user is User => Boolean(user) && user!.id() !== actorId,
+    );
   }
 
   apiEndpoint(): string {

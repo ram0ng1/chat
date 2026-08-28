@@ -109,6 +109,7 @@ ramon-chat:
       collapse: Collapse
       full_screen: Open full screen
       close: Close chat
+      channel_actions: Channel actions
 
     sidebar:
       my_threads: My Threads
@@ -135,6 +136,7 @@ ramon-chat:
       view_info: Channel details
       search_in_channel: Search this channel
       pinned_messages: Pinned messages
+      view_all_pinned: "View all {count} pinned messages"
       close_pinned: Close pinned messages
       no_pinned_messages: No pinned messages in this channel.
       edit: Edit channel
@@ -461,6 +463,7 @@ ramon-chat:
       in_channel: "in {channel}"
       prompt: Type to search messages.
       empty: No messages match.
+      close: Close search
 
     revisions:
       title: Edit history

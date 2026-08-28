@@ -40,6 +40,23 @@ interface TypingEntry {
 const PAGE_SIZE = 50;
 
 /**
+ * The collection size a paginated response reports, or null when it does not.
+ *
+ * `Store#find` hangs the raw document off the array it returns, which is the
+ * only way to reach anything outside `data` — and json-api-server puts the count
+ * of the whole collection in `meta.page.total`. Reading it turns a `limit: 1`
+ * request into "the newest one, and how many there are", for the price of the
+ * one it was already making.
+ */
+function readTotal(results: unknown): number | null {
+  const total = (
+    results as { payload?: { meta?: { page?: { total?: unknown } } } } | null
+  )?.payload?.meta?.page?.total;
+
+  return typeof total === "number" ? total : null;
+}
+
+/**
  * Single source of truth for the chat UI.
  *
  * Components read from here and stay presentational. Keeping paging, read state,
@@ -92,6 +109,17 @@ export default class ChatState {
    */
   pinnedPreviews: Record<number, Message | null> = {};
 
+  /**
+   * How many pinned messages each channel has, as the server last counted them.
+   *
+   * Read from the preview request's own pagination meta rather than asked for
+   * separately. Kept apart from `pinnedPreviews` because it answers a different
+   * question — that one is "what does the bar show", this one is "is there more
+   * than that" — and because a channel can have a total without a preview when
+   * the preview request failed.
+   */
+  private pinnedTotals: Record<number, number> = {};
+
   /** Composer drafts, keyed by `channelId` or `channelId:threadId`. */
   drafts: Record<string, string> = {};
 
@@ -109,6 +137,19 @@ export default class ChatState {
    * other — see togglePinned() / setActiveThread().
    */
   showPinned = false;
+
+  /**
+   * Whether the drawer is showing search instead of the conversation.
+   *
+   * Drawer-only, and it exists because the full-screen page has a route for this
+   * and the drawer has none: `chat.search` is a page, so reaching it from the
+   * drawer navigated away and closed the drawer to do it — searching a
+   * conversation threw you out of the window you were searching from.
+   *
+   * Shares the overlay slot with the thread and pinned panels; the three toggles
+   * clear each other.
+   */
+  showSearch = false;
 
   /**
    * Drawer open/collapsed state.
@@ -309,6 +350,171 @@ export default class ChatState {
   }
 
   // ───────────────────────────────────────────────────────────────────────────
+  // Boot payload
+  // ───────────────────────────────────────────────────────────────────────────
+
+  /** Whether the boot payload has already been read; it is only ever good once. */
+  private bootHydrated = false;
+
+  /**
+   * Fills the state from the payload Content\PreloadChat put in the page.
+   *
+   * This is what removes the staggered flash the chat opened with. The list, the
+   * conversation, the pinned strip and the drafts were four requests fired after
+   * the page had already mounted, each swapping a placeholder for content as it
+   * landed; here they are already answered, and reading them is synchronous, so
+   * the first frame the user sees is the finished chat.
+   *
+   * Called from the initializer, before anything mounts. `app.data` is populated
+   * by `Application#load()`, which runs ahead of the initializers, so the payload
+   * is there — but `app.forum` and `app.session` are not yet, which is why
+   * nothing here may touch them.
+   *
+   * Every step is optional and independently guarded. A section the server could
+   * not produce, or a stream something has already loaded, is left alone and the
+   * ordinary async path serves it.
+   */
+  hydrateFromBoot(): void {
+    if (this.bootHydrated) return;
+
+    this.bootHydrated = true;
+
+    const boot = (app as unknown as { data?: Record<string, any> }).data
+      ?.ramonChat;
+
+    if (!boot) return;
+
+    try {
+      this.hydrateChannels(boot.channels);
+      this.hydrateDrafts(boot.drafts);
+
+      const channelId = Number(boot.channelId ?? 0);
+
+      if (channelId > 0) {
+        this.hydrateStream(this.stream(channelId), boot.messages, channelId);
+        this.hydratePinned(channelId, boot.pinned);
+      }
+
+      const threadId = Number(boot.threadId ?? 0);
+
+      if (threadId > 0) {
+        this.hydrateStream(this.threadStream(threadId), boot.threadMessages);
+      }
+    } catch {
+      // A preload that broke the chat would be worse than the flash it removes.
+      // Whatever was not hydrated is simply fetched the way it always was.
+    }
+  }
+
+  /**
+   * Pushes a JSON:API document into the store and returns its primary models.
+   *
+   * `null` for a document that is absent or malformed, which the callers treat as
+   * "the server did not answer this one". That is distinct from an empty `data`,
+   * which is a real answer — an account with no channels, a conversation with
+   * nothing pinned — and must be honoured rather than refetched.
+   */
+  private pushDocument<T>(document: unknown): T[] | null {
+    if (!document || typeof document !== "object") return null;
+
+    const data = (document as { data?: unknown }).data;
+
+    if (!Array.isArray(data)) return null;
+
+    const pushed = app.store.pushPayload(document as never) as unknown;
+
+    return (Array.isArray(pushed) ? pushed : [pushed]).filter(Boolean) as T[];
+  }
+
+  private hydrateChannels(document: unknown): void {
+    if (this.channelsLoaded) return;
+
+    const channels = this.pushDocument<Channel>(document);
+
+    if (channels === null) return;
+
+    this.channels = channels;
+    this.channelsLoaded = true;
+  }
+
+  private hydrateDrafts(document: unknown): void {
+    if (this.draftsLoaded) return;
+
+    const rows = (document as { data?: unknown })?.data;
+
+    if (!Array.isArray(rows)) return;
+
+    for (const row of rows) {
+      const { channelId, threadId, content } = row?.attributes ?? {};
+
+      if (channelId && content) {
+        this.drafts[
+          this.draftKey(Number(channelId), threadId ? Number(threadId) : null)
+        ] = content;
+      }
+    }
+
+    this.draftsLoaded = true;
+  }
+
+  /**
+   * Seeds one message window from a preloaded page.
+   *
+   * The page arrives newest-first, the way the endpoint sorts it, and is reversed
+   * for the same reason `fetchInto` reverses its own — the stream is held
+   * oldest-first so paging upwards prepends.
+   *
+   * `channelId` is passed only for a channel stream: it is what the unread
+   * divider is read from, and threads carry no read marker of their own.
+   */
+  private hydrateStream(
+    stream: ChannelStream,
+    document: unknown,
+    channelId?: number,
+  ): void {
+    if (stream.loadedInitial || stream.loading) return;
+
+    const page = this.pushDocument<Message>(document);
+
+    if (page === null) return;
+
+    if (channelId !== undefined) {
+      // Frozen here for the same reason loadChannel() freezes it: the divider
+      // marks where reading stopped last time, and must not follow the marker
+      // down the stream as markRead() catches it up.
+      const channel = this.channel(channelId);
+      const lastRead = channel?.lastReadMessageId() ?? 0;
+
+      stream.dividerAfterId =
+        lastRead > 0 && (channel?.unreadCount() ?? 0) > 0 ? lastRead : null;
+    }
+
+    if (page.length < PAGE_SIZE) stream.hasMore = false;
+
+    stream.messages = page.slice().reverse();
+    this.sortStream(stream);
+    stream.loadedInitial = true;
+  }
+
+  private hydratePinned(channelId: number, document: unknown): void {
+    if (channelId in this.pinnedPreviews) return;
+
+    const pinned = this.pushDocument<Message>(document);
+
+    if (pinned === null) return;
+
+    this.pinnedPreviews[channelId] = pinned[0] ?? null;
+
+    // The preloaded document is the same one the request would have returned, so
+    // it carries the same count. Read straight off it rather than through
+    // `readTotal`, which expects what the store hands back.
+    const total = (document as { meta?: { page?: { total?: unknown } } })?.meta
+      ?.page?.total;
+
+    this.pinnedTotals[channelId] = typeof total === "number" ? total : 0;
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
   // Channels
   // ───────────────────────────────────────────────────────────────────────────
 
@@ -367,6 +573,64 @@ export default class ChatState {
    * account change, or joining a channel from somewhere that does not already
    * hold the model.
    */
+  /**
+   * Marks a brand-new channel as loaded and empty, without asking the server.
+   *
+   * Only ever correct for a channel that was just created — the caller has to
+   * know that, which is why it is a separate method rather than a branch inside
+   * `loadChannel`. A channel inserted a moment ago in the transaction that
+   * answered the request has no messages and nothing pinned, and asking for
+   * either is a round trip whose answer is already known.
+   *
+   * Two requests saved on the path that most needs them: "Send message" on a
+   * profile, where the whole point is that the conversation opens at once.
+   */
+  seedEmptyChannel(channelId: number): void {
+    const stream = this.stream(channelId);
+
+    if (!stream.loadedInitial && !stream.loading) {
+      stream.messages = [];
+      stream.hasMore = false;
+      stream.dividerAfterId = null;
+      stream.loadedInitial = true;
+    }
+
+    if (!(channelId in this.pinnedPreviews)) {
+      this.pinnedPreviews[channelId] = null;
+    }
+  }
+
+  /**
+   * Puts a channel at the top of the sidebar, if it is not already listed.
+   *
+   * The list is sorted by last activity and a conversation just started is the
+   * most recent thing there is, so the front is where it belongs — and where the
+   * server would put it on the next fetch anyway.
+   */
+  rememberChannel(channel: Channel): void {
+    if (this.channels.some((existing) => existing.id() === channel.id()))
+      return;
+
+    this.channels.unshift(channel);
+  }
+
+  /**
+   * Warms everything opening a channel would ask for, without waiting for it.
+   *
+   * The boot payload only helps a page that was loaded from the server; arriving
+   * at the chat from a link, or switching channels once inside it, is a client-
+   * side navigation with nothing preloaded. Called from hover and focus, it turns
+   * the round trip into something that happens while the pointer is still moving,
+   * so the click lands on a conversation that is already there.
+   *
+   * Both calls are idempotent and self-guarding — a channel already loaded costs
+   * nothing — so this is safe to fire as often as the pointer moves.
+   */
+  prefetchChannel(channelId: number): void {
+    this.loadChannel(channelId).catch(() => {});
+    this.loadPinnedPreview(channelId).catch(() => {});
+  }
+
   invalidateChannels(): void {
     this.channelsLoaded = false;
   }
@@ -628,6 +892,19 @@ export default class ChatState {
     this.activeThreadId = null;
   }
 
+  /**
+   * Leaves whatever is covering the conversation in the drawer.
+   *
+   * Called when the drawer changes channel: a search or a pin list belongs to
+   * the channel it was opened from, and carrying it across to the next one shows
+   * one channel's results over another's conversation.
+   */
+  closeOverlays(): void {
+    this.showPinned = false;
+    this.showSearch = false;
+    this.activeThreadId = null;
+  }
+
   // ───────────────────────────────────────────────────────────────────────────
   // Pinned
   // ───────────────────────────────────────────────────────────────────────────
@@ -666,9 +943,16 @@ export default class ChatState {
 
       this.pinnedPreviews[channelId] =
         (Array.isArray(results) ? results[0] : null) ?? null;
+
+      // How many there are in total, which is what decides whether the bar
+      // offers a way into the full list. It comes back in this same response —
+      // json-api-server puts a count beside every paginated collection — so
+      // knowing it costs nothing beyond the request already being made.
+      this.pinnedTotals[channelId] = readTotal(results) ?? 0;
     } catch {
       // A missing bar is not worth an error; the pin itself still shows on the row.
       this.pinnedPreviews[channelId] = null;
+      this.pinnedTotals[channelId] = 0;
     } finally {
       m.redraw();
     }
@@ -683,6 +967,36 @@ export default class ChatState {
    */
   invalidatePinnedPreview(channelId: number): void {
     delete this.pinnedPreviews[channelId];
+    delete this.pinnedTotals[channelId];
+  }
+
+  /**
+   * How many pinned messages the channel has.
+   *
+   * The larger of what the server last counted and what is pinned in the loaded
+   * window, because neither sees everything: the count cannot know about a pin
+   * made since it was taken, and the window cannot know about one above it. Both
+   * being wrong in only one direction is what makes the maximum the honest
+   * answer rather than a guess.
+   *
+   * Used to decide whether the pinned bar is worth a second control. With one
+   * pin the bar already shows it and clicking jumps to it, so a panel listing
+   * that same message would be a click to see what is on screen.
+   */
+  pinnedCount(channelId: number): number {
+    const known = new Set<string>();
+
+    const preview = this.pinnedPreviews[channelId];
+
+    if (preview?.isPinned() && preview.id()) known.add(String(preview.id()));
+
+    for (const message of this.streams[channelId]?.messages ?? []) {
+      if (message.isPinned() && !message.isDeleted() && message.id()) {
+        known.add(String(message.id()));
+      }
+    }
+
+    return Math.max(this.pinnedTotals[channelId] ?? 0, known.size);
   }
 
   /**
@@ -712,12 +1026,23 @@ export default class ChatState {
     );
   }
 
-  /** The pinned panel and the thread panel occupy the same slot. */
+  /** The pinned panel, the search pane and the thread panel share one slot. */
   togglePinned(): void {
     this.showPinned = !this.showPinned;
 
     if (this.showPinned) {
       this.activeThreadId = null;
+      this.showSearch = false;
+    }
+  }
+
+  /** Search, in the drawer's overlay slot. See `showSearch`. */
+  toggleSearch(): void {
+    this.showSearch = !this.showSearch;
+
+    if (this.showSearch) {
+      this.activeThreadId = null;
+      this.showPinned = false;
     }
   }
 

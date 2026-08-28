@@ -169,13 +169,26 @@ class ChannelResource extends AbstractDatabaseResource
                 // out is exactly the query this is meant to save.
                 ->eagerLoadWhere(
                     'directParticipants',
-                    fn ($query) => $query->whereIn(
-                        'chat_channel_user.channel_id',
-                        Channel::query()
-                            ->where('type', Channel::TYPE_DIRECT)
-                            ->select('chat_channels.id')
-                    )
-                ),
+                    fn ($query, Context $context) => $query
+                        ->whereIn(
+                            'chat_channel_user.channel_id',
+                            Channel::query()
+                                ->where('type', Channel::TYPE_DIRECT)
+                                ->select('chat_channels.id')
+                        )
+                        // The reader is never part of their own label, and never one
+                        // of the avatars either — `displayName()` rejects them and so
+                        // does `Channel#others()` on the client. Dropped in SQL so the
+                        // row is not loaded, and so the actor's own user record is not
+                        // dragged into `included` on every channel list, where its
+                        // three unread counters each cost a query.
+                        ->where('users.id', '!=', (int) $context->getActor()->id)
+                )
+                // Serialised as well as loaded. The relation was already being
+                // fetched for the label; sending it costs nothing further and is
+                // what lets the sidebar draw a conversation's avatars on the
+                // first paint instead of after the members tab is opened.
+                ->defaultInclude(['directParticipants']),
 
             Endpoint\Index::make()
                 ->authenticated()
@@ -196,13 +209,22 @@ class ChannelResource extends AbstractDatabaseResource
                 // out is exactly the query this is meant to save.
                 ->eagerLoadWhere(
                     'directParticipants',
-                    fn ($query) => $query->whereIn(
-                        'chat_channel_user.channel_id',
-                        Channel::query()
-                            ->where('type', Channel::TYPE_DIRECT)
-                            ->select('chat_channels.id')
-                    )
+                    fn ($query, Context $context) => $query
+                        ->whereIn(
+                            'chat_channel_user.channel_id',
+                            Channel::query()
+                                ->where('type', Channel::TYPE_DIRECT)
+                                ->select('chat_channels.id')
+                        )
+                        // The reader is never part of their own label, and never one
+                        // of the avatars either — `displayName()` rejects them and so
+                        // does `Channel#others()` on the client. Dropped in SQL so the
+                        // row is not loaded, and so the actor's own user record is not
+                        // dragged into `included` on every channel list, where its
+                        // three unread counters each cost a query.
+                        ->where('users.id', '!=', (int) $context->getActor()->id)
                 )
+                ->defaultInclude(['directParticipants'])
                 ->paginate(50),
 
             // visible() is invoked as (model, context) when the context carries a
@@ -745,6 +767,27 @@ class ChannelResource extends AbstractDatabaseResource
                 ->type('users')
                 ->includable()
                 ->visible(fn (Channel $c, Context $context) => $context->getActor()->can('viewMembers', $c)),
+
+            /*
+             * The other side of a direct channel, for the avatars the sidebar draws
+             * in place of a channel icon.
+             *
+             * `participants` cannot serve this. That one is what the members tab
+             * asks for, and default-including it on the channel list would ship
+             * every member of every category channel on every page load. This
+             * relation is eager-loaded only for direct channels — see the
+             * `eagerLoadWhere` on Index and Show — so default-including it costs
+             * the single row a conversation actually has.
+             *
+             * Without it the sidebar had no participants to draw and fell back to
+             * an envelope, and the avatars appeared only once something else had
+             * fetched `?include=participants` into the store: opening the channel's
+             * settings and switching to the Members tab.
+             */
+            Schema\Relationship\ToMany::make('directParticipants')
+                ->type('users')
+                ->includable()
+                ->visible(fn (Channel $c, Context $context) => $c->isDirect() && $context->getActor()->can('viewMembers', $c)),
         ];
     }
 

@@ -2,15 +2,19 @@ import app from "flarum/forum/app";
 import Component from "flarum/common/Component";
 import type { ComponentAttrs } from "flarum/common/Component";
 import Button from "flarum/common/components/Button";
+import Dropdown from "flarum/common/components/Dropdown";
 import classList from "flarum/common/utils/classList";
 import type Mithril from "mithril";
 
 import type Channel from "../../common/models/Channel";
 import chatState from "../state/chat";
+import { channelIcon } from "../utils/channelIcon";
+import { channelActions, openChannelInfo } from "../utils/channelActions";
 import ChatSidebar from "./ChatSidebar";
 import ErrorBoundary from "./ErrorBoundary";
 import ChannelView from "./ChannelView";
 import PinnedPanel from "./PinnedPanel";
+import ChatSearch from "./ChatSearch";
 import ThreadPanel from "./ThreadPanel";
 import { chatTitle, chatIcon } from "../utils/branding";
 import { isNarrowViewport } from "../utils/surface";
@@ -83,14 +87,17 @@ export default class ChatDrawer extends Component<ComponentAttrs> {
       >
         <div
           className="ChatDrawer-header"
-          onclick={() => this.toggleCollapsed()}
+          onclick={(e: Event) => this.onHeaderClick(e)}
         >
           {channel ? (
             <Button
               className="Button Button--icon Button--flat"
               icon="fas fa-chevron-left"
-              onclick={(e: Event) => {
-                e.stopPropagation();
+              onclick={() => {
+                // Whatever was covering the conversation belongs to the channel
+                // being left; carrying it back would show one channel's results
+                // over the list.
+                chatState.closeOverlays();
                 chatState.setActiveChannel(null);
               }}
             />
@@ -98,9 +105,27 @@ export default class ChatDrawer extends Component<ComponentAttrs> {
             <i className={icon} aria-hidden="true" />
           ) : null}
 
-          <span className="ChatDrawer-title">
-            {channel ? channel.displayName() : title}
-          </span>
+          {/* The channel's mark and name, in the drawer's own bar.
+              ChannelView draws no header of its own while embedded — two bars
+              stacked in a 320px panel spent 88px naming the same channel twice.
+              Clicking opens the details, the way the channel header's title
+              does, so the gesture is the same in both places. */}
+          {channel ? (
+            <button
+              type="button"
+              className="ChatDrawer-title ChatDrawer-title--channel"
+              onclick={() => {
+                openChannelInfo(channel);
+              }}
+            >
+              {channelIcon(channel, "ChatDrawer-icon")}
+              <span className="ChatDrawer-titleText">
+                {channel.displayName()}
+              </span>
+            </button>
+          ) : (
+            <span className="ChatDrawer-title">{title}</span>
+          )}
 
           {/* Collapsed, the drawer is a bar with no stream to look at — so unread
               activity has to surface on the header itself or it goes unnoticed.
@@ -132,6 +157,15 @@ export default class ChatDrawer extends Component<ComponentAttrs> {
           ) : null}
 
           <div className="ChatDrawer-actions">
+            {/* The channel's own actions, behind one control rather than four.
+                They are the same set the full-screen header spreads across its
+                bar — see utils/channelActions — but the window controls beside
+                them are not optional, and seven icons do not fit 320px. Absent
+                while collapsed, where there is no channel on screen to act on. */}
+            {channel && !chatState.drawerCollapsed
+              ? this.channelMenu(channel)
+              : null}
+
             <Button
               className="Button Button--icon Button--flat"
               icon="fas fa-expand"
@@ -140,8 +174,7 @@ export default class ChatDrawer extends Component<ComponentAttrs> {
                 {},
                 true,
               )}
-              onclick={(e: Event) => {
-                e.stopPropagation();
+              onclick={() => {
                 this.goFullScreen();
               }}
             />
@@ -159,8 +192,7 @@ export default class ChatDrawer extends Component<ComponentAttrs> {
                 {},
                 true,
               )}
-              onclick={(e: Event) => {
-                e.stopPropagation();
+              onclick={() => {
                 this.toggleCollapsed();
               }}
             />
@@ -172,8 +204,7 @@ export default class ChatDrawer extends Component<ComponentAttrs> {
                 {},
                 true,
               )}
-              onclick={(e: Event) => {
-                e.stopPropagation();
+              onclick={() => {
                 this.close();
               }}
             />
@@ -186,6 +217,77 @@ export default class ChatDrawer extends Component<ComponentAttrs> {
           </div>
         )}
       </div>
+    );
+  }
+
+  /**
+   * Clicking the bar folds the drawer — unless the click was on something in it.
+   *
+   * The controls used to each call `stopPropagation` to opt out, which worked
+   * only for as long as every one of them was a plain button. It stopped working
+   * the moment the overflow menu arrived: Bootstrap opens a dropdown from a
+   * handler delegated on `document`, so the very thing that kept the bar from
+   * folding also kept the menu from opening.
+   *
+   * Asking what was clicked instead leaves the event free to reach the document,
+   * which is what both opening the menu and closing it by clicking away depend
+   * on. `.Dropdown` is listed alongside the elements because the menu's own
+   * padding is part of it and is not a button.
+   */
+  protected onHeaderClick(e: Event): void {
+    const target = e.target as HTMLElement | null;
+
+    if (target?.closest("button, a, input, .Dropdown")) return;
+
+    this.toggleCollapsed();
+  }
+
+  /**
+   * The channel's actions, as a menu.
+   *
+   * The wrapper carries no click handler, and must not: Bootstrap opens a
+   * dropdown from a handler delegated on `document` —
+   * `on('click.bs.dropdown.data-api', '[data-toggle="dropdown"]', …)` — so a
+   * `stopPropagation` anywhere between the toggle and the document swallows the
+   * click that would have opened it. That is what left this menu inert. The
+   * header guards itself instead; see `onHeaderClick`.
+   */
+  protected channelMenu(channel: Channel): Mithril.Children {
+    const actions = channelActions(channel, chatState, { embedded: true });
+
+    if (actions.length === 0) return null;
+
+    return (
+      <span className="ChatDrawer-channelMenu">
+        <Dropdown
+          buttonClassName="Button Button--icon Button--flat"
+          icon="fas fa-ellipsis"
+          label={app.translator.trans(
+            "ramon-chat.forum.drawer.channel_actions",
+            {},
+            true,
+          )}
+          accessibleToggleLabel={app.translator.trans(
+            "ramon-chat.forum.drawer.channel_actions",
+            {},
+            true,
+          )}
+        >
+          {actions.map((action) => (
+            <Button
+              key={action.key}
+              // `active` is not a Button attr; core marks a selected menu item
+              // with the class, which is what its own dropdowns are styled on.
+              className={classList({ active: action.active })}
+              icon={action.icon}
+              loading={action.loading}
+              onclick={action.onclick}
+            >
+              {action.label}
+            </Button>
+          ))}
+        </Dropdown>
+      </span>
     );
   }
 
@@ -301,6 +403,26 @@ export default class ChatDrawer extends Component<ComponentAttrs> {
       return panes;
     }
 
+    // Search covers the conversation the same way, and for the same reason it is
+    // here at all: `chat.search` is a page, so opening it from the drawer routed
+    // away and closed the drawer on arrival.
+    if (channel && chatState.showSearch) {
+      panes.push(
+        <ChatSearch
+          key={`search-${channel.id()}`}
+          state={chatState}
+          channelId={Number(channel.id())}
+          embedded
+          onClose={() => {
+            chatState.showSearch = false;
+            m.redraw();
+          }}
+        />,
+      );
+
+      return panes;
+    }
+
     // The drawer has no room for a side panel, so the pinned list covers the
     // conversation instead — the arrangement the thread panel uses on a phone.
     if (channel && chatState.showPinned) {
@@ -322,6 +444,9 @@ export default class ChatDrawer extends Component<ComponentAttrs> {
   }
 
   protected select(channel: Channel): void {
+    // Same reason as the back button: a search left open would have the next
+    // channel opening straight into the previous one's results.
+    chatState.closeOverlays();
     chatState.setActiveChannel(Number(channel.id()));
     m.redraw();
   }
@@ -360,16 +485,26 @@ export default class ChatDrawer extends Component<ComponentAttrs> {
 
   /**
    * Opens the drawer, loading the channel list on first open.
+   *
+   * The redraw comes before the load, not after it. Awaiting first meant the
+   * drawer stayed invisible for a whole round trip and then appeared complete,
+   * which reads as the button being slow rather than as the list being fetched —
+   * and it is worst on the one path that already knows what it wants to show,
+   * "Send message" on a profile, where the conversation is in the store before
+   * this is called. The sidebar draws its skeleton in the meantime.
    */
   static async open(): Promise<void> {
     chatState.setDrawerOpen(true);
     chatState.setDrawerCollapsed(false);
 
-    if (!chatState.channelsLoaded) {
-      // loadDrafts() is a no-op for a guest; see ChatState.
-      await Promise.all([chatState.loadChannels(), chatState.loadDrafts()]);
-    }
-
     m.redraw();
+
+    if (chatState.channelsLoaded) return;
+
+    // loadDrafts() is a no-op for a guest; see ChatState. Both redraw when they
+    // land, so nothing further is needed here.
+    await Promise.all([chatState.loadChannels(), chatState.loadDrafts()]).catch(
+      () => {},
+    );
   }
 }

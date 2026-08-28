@@ -30,6 +30,10 @@ return [
         // shortcodes silently stop resolving beyond the small built-in set.
         ->jsDirectory(__DIR__.'/js/dist/forum')
         ->css(__DIR__.'/less/forum.less')
+        // Everything the chat draws on first paint, in the boot payload, so the
+        // page opens complete instead of filling in over three round trips. Runs
+        // for chat routes only — see PreloadChat, which guards on the route name.
+        ->content(Content\PreloadChat::class)
         // Full-screen mode. The drawer is rendered over whatever page is open,
         // so it needs no route of its own.
         ->route('/chat', 'chat.index', Frontend\RequireChatAccess::class)

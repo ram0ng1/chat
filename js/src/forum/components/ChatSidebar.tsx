@@ -1,7 +1,6 @@
 import app from "flarum/forum/app";
 import Component from "flarum/common/Component";
 import type { ComponentAttrs } from "flarum/common/Component";
-import Avatar from "flarum/common/components/Avatar";
 import Button from "flarum/common/components/Button";
 import classList from "flarum/common/utils/classList";
 import type Mithril from "mithril";
@@ -29,6 +28,15 @@ interface SectionAction {
  * sections — the same order and grouping as Discourse's chat sidebar.
  */
 export default class ChatSidebar extends Component<ChatSidebarAttrs> {
+  /** Pending hover-intent timer; see the pointer handlers on a channel row. */
+  private prefetchTimer: number | null = null;
+
+  onremove(vnode: Mithril.VnodeDOM<ChatSidebarAttrs, this>): void {
+    super.onremove(vnode);
+
+    this.cancelPrefetch();
+  }
+
   view(): Mithril.Children {
     const { state } = this.attrs;
 
@@ -269,12 +277,16 @@ export default class ChatSidebar extends Component<ChatSidebarAttrs> {
           "ChatChannelRow--muted": channel.isMuted(),
         })}
         onclick={() => onSelect?.(channel)}
+        // Hover intent, not hover: sweeping the pointer down the list to reach
+        // the bottom row would otherwise fetch every conversation it crossed.
+        // 120ms is long enough that only a pointer that stopped here counts.
+        onpointerenter={() => this.schedulePrefetch(channel)}
+        onpointerleave={() => this.cancelPrefetch()}
+        // Keyboard arrives without a pointer, and a channel reached by tabbing
+        // deserves the same head start.
+        onfocus={() => this.attrs.state.prefetchChannel(Number(channel.id()))}
       >
-        {channel.isDirect() ? (
-          this.avatars(channel)
-        ) : (
-          <span className="ChatChannelRow-icon">{channelIcon(channel)}</span>
-        )}
+        {channelIcon(channel, "ChatChannelRow-icon")}
 
         <span className="ChatChannelRow-name">{channel.displayName()}</span>
 
@@ -322,35 +334,26 @@ export default class ChatSidebar extends Component<ChatSidebarAttrs> {
     );
   }
 
-  /** Stacked avatars of the other participants, for a direct channel. */
-  protected avatars(channel: Channel): Mithril.Children {
-    const actorId = app.session.user?.id();
+  /**
+   * Starts warming a channel once the pointer has settled on its row.
+   *
+   * Replaces any pending one: only the row currently under the pointer is worth
+   * fetching, and the previous timer belongs to a row already left behind.
+   */
+  protected schedulePrefetch(channel: Channel): void {
+    this.cancelPrefetch();
 
-    // `hasMany` yields `false` when the relationship was not included.
-    const participants = channel.participants() || [];
+    this.prefetchTimer = window.setTimeout(() => {
+      this.prefetchTimer = null;
+      this.attrs.state.prefetchChannel(Number(channel.id()));
+    }, 120);
+  }
 
-    const others = participants
-      .filter(
-        (user): user is NonNullable<typeof user> =>
-          Boolean(user) && user!.id() !== actorId,
-      )
-      .slice(0, 2);
+  protected cancelPrefetch(): void {
+    if (this.prefetchTimer === null) return;
 
-    if (others.length === 0) {
-      return (
-        <span className="ChatChannelRow-icon">
-          <i className="fas fa-envelope" aria-hidden="true" />
-        </span>
-      );
-    }
-
-    return (
-      <span className="ChatChannelRow-avatars">
-        {others.map((user) => (
-          <Avatar user={user} className="Avatar" />
-        ))}
-      </span>
-    );
+    window.clearTimeout(this.prefetchTimer);
+    this.prefetchTimer = null;
   }
 
   protected createChannel(): void {
