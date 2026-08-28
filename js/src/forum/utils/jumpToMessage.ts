@@ -22,8 +22,9 @@ export function jumpToMessage(
   from?: HTMLElement | null,
 ): boolean {
   const scroller =
-    from?.closest<HTMLElement>(".ChatChannel-stream, .ChatThreadPanel-stream") ??
-    document.querySelector<HTMLElement>(".ChatChannel-stream");
+    from?.closest<HTMLElement>(
+      ".ChatChannel-stream, .ChatThreadPanel-stream",
+    ) ?? document.querySelector<HTMLElement>(".ChatChannel-stream");
 
   const node = scroller?.querySelector<HTMLElement>(
     `.ChatMessage[data-id="${id}"]`,

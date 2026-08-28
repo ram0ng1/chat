@@ -54,6 +54,14 @@ export default class ChatNavButton<
         title={label}
         aria-label={this.ariaLabel(mentions, unread > 0, label)}
         onclick={() => this.open()}
+        // The boot payload only reaches a page the server rendered; opening the
+        // chat from the header is a client-side navigation with nothing preloaded,
+        // and the channel list is the round trip everything else waits behind.
+        // Started on hover and on focus, it is usually finished by the time the
+        // click lands. `loadChannels` is once-per-session and joins a request
+        // already in flight, so repeated hovering costs one fetch at most.
+        onpointerenter={() => this.prefetch()}
+        onfocus={() => this.prefetch()}
       >
         {icon ? <Icon name={icon} className="Button-icon" /> : null}
 
@@ -86,6 +94,18 @@ export default class ChatNavButton<
         </span>
       </button>
     );
+  }
+
+  /**
+   * Warms what opening the chat will ask for, without waiting for it.
+   *
+   * Drafts come along because the drawer loads both together, and the composer
+   * that would otherwise appear empty and then fill in is the same flash the
+   * channel list has.
+   */
+  protected prefetch(): void {
+    chatState.loadChannels().catch(() => {});
+    chatState.loadDrafts().catch(() => {});
   }
 
   /**

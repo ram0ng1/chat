@@ -84,14 +84,79 @@
   &-title {
     .chat-truncate();
     flex: 1;
+    min-width: 0;
     font-size: @chat-font-label;
     font-weight: 800;
     color: var(--avocado-text-dark);
   }
 
+  // With a channel open the title is a button — it opens the channel's details,
+  // the way the full-screen header's title does — so it has to shed the UA's
+  // button chrome and stop looking like a control it is not.
+  //
+  // The hover treatment is `.ChatChannel-title`'s, deliberately: this bar now
+  // does that one's job, and the two are the same gesture on the same object. It
+  // briefly had an underline instead, which was a third style belonging to
+  // neither. The negative margin is the same trick as well — it pulls the pill's
+  // left edge back so the text keeps the position it had without one.
+  //
+  // Type stays the drawer's own 13px rather than the header's 15px: this bar is
+  // 48px tall and carries five controls beside the name, where the full-screen
+  // header has a whole row to itself.
+  &-title--channel {
+    .chat-flex-row(8px);
+    padding: 4px 8px;
+    margin-left: -8px;
+    border: 0;
+    border-radius: @chat-radius-sm;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--chat-row-hover-bg);
+    }
+  }
+
+  &-titleText {
+    .chat-truncate();
+    min-width: 0;
+  }
+
+  // The mark beside the name. Sized like the sidebar's rather than the
+  // full-screen header's: this bar is 44px tall and carries five controls beside
+  // it, so the mark is an identifier here, not a heading.
+  &-icon {
+    .chat-flex-center();
+    flex-shrink: 0;
+    width: 20px;
+    font-size: 14px;
+    line-height: 1;
+    color: var(--avocado-muted-icon);
+  }
+
   &-actions {
     .chat-flex-row(2px);
     flex-shrink: 0;
+  }
+
+  // The channel's own actions, before the window controls and separated from
+  // them: one group acts on the conversation, the other on the panel showing it,
+  // and running six icons together reads as one undifferentiated row.
+  &-channelMenu {
+    display: flex;
+    margin-right: 4px;
+    padding-right: 4px;
+    border-right: 1px solid var(--avocado-border-soft);
+
+    // Right-aligned. The toggle sits four controls from the right edge of a
+    // 320px panel, and a menu dropping left-aligned under it would hang off the
+    // side — Flarum's default alignment assumes a toggle with the page's width
+    // to its right.
+    .Dropdown-menu {
+      right: 0;
+      left: auto;
+    }
   }
 
   &-body {
@@ -556,23 +621,11 @@ body.ChatFullPage {
     }
   }
 
-  // Avatar stack for group DMs.
-  &-avatars {
-    display: flex;
-    flex-shrink: 0;
-
-    .Avatar {
-      width: @chat-avatar-size-compact;
-      height: @chat-avatar-size-compact;
-      border: 2px solid var(--body-bg);
-
-      & + .Avatar {
-        margin-left: -10px;
-      }
-    }
-  }
-
-  &--online &-avatars .Avatar:first-child {
+  // The avatar stack a direct channel gets in place of a glyph is styled with
+  // the slot it lives in — see `.ChatChannelIcon--avatars`, which serves the
+  // header, the Browse card and the info modal from the same rule. It used to be
+  // here, which is why those three drew a hash instead of a face.
+  &--online .ChatChannelIcon--avatars .Avatar:first-child {
     .chat-online-ring(2px);
   }
 
@@ -609,7 +662,10 @@ body.ChatFullPage {
       font-size: @chat-font-label;
     }
 
-    &-avatars .Avatar {
+    // Thumb-sized with the rest of the row. Overrides the em-based default on
+    // `.ChatChannelIcon--avatars`, which follows the slot's font-size and would
+    // otherwise shrink the faces just as the row grows.
+    .ChatChannelIcon--avatars .Avatar {
       width: @chat-avatar-size;
       height: @chat-avatar-size;
 
@@ -718,25 +774,44 @@ body.ChatFullPage {
 
   // WhatsApp's arrangement: a slim strip under the header carrying the pinned
   // message. Present in the drawer too, which has no room for the pinned panel.
+  // The strip itself is no longer the button. Past the first pin it carries two
+  // of them — jump to the newest, and open the panel with all of them — and a
+  // button inside a button is invalid, so the strip became their container.
   &-pinnedBar {
-    .chat-flex-row(10px);
+    .chat-flex-row(0);
     flex-shrink: 0;
     width: 100%;
-    padding: 7px 14px;
-    border: 0;
     border-bottom: 1px solid var(--avocado-border-soft);
     background: var(--chat-pinned-bg);
-    text-align: left;
-    cursor: pointer;
 
-    &:disabled {
-      // Still shown, just inert: the message is pinned but not in the loaded
-      // window, so there is nowhere to jump to yet.
-      cursor: default;
-    }
+    // The bar's own padding moved onto the jump button so its hover covers the
+    // whole strip rather than a box inset within it.
+    &-jump {
+      .chat-flex-row(10px);
+      flex: 1;
+      min-width: 0;
+      padding: 7px 14px;
+      border: 0;
+      background: none;
+      text-align: left;
+      cursor: pointer;
 
-    &:hover:not(:disabled) {
-      filter: brightness(0.97);
+      &:disabled {
+        // Still shown, just inert: the message is pinned but not in the loaded
+        // window, so there is nowhere to jump to yet.
+        cursor: default;
+      }
+
+      // The extension's hover token, the same one the sidebar rows and the
+      // drawer's title use. It replaced a `filter: brightness(0.97)`, which was
+      // correct while the strip was a single button — it darkened the strip's
+      // own paint — and stopped being correct the moment the strip was split in
+      // two: a filter only acts on what the element itself paints, so the half
+      // that is transparent could not be given the same effect, and the two
+      // halves of one bar hovered differently.
+      &:hover:not(:disabled) {
+        background: var(--chat-row-hover-bg);
+      }
     }
 
     &-icon {
@@ -750,6 +825,62 @@ body.ChatFullPage {
       flex: 1;
       font-size: @chat-font-label;
       color: var(--avocado-muted-label);
+    }
+
+    // The way into the full list. Drawn as a count and a chevron rather than a
+    // second thumbtack: the strip's own icon already says "pinned", and what
+    // this adds is how many more there are.
+    &-all {
+      .chat-flex-row(4px);
+      flex-shrink: 0;
+      align-self: stretch;
+      padding: 0 12px 0 8px;
+      border: 0;
+      border-left: 1px solid var(--avocado-border-soft);
+      background: none;
+      cursor: pointer;
+      font-size: 12px;
+      color: var(--avocado-muted-label);
+
+      // Identical to the jump half's, so the two halves of one strip hover as
+      // one surface rather than as a bar and a widget sitting in it.
+      &:hover {
+        background: var(--chat-row-hover-bg);
+        color: var(--avocado-text-dark);
+      }
+
+      // While the panel it opens is on screen. Colour, not a background: that is
+      // what `.ChatChannel-headerAction--active` does for the same toggle in the
+      // channel header, and it is the only thing that can be layered here — the
+      // strip is already painted `--chat-pinned-bg`, so a second translucent
+      // tint over it read as a third colour belonging to neither state.
+      &--active {
+        color: var(--primary-color);
+
+        // A second signal, because the first one cannot be relied on: on a forum
+        // whose accent is near-black — this one ships `--primary-color: #383838`
+        // — the active colour lands within a shade of the hover colour and the
+        // state is invisible. Rotation is shape rather than paint, so it reads
+        // whatever the accent is and cannot clash with the tint the strip is
+        // already painted with. Points down while the list it opens is showing,
+        // the way a disclosure control does.
+        .fa-angle-right {
+          transform: rotate(90deg);
+        }
+      }
+    }
+
+    &-count {
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+
+    // The rotation eases only for readers who have not asked for less motion;
+    // without the preference it simply snaps, which is still the correct state.
+    .fa-angle-right {
+      .chat-motion-safe({
+        transition: transform var(--avocado-t-fast);
+      });
     }
   }
 
@@ -3555,6 +3686,64 @@ body.ChatFullPage {
   line-height: 1;
 }
 
+// ── The avatar form of the slot ──────────────────────────────────────────────
+// A direct channel is marked by who is in it rather than by a glyph — see
+// utils/channelIcon.tsx, which decides that and puts this class on the slot it
+// returns.
+//
+// Everything here undoes what the rules above set for a glyph, and it has to
+// come after all of them to do it: the slot classes are single-class selectors
+// too, so this wins on order, not on weight. Keeping it as a plain class rather
+// than compounding it onto each of the four (`.ChatChannelRow-icon.ChatChannelIcon--avatars`
+// and so on) is what stops a fifth surface from silently missing out.
+//
+// `width: auto` because a fixed 20px column was sized for one glyph and would
+// show a sliver of the first face and none of the second; `overflow: visible`
+// because the stack's negative margin is what makes it a stack.
+.ChatChannelIcon--avatars {
+  display: inline-flex;
+  flex-shrink: 0;
+  width: auto;
+  min-width: 0;
+  overflow: visible;
+  vertical-align: middle;
+  // The circle mixin on a Browse card paints a background and a border meant to
+  // sit behind a glyph. Behind faces it is a grey ring around them.
+  background: none;
+  border: 0;
+  padding: 0;
+
+  // One size for every slot rather than one derived from each slot's font-size.
+  // The channel header and the info modal's title set type several steps apart,
+  // and an em-based avatar would have followed them into sizes neither slot has
+  // room for. This is the size the sidebar already used.
+  .Avatar {
+    width: @chat-avatar-size-compact;
+    height: @chat-avatar-size-compact;
+    // Reads as a stack rather than as two circles that happen to touch.
+    border: 2px solid var(--body-bg);
+
+    & + .Avatar {
+      margin-left: -10px;
+    }
+  }
+}
+
+// The one slot that keeps its width. A Browse card's mark is a 40px circle, and
+// the cards sit in a grid: letting a conversation's stack size itself would pull
+// that card's name 16px left of every other card's in the row. Two overlapped
+// avatars are 38px, so they fit the circle as they are.
+.ChatBrowseCard-icon.ChatChannelIcon--avatars {
+  width: 40px;
+}
+
+// The info modal's title is the one place the mark is not in a flex row, so it
+// has no gap of its own. A glyph carries its own side bearing and looked fine
+// without one; a 24px circle butts straight against the name.
+.ChatChannelInfo-icon.ChatChannelIcon--avatars {
+  margin-right: @chat-space-sm;
+}
+
 .EmojiPicker {
   position: relative;
 
@@ -3795,13 +3984,34 @@ body.ChatFullPage {
 .ChatDrawer-body {
   position: relative;
 
-  .ChatThreadPanel {
+  // The embedded search joins them: it is the third pane that covers the
+  // conversation in this slot, and it wears the same panel header, so it is
+  // listed here rather than given a rule of its own that could drift.
+  .ChatThreadPanel,
+  .ChatSearch--embedded {
     position: absolute;
     inset: 0;
     width: auto;
     border-left: 0;
     z-index: var(--avocado-z-sidebar);
     background: var(--body-bg);
+  }
+}
+
+// Search, as a pane over a conversation rather than a page.
+//
+// The page version is laid out by whatever contains it; here the pane owns the
+// full height of the drawer and its results have to be the only thing that
+// scrolls, or the bar scrolls away from the field it belongs to.
+.ChatSearch--embedded {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+
+  .ChatSearch-results {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
   }
 }
 

@@ -10,11 +10,10 @@ import type Message from "../../common/models/Message";
 import type ChatState from "../state/ChatState";
 import ChatMessage from "./ChatMessage";
 import ChatComposer from "./ChatComposer";
-import ChannelFormModal from "./ChannelFormModal";
-import ChannelInfoModal from "./ChannelInfoModal";
 import ChatSelectionBar from "./ChatSelectionBar";
 import { MessageStreamSkeleton } from "./Skeletons";
 import { channelIcon } from "../utils/channelIcon";
+import { channelActions, openChannelInfo } from "../utils/channelActions";
 import { jumpToMessage } from "../utils/jumpToMessage";
 import { messagePreview } from "../../common/utils/preview";
 
@@ -49,7 +48,6 @@ export default class ChannelView extends Component<ChannelViewAttrs> {
   private heightBeforePrepend: number | null = null;
 
   private lastRenderedCount = 0;
-  private joining = false;
 
   oninit(vnode: Mithril.Vnode<ChannelViewAttrs>): void {
     super.oninit(vnode);
@@ -186,26 +184,62 @@ export default class ChannelView extends Component<ChannelViewAttrs> {
       .stream(Number(channel.id()))
       .messages.some((message) => message.id() === pinned.id());
 
+    const count = state.pinnedCount(Number(channel.id()));
+
     return (
-      <button
-        type="button"
-        className="ChatChannel-pinnedBar"
-        title={app.translator.trans(
-          "ramon-chat.forum.channel.pinned_messages",
-          {},
-          true,
-        )}
-        onclick={() => this.jumpToPinned(pinned)}
-        disabled={!reachable}
-      >
-        <i
-          className="ChatChannel-pinnedBar-icon fas fa-thumbtack"
-          aria-hidden="true"
-        />
-        <span className="ChatChannel-pinnedBar-text">
-          {text || app.translator.trans("ramon-chat.forum.message.pinned")}
-        </span>
-      </button>
+      <div className="ChatChannel-pinnedBar">
+        <button
+          type="button"
+          className="ChatChannel-pinnedBar-jump"
+          title={app.translator.trans(
+            "ramon-chat.forum.channel.pinned_messages",
+            {},
+            true,
+          )}
+          onclick={() => this.jumpToPinned(pinned)}
+          disabled={!reachable}
+        >
+          <i
+            className="ChatChannel-pinnedBar-icon fas fa-thumbtack"
+            aria-hidden="true"
+          />
+          <span className="ChatChannel-pinnedBar-text">
+            {text || app.translator.trans("ramon-chat.forum.message.pinned")}
+          </span>
+        </button>
+
+        {/* Only past the first. The bar already *is* the one pinned message, and
+            a control opening a panel to show that same message again would cost
+            a click to see what is already on screen. Past that the bar shows the
+            newest of several and the rest have nowhere else to be reached from —
+            which is the gap this closes: the panel's own toggle moved into the
+            drawer's overflow menu, and the strip that stands for the pins had no
+            way into them.
+
+            A sibling rather than a nested button: the strip is itself a button
+            and a button inside a button is invalid, which is why the whole thing
+            is a div now with the jump as its first child. */}
+        {count > 1 ? (
+          <button
+            type="button"
+            className={classList("ChatChannel-pinnedBar-all", {
+              "ChatChannel-pinnedBar-all--active": state.showPinned,
+            })}
+            title={app.translator.trans(
+              "ramon-chat.forum.channel.view_all_pinned",
+              { count },
+              true,
+            )}
+            onclick={() => {
+              state.togglePinned();
+              m.redraw();
+            }}
+          >
+            <span className="ChatChannel-pinnedBar-count">{count}</span>
+            <i className="fas fa-angle-right" aria-hidden="true" />
+          </button>
+        ) : null}
+      </div>
     );
   }
 
@@ -213,8 +247,18 @@ export default class ChannelView extends Component<ChannelViewAttrs> {
     jumpToMessage(pinned.id()!, this.scroller);
   }
 
+  /**
+   * The channel's own bar: mark, name, description, actions.
+   *
+   * Absent when embedded. The drawer is 320px of vertical space and drew two
+   * bars stacked, both naming the same channel — its own, for the window
+   * controls, and this one. It now carries both, so this would be the second
+   * copy rather than the only one.
+   */
   protected header(): Mithril.Children {
-    const { channel, onBack } = this.attrs;
+    const { channel, state, onBack, embedded } = this.attrs;
+
+    if (embedded) return null;
 
     return (
       <div className="ChatChannel-header">
@@ -230,19 +274,13 @@ export default class ChannelView extends Component<ChannelViewAttrs> {
             Side by side they competed for the same width and the flex line
             resolved it by cutting the *name*: "Canal Priva…Apenas um canal …".
             Stacked, each truncates within its own line and the name is always
-            whole for as long as the header is wide enough to hold it.
-
-            The icon carries its own class rather than being a bare text node.
-            `channelIcon` returns a plain string for an emoji, so the icon slot
-            used to be styled through `> span:first-child` — which, with no span
-            of its own, matched the *name* instead and clipped it with
-            `text-overflow: clip`. That is the missing ellipsis in the report. */}
+            whole for as long as the header is wide enough to hold it. */}
         <button
           type="button"
           className="ChatChannel-title"
-          onclick={() => this.openInfo()}
+          onclick={() => openChannelInfo(channel)}
         >
-          <span className="ChatChannel-icon">{channelIcon(channel)}</span>
+          {channelIcon(channel, "ChatChannel-icon")}
 
           <span className="ChatChannel-titleText">
             <span className="ChatChannel-name">{channel.displayName()}</span>
@@ -255,162 +293,24 @@ export default class ChannelView extends Component<ChannelViewAttrs> {
           </span>
         </button>
 
+        {/* The same set the drawer puts behind its overflow menu — see
+            utils/channelActions, which is where the gating lives. */}
         <div className="ChatChannel-headerActions">
-          {/* Gated on the server-computed flag, so the control is absent rather
-              than present-and-rejected. See ChannelPolicy::edit. */}
-          {channel.canEdit() && channel.isCategory() ? (
+          {channelActions(channel, state).map((action) => (
             <Button
-              className="Button Button--icon Button--flat"
-              icon="fas fa-pen-to-square"
-              title={app.translator.trans(
-                "ramon-chat.forum.channel.edit",
-                {},
-                true,
-              )}
-              onclick={() => this.editChannel()}
+              key={action.key}
+              className={classList("Button Button--icon Button--flat", {
+                "ChatChannel-headerAction--active": action.active,
+              })}
+              icon={action.icon}
+              title={action.label}
+              loading={action.loading}
+              onclick={action.onclick}
             />
-          ) : null}
-
-          <Button
-            className={classList("Button Button--icon Button--flat", {
-              "ChatChannel-headerAction--active": this.attrs.state.showPinned,
-            })}
-            icon="fas fa-thumbtack"
-            title={app.translator.trans(
-              "ramon-chat.forum.channel.pinned_messages",
-              {},
-              true,
-            )}
-            onclick={() => {
-              this.attrs.state.togglePinned();
-              m.redraw();
-            }}
-          />
-
-          <Button
-            className="Button Button--icon Button--flat"
-            icon="fas fa-magnifying-glass"
-            title={app.translator.trans(
-              "ramon-chat.forum.channel.search_in_channel",
-              {},
-              true,
-            )}
-            onclick={() =>
-              m.route.set(app.route("chat.search", { channel: channel.id() }))
-            }
-          />
-
-          {/* Leaving is offered only for a channel you are actually in. A direct
-              channel keeps its history, so leaving one is not destructive. */}
-          {channel.isFollowing() ? (
-            <Button
-              className="Button Button--icon Button--flat"
-              icon="fas fa-arrow-right-from-bracket"
-              title={app.translator.trans(
-                "ramon-chat.forum.channel.leave",
-                {},
-                true,
-              )}
-              onclick={() => this.leave()}
-            />
-          ) : (
-            this.joinControls(channel)
-          )}
+          ))}
         </div>
       </div>
     );
-  }
-
-  /**
-   * Getting back into a channel you left.
-   *
-   * Two buttons rather than one, because they are different acts. An ordinary join
-   * puts you in the member list and the count; a hidden one does not, which is what
-   * lets a moderator read a room without their arrival changing how people talk in
-   * it. The hidden option is drawn only when the server says the actor holds it,
-   * and a lurking moderator is told they are lurking — otherwise the state is
-   * indistinguishable from an ordinary membership.
-   */
-  protected joinControls(channel: Channel): Mithril.Children {
-    const items: Mithril.Children[] = [];
-
-    if (channel.canJoin()) {
-      items.push(
-        <Button
-          className="Button Button--icon Button--flat"
-          icon="fas fa-arrow-right-to-bracket"
-          title={app.translator.trans(
-            "ramon-chat.forum.channel.join",
-            {},
-            true,
-          )}
-          loading={this.joining}
-          onclick={() => this.join(false)}
-        />,
-      );
-    }
-
-    if (channel.canJoinHidden()) {
-      items.push(
-        <Button
-          className="Button Button--icon Button--flat"
-          icon="fas fa-user-secret"
-          title={app.translator.trans(
-            "ramon-chat.forum.channel.join_hidden",
-            {},
-            true,
-          )}
-          loading={this.joining}
-          onclick={() => this.join(true)}
-        />,
-      );
-    }
-
-    return items.length > 0 ? items : null;
-  }
-
-  protected async join(hidden: boolean): Promise<void> {
-    const { channel, state } = this.attrs;
-
-    this.joining = true;
-    m.redraw();
-
-    try {
-      await app.request({
-        method: "POST",
-        url: `${app.forum.attribute("apiUrl")}/chat-channels/${channel.id()}/join`,
-        body: { data: { attributes: { hidden } } },
-      });
-
-      channel.pushAttributes({
-        isFollowing: true,
-        isHiddenMember: hidden,
-        // A hidden join is absent from the count, so it must not appear to move it.
-        userCount: hidden
-          ? channel.userCount()
-          : (channel.userCount() ?? 0) + 1,
-      });
-
-      if (!state.channels.some((c) => c.id() === channel.id())) {
-        state.channels.unshift(channel);
-      }
-
-      if (hidden) {
-        app.alerts.show(
-          { type: "success" },
-          app.translator.trans("ramon-chat.forum.channel.joined_hidden"),
-        );
-      }
-    } catch (e: any) {
-      app.alerts.show(
-        { type: "error" },
-        e?.response?.errors?.[0]?.detail ??
-          app.translator.trans("ramon-chat.forum.channel.join_failed"),
-      );
-    } finally {
-      this.joining = false;
-      m.redraw();
-    }
   }
 
   /**
@@ -692,68 +592,5 @@ export default class ChannelView extends Component<ChannelViewAttrs> {
     // threading-enabled channel into a thread.
     state.setReplyingTo(Number(channel.id()), message, null, true);
     m.redraw();
-  }
-
-  protected editChannel(): void {
-    app.modal.show(ChannelFormModal, { channel: this.attrs.channel });
-  }
-
-  /**
-   * Leaves the channel. The membership row is retained server-side, so read state
-   * and history survive rejoining — and for a direct channel, restarting the
-   * conversation links back to the earlier messages.
-   */
-  protected async leave(): Promise<void> {
-    const { channel, state } = this.attrs;
-
-    if (
-      !confirm(
-        app.translator.trans(
-          "ramon-chat.forum.channel.leave_confirm",
-          {},
-          true,
-        ),
-      )
-    )
-      return;
-
-    try {
-      await app.request({
-        method: "POST",
-        url: `${app.forum.attribute("apiUrl")}/chat-channels/${channel.id()}/leave`,
-      });
-
-      channel.pushAttributes({
-        isFollowing: false,
-        unreadCount: 0,
-        unreadMentionsCount: 0,
-        userCount: Math.max(0, (channel.userCount() ?? 1) - 1),
-      });
-
-      // Drop it from the sidebar and step away from the now-unfollowed channel.
-      state.channels = state.channels.filter((c) => c.id() !== channel.id());
-      state.setActiveChannel(null);
-
-      if ((m.route.get() ?? "").includes("/chat/c/")) {
-        m.route.set(app.route("chat.index"));
-      }
-    } catch (e: any) {
-      app.alerts.show(
-        { type: "error" },
-        e?.response?.errors?.[0]?.detail ??
-          app.translator.trans("ramon-chat.forum.channel.leave_failed"),
-      );
-    } finally {
-      m.redraw();
-    }
-  }
-
-  /**
-   * Clicking the title opens the channel's details — notification level, member
-   * list and the state actions the actor is allowed. Available to every member,
-   * unlike the settings form behind the pencil, which needs the edit permission.
-   */
-  protected openInfo(): void {
-    app.modal.show(ChannelInfoModal, { channel: this.attrs.channel });
   }
 }

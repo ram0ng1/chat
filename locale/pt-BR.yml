@@ -83,6 +83,7 @@ ramon-chat:
       collapse: Recolher
       full_screen: Abrir em tela cheia
       close: Fechar o chat
+      channel_actions: Ações do canal
 
     sidebar:
       my_threads: Meus tópicos
@@ -109,6 +110,7 @@ ramon-chat:
       view_info: Detalhes do canal
       search_in_channel: Buscar neste canal
       pinned_messages: Mensagens fixadas
+      view_all_pinned: "Ver todas as {count} mensagens fixadas"
       close_pinned: Fechar mensagens fixadas
       no_pinned_messages: Nenhuma mensagem fixada neste canal.
       edit: Editar canal
@@ -435,6 +437,7 @@ ramon-chat:
       in_channel: "em {channel}"
       prompt: Digite para buscar mensagens.
       empty: Nenhuma mensagem corresponde.
+      close: Fechar a busca
 
     revisions:
       title: Histórico de edições

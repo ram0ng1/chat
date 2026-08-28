@@ -18,9 +18,12 @@ use Flarum\Settings\SettingsRepositoryInterface;
 use Flarum\Testing\integration\RetrievesAuthorizedUsers;
 use Flarum\Testing\integration\TestCase;
 use Flarum\User\User;
+use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Contracts\View\Factory;
+use Illuminate\Mail\Events\MessageSending;
 use Ramon\Chat\Message;
 use Ramon\Chat\Notification\ChatMentionBlueprint;
+use Symfony\Component\Mime\Email;
 
 /**
  * The rendered body of the mention email.
@@ -179,22 +182,69 @@ class MentionEmailTest extends TestCase
 
     /**
      * Core hands email views a translator that swaps every parameter for an
-     * opaque marker, to be put back by the formatter afterwards. These templates
-     * deliberately do not render through that formatter — the locale string
-     * carries their markup and they escape their own values — so a marker that
-     * reaches the output has nothing left to restore it and ships as
-     * `flarumsafevalue…` where a name should be.
+     * opaque marker, so that a display name cannot be parsed as markup by the
+     * formatter that renders the body around it. What puts the values back moved
+     * in core 2.0.0-rc.8: it used to be `MailFormatter::convert()`, which only
+     * covered strings a template chose to route through the formatter, and is
+     * now `MutateEmail` acting on the finished message — deliberately, so that a
+     * template which never calls the formatter is covered too. These templates
+     * are exactly that kind: the locale string carries their markup and they
+     * escape their own values (see the comment in `emails/html/mentioned`).
      *
-     * Asserted on both variants and on the hostile account, because the leak is
-     * in how values reach the translator, not in any one string.
+     * So the guarantee is no longer one a rendered view can carry on its own,
+     * and asserting it there fails on rc.8 for output that reaches the inbox
+     * perfectly well — the marker is supposed to still be present at that point.
+     * The message on its way out is where the guarantee lives now, and where it
+     * has to be pinned: whatever the templates render, nothing shaped like
+     * `flarumsafevalue…` may be in the body Symfony is handed.
+     *
+     * Dispatching `MessageSending` is what the mailer does; core listens for it
+     * in `MailServiceProvider::boot()`. Asserted on both variants and on the
+     * hostile account, because the leak this guards against is in how values
+     * reach the translator, not in any one string.
      *
      * @dataProvider renderedBodies
      */
-    public function test_no_substitution_marker_survives_into_the_body(string $variant, int $messageId): void
+    public function test_no_substitution_marker_survives_into_the_sent_message(string $variant, int $messageId): void
     {
-        $body = $this->render($variant, $messageId);
+        $rendered = $this->render($variant, $messageId);
 
-        $this->assertStringNotContainsString('flarumsafevalue', $body);
+        // The marker is expected here on a core that marks — this assertion is
+        // about what happens to it next, not about whether it was ever created.
+        $email = new Email();
+
+        $variant === 'html'
+            ? $email->html($rendered)
+            : $email->text($rendered);
+
+        $this->app()->getContainer()->make(Dispatcher::class)->dispatch(
+            new MessageSending($email)
+        );
+
+        $body = $variant === 'html' ? $email->getHtmlBody() : $email->getTextBody();
+
+        $this->assertStringNotContainsString('flarumsafevalue', (string) $body);
+    }
+
+    /**
+     * The value a marker stands for has to come back, not merely disappear.
+     *
+     * Without this, a restore step that dropped markers instead of decoding them
+     * would satisfy the assertion above while mailing a sentence with a hole in
+     * it — which is the failure the marker exists to prevent, arrived at from the
+     * other side.
+     */
+    public function test_the_recipient_name_reaches_the_sent_message(): void
+    {
+        $email = new Email();
+        $email->html($this->render('html', 1));
+
+        $this->app()->getContainer()->make(Dispatcher::class)->dispatch(
+            new MessageSending($email)
+        );
+
+        $this->assertStringContainsString('normal', (string) $email->getHtmlBody());
+        $this->assertStringContainsString('Ramon', (string) $email->getHtmlBody());
     }
 
     public static function renderedBodies(): array

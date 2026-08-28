@@ -126,6 +126,32 @@ const POLL_INTERVAL_UNPROVEN = 15000;
  */
 const POLL_INTERVAL_PROVEN = 60000;
 
+/**
+ * Floor between two refreshes of the channel list, whatever the poll rate is.
+ *
+ * The list is by far the most expensive thing the poller asks for: fifty rows,
+ * each resolving a membership and ten capability policies. The message tail
+ * beside it is a keyset read of whatever is newer than the newest id held, which
+ * is usually nothing at all.
+ *
+ * They used to run at the same rate, so a forum whose websocket is not delivering
+ * — the 3s case, which is exactly the forum least able to afford it — rebuilt the
+ * whole sidebar twenty times a minute. Splitting them keeps a conversation live at
+ * 3s while the list, whose job is unread badges and channels that appeared
+ * elsewhere, settles for being a few seconds behind.
+ */
+const CHANNEL_POLL_INTERVAL = 15000;
+
+/**
+ * The same floor once the socket has proven itself.
+ *
+ * Everything the list carries — new messages, joins, leaves, edits — arrives over
+ * the socket at that point and is applied to these same objects, so this is a
+ * backstop against a daemon that dies mid-session rather than the way the list
+ * stays current.
+ */
+const CHANNEL_POLL_INTERVAL_PROVEN = 60000;
+
 app.initializers.add("ramon-chat", () => {
   // Register JSON:API types before anything can request them — the store drops
   // payloads for types it has no model for.
@@ -134,6 +160,17 @@ app.initializers.add("ramon-chat", () => {
   app.store.models["chat-threads"] = Thread;
   app.store.models["chat-uploads"] = Upload;
   app.store.models["chat-message-flags"] = MessageFlag;
+
+  // Straight after the models and before anything mounts: the channel list, the
+  // open conversation, its pinned message and the drafts are already in the page
+  // (see Content\PreloadChat), and reading them here is what lets the chat paint
+  // finished instead of assembling itself over four round trips.
+  //
+  // Deliberately not deferred to `app.mount` — that runs after the router has
+  // mounted the page, so ChatPage would already have decided it had nothing to
+  // draw. `app.data` is populated before initializers run; `app.forum` and
+  // `app.session` are not, and nothing in hydrateFromBoot touches them.
+  chatState.hydrateFromBoot();
 
   // ── Routes ────────────────────────────────────────────────────────────────
   // Names match the server-side declarations in extend.php. Without these the
@@ -338,35 +375,59 @@ app.initializers.add("ramon-chat", () => {
  */
 export async function startDirectMessage(user: User): Promise<void> {
   try {
-    const payload = await app.request<{ data: { id: string } }>({
+    const payload = await app.request<{
+      data?: { id?: string };
+      meta?: { created?: boolean; serialized?: boolean };
+    }>({
       method: "POST",
       url: `${app.forum.attribute("apiUrl")}/chat/direct`,
       body: { data: { attributes: { userIds: [Number(user.id())] } } },
     });
 
-    const channelId = Number(payload.data?.id);
+    const channelId = Number(payload?.data?.id);
 
     if (!channelId) return;
 
-    // Pull the channel into the store and the sidebar before showing it, so the
-    // drawer does not open on an empty frame.
-    try {
-      const channel = (await app.store.find(
-        "chat-channels",
-        String(channelId),
-      )) as unknown as Channel;
+    // The endpoint serialises the channel it found or created, so this is the
+    // whole conversation arriving with the POST rather than one more request
+    // after it — see StartDirectController::serialize.
+    let channel: Channel | null = null;
 
-      if (channel && !chatState.channels.some((c) => c.id() === channel.id())) {
-        chatState.channels.unshift(channel);
+    if (payload.meta?.serialized) {
+      try {
+        channel = app.store.pushPayload(payload as never) as unknown as Channel;
+      } catch {
+        // Falls through to the fetch below.
       }
-    } catch {
-      // The channel exists; a failed fetch just means the list refreshes later.
+    }
+
+    if (!channel) {
+      try {
+        channel = (await app.store.find(
+          "chat-channels",
+          String(channelId),
+        )) as unknown as Channel;
+      } catch {
+        // The channel exists; a failed fetch just means the list refreshes later.
+      }
+    }
+
+    if (channel) chatState.rememberChannel(channel);
+
+    // A conversation created a moment ago has no history and nothing pinned, and
+    // the server has just told us it created one. Seeding both saves the two
+    // requests the channel view would otherwise open with — which, on a brand-new
+    // conversation, would both come back empty.
+    if (payload.meta?.created) {
+      chatState.seedEmptyChannel(channelId);
     }
 
     chatState.setActiveChannel(channelId);
 
     if (shouldUseChatDrawer()) {
-      await ChatDrawer.open();
+      // Not awaited: the drawer paints on the first frame now, and the channel
+      // list it fills in behind is not what the reader came for.
+      ChatDrawer.open().catch(() => {});
     } else {
       m.route.set(app.route("chat.channel", { id: channelId }));
     }
@@ -458,15 +519,27 @@ function pollInterval(): number {
   return realtimeDelivered() ? POLL_INTERVAL_PROVEN : POLL_INTERVAL_UNPROVEN;
 }
 
+/** When the channel list was last refreshed; see CHANNEL_POLL_INTERVAL. */
+let lastChannelPoll = 0;
+
 function poll(): void {
   if (document.hidden) return;
   if (!chatState.channelsLoaded) return;
 
-  // Forced, because this is the one caller that genuinely wants a refetch: the
-  // list is cached for the session precisely so navigation does not re-fetch it,
-  // and the poller is the backstop that keeps it current when the websocket is
-  // not delivering. A cached read here would poll for nothing.
-  chatState.loadChannels(true).catch(() => {});
+  const now = Date.now();
+  const channelFloor = realtimeDelivered()
+    ? CHANNEL_POLL_INTERVAL_PROVEN
+    : CHANNEL_POLL_INTERVAL;
+
+  if (now - lastChannelPoll >= channelFloor) {
+    lastChannelPoll = now;
+
+    // Forced, because this is the one caller that genuinely wants a refetch: the
+    // list is cached for the session precisely so navigation does not re-fetch
+    // it, and the poller is the backstop that keeps it current when the
+    // websocket is not delivering. A cached read here would poll for nothing.
+    chatState.loadChannels(true).catch(() => {});
+  }
 
   const activeId = chatState.activeChannelId;
 

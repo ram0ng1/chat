@@ -9,6 +9,7 @@
 
 namespace Ramon\Chat\Api\Controller;
 
+use Flarum\Api\Client as ApiClient;
 use Flarum\Foundation\ValidationException;
 use Flarum\Http\RequestUtil;
 use Flarum\Locale\Translator;
@@ -20,10 +21,12 @@ use Laminas\Diactoros\Response\JsonResponse;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
+use Psr\Log\LoggerInterface;
 use Ramon\Chat\Channel;
 use Ramon\Chat\ChannelUser;
 use Ramon\Chat\Event\ChannelWasCreated;
 use Ramon\Chat\Service\MembershipManager;
+use Throwable;
 
 /**
  * Finds or creates a direct channel for a set of participants.
@@ -40,7 +43,9 @@ class StartDirectController implements RequestHandlerInterface
         protected ConnectionInterface $db,
         protected Events $events,
         protected Translator $translator,
-        protected MembershipManager $memberships
+        protected MembershipManager $memberships,
+        protected ApiClient $api,
+        protected LoggerInterface $logger
     ) {
     }
 
@@ -113,16 +118,68 @@ class StartDirectController implements RequestHandlerInterface
             $this->memberships->join($channel, $actor);
         }
 
-        return new JsonResponse([
+        return new JsonResponse(
+            $this->serialize($request, $channel, $created),
+            $created ? 201 : 200
+        );
+    }
+
+    /**
+     * The channel as ChannelResource would serve it, so the caller does not have
+     * to ask for it again.
+     *
+     * This used to answer with a hand-rolled stub carrying nothing but the id,
+     * which left the client with a channel it could not render and one more round
+     * trip before it could: POST here, then GET /chat-channels/{id}, then the
+     * first page of messages — three in series before "Send message" on a profile
+     * showed anything. Serialising in-process removes the middle one, and it
+     * arrives with the same fields, capability flags and `directParticipants` as
+     * every other read of a channel, because it *is* that read.
+     *
+     * `meta.created` is how the client knows a conversation is new. A channel that
+     * was just inserted has no messages and nothing pinned, so it can seed both as
+     * loaded-and-empty and skip two more requests; a conversation that was found
+     * rather than created has history to fetch.
+     *
+     * `meta.serialized` is false when the internal read failed. The channel exists
+     * either way — it has already been committed — so reporting an error here
+     * would be a lie about a write that succeeded. The stub is enough for the
+     * client to fall back to fetching it itself.
+     *
+     * @return array<string, mixed>
+     */
+    protected function serialize(ServerRequestInterface $request, Channel $channel, bool $created): array
+    {
+        try {
+            $document = json_decode(
+                (string) $this->api
+                    ->withoutErrorHandling()
+                    ->withParentRequest($request)
+                    ->get('/chat-channels/'.$channel->id)
+                    ->getBody(),
+                true
+            );
+
+            if (is_array($document) && isset($document['data']['id'])) {
+                $document['meta'] = ['created' => $created, 'serialized' => true];
+
+                return $document;
+            }
+        } catch (Throwable $e) {
+            $this->logger->warning('[ramon-chat] could not serialise a direct channel', [
+                'channel' => (int) $channel->id,
+                'class' => $e::class,
+                'message' => $e->getMessage(),
+            ]);
+        }
+
+        return [
             'data' => [
-                'type'       => 'chat-channels',
-                'id'         => (string) $channel->id,
-                'attributes' => [
-                    'type'    => $channel->type,
-                    'created' => $created,
-                ],
+                'type' => 'chat-channels',
+                'id'   => (string) $channel->id,
             ],
-        ], $created ? 201 : 200);
+            'meta' => ['created' => $created, 'serialized' => false],
+        ];
     }
 
     /**

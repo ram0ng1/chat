@@ -3,6 +3,7 @@ import Component from "flarum/common/Component";
 import type { ComponentAttrs } from "flarum/common/Component";
 import Button from "flarum/common/components/Button";
 import Avatar from "flarum/common/components/Avatar";
+import classList from "flarum/common/utils/classList";
 import humanTime from "flarum/common/helpers/humanTime";
 import type Mithril from "mithril";
 
@@ -16,6 +17,16 @@ export interface ChatSearchAttrs extends ComponentAttrs {
   state: ChatState;
   /** When set, the search is scoped to one channel instead of all of them. */
   channelId?: number | null;
+  /**
+   * Rendered over a conversation rather than as the page's main pane — the
+   * drawer, which has no route to reach `chat.search` with.
+   *
+   * Two things change: the pane grows a header with a way back out, and opening
+   * a result switches the channel in place instead of routing to it.
+   */
+  embedded?: boolean;
+  /** Dismisses the pane. Required when embedded; ignored otherwise. */
+  onClose?: () => void;
 }
 
 /** Keystrokes are coalesced for this long before a request goes out. */
@@ -50,7 +61,34 @@ export default class ChatSearch extends Component<ChatSearchAttrs> {
       : null;
 
     return (
-      <div className="ChatSearch">
+      <div
+        className={classList("ChatSearch", {
+          "ChatSearch--embedded": this.attrs.embedded,
+        })}
+      >
+        {/* The panel shell the thread and pinned lists use, so the three panes
+            that share the drawer's overlay slot are dismissed the same way. */}
+        {this.attrs.embedded ? (
+          <div className="ChatThreadPanel-header">
+            <i className="fas fa-magnifying-glass" aria-hidden="true" />
+
+            <span className="ChatThreadPanel-title">
+              {app.translator.trans("ramon-chat.forum.search.title")}
+            </span>
+
+            <Button
+              className="Button Button--icon Button--flat"
+              icon="fas fa-xmark"
+              title={app.translator.trans(
+                "ramon-chat.forum.search.close",
+                {},
+                true,
+              )}
+              onclick={this.attrs.onClose}
+            />
+          </div>
+        ) : null}
+
         <div className="ChatSearch-bar">
           <i
             className="ChatSearch-icon fas fa-magnifying-glass"
@@ -250,6 +288,17 @@ export default class ChatSearch extends Component<ChatSearchAttrs> {
     if (!channelId) return;
 
     this.attrs.state.setActiveChannel(channelId);
+
+    // In the drawer there is no route to set, and setting one would close the
+    // drawer to open the full-screen page — which is the whole reason the search
+    // is in here. Dismissing the pane puts the chosen channel on screen.
+    if (this.attrs.embedded) {
+      this.attrs.onClose?.();
+      m.redraw();
+
+      return;
+    }
+
     m.route.set(app.route("chat.channel", { id: channelId }));
   }
 }
