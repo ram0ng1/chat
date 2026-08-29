@@ -9,6 +9,10 @@ import type Mithril from "mithril";
  * One suggestion. `insert` is what replaces the typed fragment, `label` is what
  * the row shows — they differ for an emoji, where the row shows the glyph and the
  * insert is the shortcode.
+ *
+ * `emoji` is `Children` rather than `string` because a Flamoji custom emoji is an
+ * image, not a codepoint. Mithril renders a string child as text either way, so
+ * the Unicode case is unaffected.
  */
 export interface Suggestion {
   key: string;
@@ -16,7 +20,7 @@ export interface Suggestion {
   label: string;
   hint?: string | null;
   user?: User | null;
-  emoji?: string | null;
+  emoji?: Mithril.Children;
   icon?: string | null;
 }
 

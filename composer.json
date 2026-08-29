@@ -41,7 +41,8 @@
         "flarum/tags": "Required for category-scoped channels, which inherit tag permissions (^2.0).",
         "flarum/realtime": "Required for live message delivery, typing indicators and presence (^2.0).",
         "flarum/mentions": "Enables @user and @group autocomplete parity with discussions (^2.0).",
-        "flarum/emoji": "Enables :shortcode: rendering in messages (^2.0)."
+        "flarum/emoji": "Enables :shortcode: rendering in messages (^2.0).",
+        "pianotell/flarum-ext-flamoji": "Adds its emoji picker to the chat composer, and renders custom emoji in messages, suggestions and reactions (^2.5)."
     },
     "autoload": {
         "psr-4": {
@@ -62,6 +63,7 @@
                 "flarum/realtime",
                 "flarum/mentions",
                 "flarum/emoji",
+                "pianotell/flarum-ext-flamoji",
                 "flarum/gdpr",
                 "flarum/audit"
             ],

@@ -4,6 +4,7 @@ import type Mithril from "mithril";
 
 import type Channel from "../../common/models/Channel";
 import { displayEmoji } from "./emoji";
+import { customEmoji, customEmojiImage } from "./flamoji";
 
 /**
  * The mark that stands for a channel: its picture, the people in it, its emoji,
@@ -83,9 +84,18 @@ export function channelIcon(
 
   const emoji = channel.emoji();
 
+  // The field accepts a bare shortcode as well as a glyph, so the value may name
+  // a Flamoji custom emoji — set through the API, or carried by a row older than
+  // the picker. Left to `displayEmoji` that renders as the literal `:kappa:`,
+  // which is the overflow this slot's clipping exists to contain rather than
+  // something anyone wanted to see.
+  const custom = customEmoji(emoji);
+
   return (
     <span className={classList("ChatChannelIcon", className)}>
-      {emoji ? (
+      {custom ? (
+        customEmojiImage(custom, "ChatChannelIcon-flamoji")
+      ) : emoji ? (
         displayEmoji(emoji)
       ) : (
         <i className="fas fa-hashtag" aria-hidden="true" />
