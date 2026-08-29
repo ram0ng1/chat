@@ -26,6 +26,12 @@ import {
   close as closeStickerPicker,
   isStickerPickerOpen,
 } from "../utils/stickers";
+import {
+  flamojiPickerButton,
+  loadCustomEmoji,
+  searchCustomEmoji,
+  customEmojiImage,
+} from "../utils/flamoji";
 
 export interface ChatComposerAttrs extends ComponentAttrs {
   channel: Channel;
@@ -91,6 +97,10 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
     super.oninit(vnode);
 
     this.syncSlowMode();
+
+    // Warm the custom-emoji set so the `:` list and the picker are complete on
+    // first use. A no-op when Flamoji is not installed.
+    loadCustomEmoji();
   }
 
   /**
@@ -323,6 +333,16 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
                   {stickerIcon()}
                 </button>
               ) : null}
+
+              {/* Flamoji's own picker button, hosted here. It draws nothing
+                  when that extension is absent, so this is a tool that appears
+                  rather than a dependency that must be met. Deliberately not
+                  gated on a chat permission: it only types into the box, and
+                  what may be sent is already decided by the send button. */}
+              {flamojiPickerButton(
+                (text: string) => this.insertAtCursor(text),
+                this.sending,
+              )}
             </div>
 
             <button
@@ -653,12 +673,34 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
     };
 
     if (type === ":") {
-      this.suggestions = searchEmoji(term, 12).map((entry) => ({
+      // Custom emoji first, and on their own budget rather than competing for
+      // the twelve slots. There are few of them, they are forum-specific, and a
+      // member who typed `:kap` almost certainly means the one their forum
+      // added — not `kappa`'s nearest Unicode neighbour.
+      const custom: Suggestion[] = searchCustomEmoji(term, 4).map((entry) => ({
+        key: "flamoji-" + entry.name,
+        insert: entry.insert,
+        label: ":" + entry.name + ":",
+        emoji: customEmojiImage(entry, "ChatAutocomplete-flamoji"),
+        hint: entry.title !== entry.name ? entry.title : null,
+      }));
+
+      const unicode: Suggestion[] = searchEmoji(term, 12).map((entry) => ({
         key: "emoji-" + entry.name,
         insert: ":" + entry.name + ":",
         label: ":" + entry.name + ":",
         emoji: entry.unicode,
       }));
+
+      // A custom emoji may share a name with a Unicode one, and the formatter
+      // gives the custom one precedence — so offering both would let someone
+      // pick a glyph they will not get.
+      const taken = new Set(custom.map((entry) => entry.label));
+
+      this.suggestions = [
+        ...custom,
+        ...unicode.filter((entry) => !taken.has(entry.label)),
+      ];
 
       this.activeSuggestion = 0;
 

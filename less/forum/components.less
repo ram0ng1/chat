@@ -3667,6 +3667,42 @@ body.ChatFullPage {
   line-height: 1;
 }
 
+// A Flamoji custom emoji is an image where every other emoji is a glyph, so it
+// has no intrinsic tie to the font size and would render at whatever the file
+// happens to be — a 128px sprite inside a 22px chip.
+//
+// Sized in `px` rather than the `em` Flamoji's own `span.flamoji img` rule uses:
+// that rule is for prose, where the emoji should track the surrounding text, and
+// its sticker-mode variant scales it to 4em. Neither is right for a chip or an
+// autocomplete row, both of which are fixed-height chrome.
+.ChatReactions-flamoji {
+  display: block;
+  width: auto;
+  height: 16px;
+  max-width: 48px;
+  object-fit: contain;
+}
+
+.ChatAutocomplete-flamoji {
+  display: block;
+  width: auto;
+  height: 20px;
+  max-width: 60px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+// In the icon slot the image is the whole mark, so it fills the circle the
+// glyph would have occupied rather than sitting at a fixed height — the slot is
+// 38px on a Browse card and 20px in the sidebar, and one number cannot serve
+// both. `contain` keeps a non-square sprite from being stretched.
+.ChatChannelIcon-flamoji {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
 // The channel icon slot — a fixed 38px circle on a Browse card, a 20-26px column
 // in the sidebar, the glyph beside the name in a channel header. Before emoji
 // were resolved, an unrendered `:speech_balloon:` overflowed it and pushed the

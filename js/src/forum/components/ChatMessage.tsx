@@ -12,6 +12,7 @@ import type Mithril from "mithril";
 import type Message from "../../common/models/Message";
 import type ChatState from "../state/ChatState";
 import { displayEmoji } from "../utils/emoji";
+import { customEmoji, customEmojiImage } from "../utils/flamoji";
 import { isOnline } from "../utils/presence";
 import { authorAvatar, authorLink } from "../utils/bot";
 import { safeFileUrl } from "../utils/url";
@@ -493,6 +494,11 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
       <div className="ChatReactions">
         {emojis.map((emoji) => {
           const entry = summary[emoji];
+          // A reaction is stored as a bare shortcode, and Flamoji's canonical
+          // triggers use exactly the character set the reaction endpoint
+          // accepts — so a custom emoji reacts fine, and only rendering it was
+          // missing. Without this the chip printed `:kappa:` as text.
+          const custom = customEmoji(emoji);
 
           return (
             <button
@@ -516,6 +522,10 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
                   className="ChatReactions-icon fas fa-thumbs-up"
                   aria-hidden="true"
                 />
+              ) : custom ? (
+                <span className="ChatReactions-emoji">
+                  {customEmojiImage(custom, "ChatReactions-flamoji")}
+                </span>
               ) : (
                 <span className="ChatReactions-emoji">
                   {displayEmoji(emoji)}
