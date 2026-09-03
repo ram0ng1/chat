@@ -14,7 +14,6 @@ use Flarum\Api\Endpoint;
 use Flarum\Api\Resource\AbstractDatabaseResource;
 use Flarum\Api\Schema;
 use Illuminate\Database\Eloquent\Builder;
-use Ramon\Chat\Message;
 use Ramon\Chat\Upload;
 use Tobyz\JsonApiServer\Context as OriginalContext;
 
@@ -38,30 +37,14 @@ class UploadResource extends AbstractDatabaseResource
     }
 
     /**
-     * An upload is visible when its message is. Unattached uploads are visible
-     * only to their uploader, which is what keeps a pending composer attachment
-     * private until the message is sent.
+     * The rule lives in Access\ScopeUploadVisibility, shared with the controller
+     * that streams private files: an upload is visible when its message is, and
+     * a pending one only to its uploader.
      */
     public function scope(Builder $query, OriginalContext $context): void
     {
-        $actor = $context->getActor();
-
-        $query->where(function (Builder $query) use ($actor) {
-            $query->whereIn('chat_uploads.message_id', function ($sub) use ($actor) {
-                Message::query()
-                    ->setQuery($sub->from('chat_messages'))
-                    ->whereVisibleTo($actor)
-                    ->select('chat_messages.id');
-            });
-
-            if ($actor->exists) {
-                $query->orWhere(function (Builder $query) use ($actor) {
-                    $query
-                        ->whereNull('chat_uploads.message_id')
-                        ->where('chat_uploads.user_id', $actor->id);
-                });
-            }
-        });
+        // @phpstan-ignore method.notFound (Flarum model scope)
+        $query->whereVisibleTo($context->getActor());
     }
 
     public function endpoints(): array
@@ -97,6 +80,11 @@ class UploadResource extends AbstractDatabaseResource
 
             Schema\Boolean::make('isImage')
                 ->get(fn (Upload $u) => $u->isImage()),
+
+            // Whether the file is served through the permission check rather
+            // than straight off the web server. Informational: the URL already
+            // points at the right place either way.
+            Schema\Boolean::make('isPrivate'),
 
             Schema\DateTime::make('createdAt'),
 

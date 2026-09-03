@@ -69,12 +69,24 @@ return [
         ->register(ChatServiceProvider::class),
 
     // ── Storage for message attachments ──────────────────────────────────────
+    // Two disks. The public one is served by the web server and holds what was
+    // posted in channels anyone can read. The private one is outside the webroot
+    // and is only ever read by ServeUploadController, which checks the upload's
+    // visibility first — that is what makes a private channel's pictures private
+    // rather than merely unlisted. See Service\UploadPrivacy for the rule that
+    // decides which disk a file goes on.
     (new Extend\Filesystem())
         ->disk('chat', function (Paths $paths, UrlGenerator $url) {
             return [
                 'root'       => "$paths->public/assets/chat",
                 'url'        => $url->to('forum')->path('assets/chat'),
                 'visibility' => Visibility::PUBLIC,
+            ];
+        })
+        ->disk('chat-private', function (Paths $paths) {
+            return [
+                'root'       => "$paths->storage/chat-uploads",
+                'visibility' => Visibility::PRIVATE,
             ];
         }),
 
@@ -85,6 +97,9 @@ return [
 
     (new Extend\ModelVisibility(Channel::class))
         ->scope(Access\ScopeChannelVisibility::class),
+
+    (new Extend\ModelVisibility(Upload::class))
+        ->scope(Access\ScopeUploadVisibility::class),
 
     (new Extend\ModelVisibility(Message::class))
         ->scope(Access\ScopeMessageVisibility::class),
@@ -274,6 +289,10 @@ return [
     // addressed by a secret rather than a resource id (webhooks).
     (new Extend\Routes('api'))
         ->post('/chat/uploads', 'chat.uploads.store', Api\Controller\UploadController::class)
+        // The bytes of an attachment on the private disk. Under /api rather than
+        // the forum so it authenticates the way every other chat request does:
+        // by session cookie from the browser, by token from anything else.
+        ->get('/chat/uploads/{id:\d+}/file', 'chat.uploads.file', Api\Controller\ServeUploadController::class)
         ->post('/chat/typing', 'chat.typing', Api\Controller\TypingController::class)
         ->post('/chat/drafts', 'chat.drafts.store', Api\Controller\DraftController::class)
         ->get('/chat/drafts', 'chat.drafts.index', Api\Controller\ListDraftsController::class)
@@ -333,6 +352,11 @@ return [
         // deleted image stayed readable by URL to anyone who had seen it.
         ->listen(Event\MessageWasDeleted::class, Listener\PurgeUploadsOnDeletion::class)
         ->listen(Event\MessageWasMoved::class, Listener\RecalculateUnreadCounts::class)
+        // A channel made private with a history, or a message moved into one,
+        // takes its attachments off the public disk. Sending is handled in the
+        // dispatcher; these are the two ways a file gets there afterwards.
+        ->listen(Event\MessageWasMoved::class, Listener\KeepUploadsPrivate::class.'@whenMessageMoved')
+        ->listen(Event\ChannelWasEdited::class, Listener\KeepUploadsPrivate::class.'@whenChannelEdited')
         // Narrates membership changes into the stream, so a departure is visible to
         // whoever is left rather than silent.
         ->listen(Event\UserJoinedChannel::class, Listener\AnnounceMembershipChanges::class.'@whenJoined')

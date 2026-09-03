@@ -161,18 +161,18 @@ class ChatData extends Type
 
     protected function deleteUploads(): void
     {
-        // The same `chat` disk PruneChatCommand writes to; Upload holds only the
-        // path, not a handle to its own storage.
-        $disk = resolve(Factory::class)->disk('chat');
+        // The same disks PruneChatCommand writes to; Upload holds only the path
+        // and which of the two disks it is on, not a handle to its own storage.
+        $filesystem = resolve(Factory::class);
 
         Upload::query()
             ->where('user_id', $this->user->id)
-            ->each(function (Upload $upload) use ($disk) {
+            ->each(function (Upload $upload) use ($filesystem) {
                 // Best effort on the stored file. A missing or unreadable file must
                 // not stop the erasure — removing the row is what matters legally,
                 // and an exception here would abort the whole request.
                 try {
-                    $disk->delete($upload->path);
+                    $filesystem->disk($upload->diskName())->delete($upload->path);
                 } catch (\Throwable $e) {
                     // Deliberately swallowed; see above.
                 }

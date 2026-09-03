@@ -16,6 +16,7 @@ use Illuminate\Contracts\Filesystem\Factory;
 use Symfony\Component\Console\Input\InputOption;
 use Ramon\Chat\Channel;
 use Ramon\Chat\Message;
+use Ramon\Chat\Service\UploadPrivacy;
 use Ramon\Chat\Upload;
 
 /**
@@ -146,11 +147,9 @@ class PruneChatCommand extends AbstractCommand
             ->where('created_at', '<', $cutoff)
             ->chunkById(500, function ($uploads) use (&$deleted, $dryRun) {
                 if (! $dryRun) {
-                    $disk = $this->filesystem->disk('chat');
-
                     foreach ($uploads as $upload) {
                         try {
-                            $disk->delete($upload->path);
+                            $this->filesystem->disk(UploadPrivacy::diskFor((bool) $upload->is_private))->delete($upload->path);
                         } catch (\Throwable $e) {
                             // A missing file is not a reason to abort the sweep;
                             // the row still needs removing either way.
@@ -172,13 +171,11 @@ class PruneChatCommand extends AbstractCommand
      */
     protected function deleteFilesFor(array $messageIds): void
     {
-        $disk = $this->filesystem->disk('chat');
-
         Upload::query()
             ->whereIn('message_id', $messageIds)
-            ->each(function (Upload $upload) use ($disk) {
+            ->each(function (Upload $upload) {
                 try {
-                    $disk->delete($upload->path);
+                    $this->filesystem->disk($upload->diskName())->delete($upload->path);
                 } catch (\Throwable $e) {
                     $this->error('Could not delete '.$upload->path.': '.$e->getMessage());
                 }

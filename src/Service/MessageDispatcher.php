@@ -44,7 +44,8 @@ class MessageDispatcher
         protected MentionResolver $mentions,
         protected RateLimiter $rateLimiter,
         protected SlowMode $slowMode,
-        protected UnreadTracker $unread
+        protected UnreadTracker $unread,
+        protected UploadPrivacy $uploadPrivacy
     ) {
     }
 
@@ -116,7 +117,7 @@ class MessageDispatcher
             $message = Message::build($channel, $actor, $content, $thread, $replyTo);
             $message->save();
 
-            $this->attachUploads($message, $actor, $uploadIds);
+            $this->attachUploads($channel, $message, $actor, $uploadIds);
 
             $this->mentions->sync(
                 $message,
@@ -196,9 +197,17 @@ class MessageDispatcher
      * Binds pending uploads to the message. Only the sender's own unattached
      * uploads are eligible, which prevents claiming someone else's file by id.
      *
+     * This is also the gate on where the file lives. The composer names the
+     * channel when it uploads, so the file normally starts on the right disk —
+     * but the upload endpoint takes the client's word for the destination, and
+     * this is where the destination is known for certain. A public file bound
+     * to a private channel is moved here, inside the same transaction as the
+     * message, so a move that fails is a send that fails rather than a picture
+     * left published.
+     *
      * @param  int[]  $uploadIds
      */
-    protected function attachUploads(Message $message, User $actor, array $uploadIds): void
+    protected function attachUploads(Channel $channel, Message $message, User $actor, array $uploadIds): void
     {
         $uploadIds = array_values(array_filter(array_map('intval', $uploadIds)));
 
@@ -214,6 +223,20 @@ class MessageDispatcher
                 'message_id' => $message->id,
                 'updated_at' => Carbon::now(),
             ]);
+
+        if (! UploadPrivacy::requiredFor($channel)) {
+            return;
+        }
+
+        $public = Upload::query()
+            ->whereKey($uploadIds)
+            ->where('message_id', $message->id)
+            ->where('is_private', false)
+            ->get();
+
+        foreach ($public as $upload) {
+            $this->uploadPrivacy->privatize($upload);
+        }
     }
 
     /**
