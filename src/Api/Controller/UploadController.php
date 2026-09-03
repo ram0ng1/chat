@@ -15,12 +15,15 @@ use Flarum\Http\RequestUtil;
 use Flarum\Locale\Translator;
 use Flarum\Settings\SettingsRepositoryInterface;
 use Illuminate\Contracts\Filesystem\Factory;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 use Laminas\Diactoros\Response\JsonResponse;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Message\UploadedFileInterface;
 use Psr\Http\Server\RequestHandlerInterface;
+use Ramon\Chat\Channel;
+use Ramon\Chat\Service\UploadPrivacy;
 use Ramon\Chat\Upload;
 
 /**
@@ -85,6 +88,27 @@ class UploadController implements RequestHandlerInterface
             ]);
         }
 
+        // The composer says where the file is headed, so one meant for a private
+        // channel never touches the public disk. A hint and not the gate: the
+        // dispatcher checks again when the message is sent, against the channel
+        // it is actually sent to. The channel must be visible to the uploader —
+        // a private one they cannot see answers "not found" like everywhere else.
+        $channelId = (int) Arr::get($request->getParsedBody(), 'channelId', 0);
+        $private = false;
+
+        if ($channelId > 0) {
+            /** @var Channel|null $channel */
+            $channel = Channel::whereVisibleTo($actor)->find($channelId);
+
+            if ($channel === null) {
+                throw new ValidationException([
+                    'channelId' => $this->translator->trans('ramon-chat.api.channel_not_found'),
+                ]);
+            }
+
+            $private = UploadPrivacy::requiredFor($channel);
+        }
+
         $maxSize = (int) $this->settings->get('ramon-chat.max_upload_size', 10485760);
 
         if ($maxSize > 0 && (int) $file->getSize() > $maxSize) {
@@ -110,7 +134,7 @@ class UploadController implements RequestHandlerInterface
         // never as a path component, so traversal and collisions are impossible.
         $path = sprintf('%s/%s.%s', Carbon::now()->format('Y/m'), Str::random(28), $extension);
 
-        $this->filesystem->disk('chat')->put($path, $file->getStream()->getContents());
+        $this->filesystem->disk(UploadPrivacy::diskFor($private))->put($path, $file->getStream()->getContents());
 
         $width = null;
         $height = null;
@@ -126,6 +150,7 @@ class UploadController implements RequestHandlerInterface
         $upload = new Upload();
         $upload->user_id = $actor->id;
         $upload->path = $path;
+        $upload->is_private = $private;
         $upload->file_name = $this->safeFileName($file->getClientFilename() ?? 'file.'.$extension);
         $upload->mime_type = $mime;
         $upload->size = (int) $file->getSize();
@@ -143,8 +168,9 @@ class UploadController implements RequestHandlerInterface
                     'size'     => $upload->size,
                     'width'    => $upload->width,
                     'height'   => $upload->height,
-                    'url'      => $upload->url(),
-                    'isImage'  => $upload->isImage(),
+                    'url'       => $upload->url(),
+                    'isImage'   => $upload->isImage(),
+                    'isPrivate' => $upload->is_private,
                 ],
             ],
         ], 201);

@@ -50,11 +50,9 @@ class PurgeUploadsOnDeletion
             return;
         }
 
-        $disk = $this->filesystem->disk('chat');
-
         foreach ($uploads as $upload) {
             try {
-                $disk->delete($upload->path);
+                $this->filesystem->disk($upload->diskName())->delete($upload->path);
             } catch (\Throwable $e) {
                 // A file already gone is not a failure — the row still has to go,
                 // and refusing to continue would leave the rest of the message's

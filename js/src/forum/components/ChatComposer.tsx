@@ -1171,6 +1171,11 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
       try {
         const body = new FormData();
         body.append("file", file);
+        // Where this is going to be posted. The server uses it to put a file
+        // meant for a private channel on the private disk from the start, rather
+        // than on the public one and moving it on send. Sending still enforces
+        // the rule — this is the hint, not the gate.
+        body.append("channelId", String(this.attrs.channel.id()));
 
         const payload = await app.request<any>({
           method: "POST",
