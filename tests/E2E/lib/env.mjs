@@ -10,8 +10,9 @@ import { readFile, mkdir, appendFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// The local forum runs on a self-signed certificate.
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+// Certificates are verified the way they would be anywhere else. A forum on a
+// certificate Node does not trust is pointed at through NODE_EXTRA_CA_CERTS
+// in the shell that runs the suites, never by switching verification off here.
 
 export const E2E_DIR = dirname(dirname(fileURLToPath(import.meta.url)));
 export const BASE = (

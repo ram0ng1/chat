@@ -18,6 +18,8 @@ php workbench/chat/tests/E2E/mint-tokens.php
 
 The forum URL defaults to `https://alegatest.alega.com.br`; set `CHAT_E2E_BASE`
 to point elsewhere. The websocket settings are read from the forum document.
+Certificates are verified normally; for a forum on a private CA, set
+`NODE_EXTRA_CA_CERTS` to the CA file in the shell before running.
 
 ## Running
 
@@ -33,7 +35,7 @@ also writes `tests/E2E/screenshots/*.png`. Both directories are git-ignored.
 ## Suites
 
 | Suite | What it proves |
-|---|---|
+| --- | --- |
 | `invite-flow.mjs` | Inviting creates an invitation, not a membership. The invitee gets the notification and the websocket push, cannot read the private channel, and can decline (owner and inviter notified live) or accept (membership, capability flags, sidebar push, the "joined, invited by" line narrated live). Withdrawing removes the notification. The public `join` endpoint answers with the channel record. |
 | `join-composer.mjs` | In a headless Edge: join from Browse and open the channel with the composer drawn at once; land on an unjoined channel and join from the bar; see another user's message arrive live; answer an invitation from the notifications page and land in the private channel. |
 | `invite-modal.mjs` | In a headless Edge, as a channel owner: the invite picker opens onto recently active people, searches by name, marks people already in or invited, keeps chips in the field with keyboard support, and the members tab lists a new invitation at once. Then, from Browse, the Inspect button for a holder of `inspectChannels`. |

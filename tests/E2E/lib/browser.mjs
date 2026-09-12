@@ -32,7 +32,6 @@ export async function launchBrowser({ label = "browser", width = 1360, height = 
       "--disable-gpu",
       "--no-first-run",
       "--no-default-browser-check",
-      "--ignore-certificate-errors",
       "--remote-debugging-port=" + port,
       "--user-data-dir=" + profile,
       "--window-size=" + width + "," + height,
