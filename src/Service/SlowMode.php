@@ -35,7 +35,8 @@ class SlowMode
 {
     public function __construct(
         protected Store $cache,
-        protected Translator $translator
+        protected Translator $translator,
+        protected ChannelOwnership $ownership
     ) {
     }
 
@@ -114,10 +115,15 @@ class SlowMode
      * equally want its moderators keeping the same rhythm as everyone else.
      *
      * Seeded to MODERATOR, so the forums already running slow mode see no change.
+     *
+     * The people running the room are exempt too — its owner and the moderators
+     * they appointed. They are the ones answering in it, and a cooldown on them
+     * slows the room down rather than calming it.
      */
     protected function isExempt(Channel $channel, User $actor): bool
     {
-        return $actor->hasPermission('ramon-chat.bypassSlowMode');
+        return $actor->hasPermission('ramon-chat.bypassSlowMode')
+            || $this->ownership->exemptFromSlowMode($actor, $channel);
     }
 
     protected function key(Channel $channel, User $actor): string

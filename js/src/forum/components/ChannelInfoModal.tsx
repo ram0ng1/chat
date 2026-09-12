@@ -371,6 +371,13 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
           ) : null}
         </div>
 
+        {/* What the role means, shown to whoever can hand it out. */}
+        {this.attrs.channel.canManageModerators() ? (
+          <p className="helpText ChatChannelInfo-moderatorHelp">
+            {app.translator.trans("ramon-chat.forum.info.moderator_help")}
+          </p>
+        ) : null}
+
         <input
           className="FormControl ChatChannelInfo-filter"
           type="search"
@@ -395,26 +402,8 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
             >
               <Avatar user={user} className="Avatar" />
               <span>{userLink(user)}</span>
-
-              {/* Drawn only for people the actor may actually remove, so the button
-                  is never a promise the server refuses to keep. Removing yourself is
-                  what "Leave channel" is for, and the endpoint rejects it. */}
-              {this.attrs.channel.canManageMembers() &&
-              user.id() !== app.session.user?.id() ? (
-                <Button
-                  className="Button Button--icon Button--flat ChatChannelInfo-member-remove"
-                  icon="fas fa-user-minus"
-                  disabled={this.working}
-                  title={app.translator.trans(
-                    "ramon-chat.forum.info.remove_member",
-                    {
-                      username: username(user),
-                    },
-                    true,
-                  )}
-                  onclick={() => this.remove(user)}
-                />
-              ) : null}
+              {this.memberBadge(user)}
+              {this.memberControls(user)}
             </div>
           ))}
 
@@ -426,6 +415,131 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
         </div>
       </div>
     );
+  }
+
+  protected isOwner(user: User): boolean {
+    const creatorId = this.attrs.channel.creatorId();
+
+    return creatorId != null && Number(creatorId) === Number(user.id());
+  }
+
+  protected isModerator(user: User): boolean {
+    return (this.attrs.channel.moderatorIds() ?? []).some(
+      (id) => Number(id) === Number(user.id()),
+    );
+  }
+
+  /** The owner's and channel moderators' labels, so the roles are visible to everyone. */
+  protected memberBadge(user: User): Mithril.Children {
+    if (this.isOwner(user)) {
+      return (
+        <span className="ChatChannelInfo-member-badge ChatChannelInfo-member-badge--owner">
+          {app.translator.trans("ramon-chat.forum.info.owner_badge")}
+        </span>
+      );
+    }
+
+    if (this.isModerator(user)) {
+      return (
+        <span className="ChatChannelInfo-member-badge">
+          {app.translator.trans("ramon-chat.forum.info.moderator_badge")}
+        </span>
+      );
+    }
+
+    return null;
+  }
+
+  /**
+   * Promote, demote and remove — each drawn only for people the actor may
+   * actually act on, so no button is a promise the server refuses to keep.
+   * Nothing for yourself: leaving is what "Leave channel" is for, and the owner
+   * is not something you can stop being from here.
+   */
+  protected memberControls(user: User): Mithril.Children {
+    const channel = this.attrs.channel;
+
+    if (user.id() === app.session.user?.id()) return null;
+
+    const controls: Mithril.Children[] = [];
+
+    if (channel.canManageModerators() && !this.isOwner(user)) {
+      const moderator = this.isModerator(user);
+
+      controls.push(
+        <Button
+          className="Button Button--icon Button--flat ChatChannelInfo-member-role"
+          icon={moderator ? "fas fa-user-slash" : "fas fa-user-shield"}
+          disabled={this.working}
+          title={app.translator.trans(
+            moderator
+              ? "ramon-chat.forum.info.demote_moderator"
+              : "ramon-chat.forum.info.promote_moderator",
+            { username: username(user) },
+            true,
+          )}
+          onclick={() => this.setModerator(user, !moderator)}
+        />,
+      );
+    }
+
+    if (channel.canManageMembers()) {
+      controls.push(
+        <Button
+          className="Button Button--icon Button--flat ChatChannelInfo-member-remove"
+          icon="fas fa-user-minus"
+          disabled={this.working}
+          title={app.translator.trans(
+            "ramon-chat.forum.info.remove_member",
+            { username: username(user) },
+            true,
+          )}
+          onclick={() => this.remove(user)}
+        />,
+      );
+    }
+
+    return controls;
+  }
+
+  /**
+   * Hands the channel's moderator role to a member, or takes it back.
+   *
+   * The response carries the channel with its participants, so pushing it
+   * refreshes `moderatorIds` on the very model this modal is drawing from.
+   */
+  protected async setModerator(user: User, moderator: boolean): Promise<void> {
+    this.working = true;
+    m.redraw();
+
+    try {
+      const payload = await app.request<any>({
+        method: "POST",
+        url: `${app.forum.attribute("apiUrl")}/chat-channels/${this.attrs.channel.id()}/moderators${moderator ? "" : "/remove"}`,
+        body: { data: { attributes: { userId: Number(user.id()) } } },
+      });
+
+      if (payload?.data) app.store.pushPayload(payload);
+
+      app.alerts.show(
+        { type: "success" },
+        app.translator.trans(
+          moderator
+            ? "ramon-chat.forum.info.moderator_promoted"
+            : "ramon-chat.forum.info.moderator_demoted",
+          { username: username(user) },
+        ),
+      );
+    } catch (e: any) {
+      app.alerts.show(
+        { type: "error" },
+        e?.response?.errors?.[0]?.detail ??
+          app.translator.trans("ramon-chat.forum.info.save_failed"),
+      );
+    } finally {
+      this.working = false;
+      m.redraw();
+    }
   }
 
   /**

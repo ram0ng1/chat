@@ -118,8 +118,8 @@ ramon-chat:
       leave: Sair do canal
       leave_confirm: Sair deste canal? Você pode voltar depois e seu histórico é mantido.
       leave_failed: Não foi possível sair do canal.
-      join_hidden: Entrar sem ser percebido
-      joined_hidden: Você entrou sem aparecer na lista de membros.
+      join_hidden: Inspecionar canal
+      joined_hidden: Você está inspecionando o canal. Você não aparece na lista de membros, e nem sua entrada nem sua saída são anunciadas.
       join_failed: Não foi possível entrar no canal.
       muted: Silenciado
 
@@ -418,6 +418,13 @@ ramon-chat:
       member_removed: "{username} foi removido do canal."
       remove_member: "Remover {username}"
       remove_member_confirm: "Remover {username} deste canal?"
+      owner_badge: Dono
+      moderator_badge: Moderador
+      moderator_help: Moderadores do canal adicionam e removem membros, removem mensagens e gerenciam tópicos aqui, e não passam pelo modo lento deste canal. Só você pode promovê-los e rebaixá-los.
+      promote_moderator: "Tornar {username} moderador deste canal"
+      demote_moderator: "Remover {username} da moderação deste canal"
+      moderator_promoted: "{username} agora é moderador deste canal."
+      moderator_demoted: "{username} não é mais moderador deste canal."
       no_members: Nenhum membro corresponde.
       save_failed: Não foi possível salvar a alteração.
 
@@ -469,6 +476,10 @@ ramon-chat:
   admin:
     settings:
       title: Chat
+      channel_ownership: Quem cria e administra os canais
+      channel_ownership_admin: Apenas administradores
+      channel_ownership_members: Membros criam e gerenciam os próprios canais
+      channel_ownership_help: "Com os membros no comando, a grade de permissões se divide em dois blocos: \"Chat · Global\", que vale em todo lugar, e \"Chat · Membros\" logo abaixo, para os canais que os membros criam e administram — criar, gerenciar, editar, e o que os membros podem enviar neles. O dono de um canal pode promover membros a moderadores daquele canal; donos e moderadores do canal não passam pelo modo lento. Administradores e moderadores do chat continuam com todos os canais, e podem inspecionar um sem aparecer na lista de membros."
       retention_title: Retenção de mensagens
       retention_help: Mensagens antigas são removidas pela tarefa noturna de limpeza.
       retention_warning: A retenção exclui mensagens permanentemente. Não há como desfazer.
@@ -529,7 +540,11 @@ ramon-chat:
       access_private_channels: Ver e entrar em canais privados
       start_direct: Iniciar mensagens diretas
       create_channel: Criar canais
-      edit_channel: Editar canais
+      edit_channel: Editar qualquer canal
+      global_heading: "Chat · Global — vale para todo o chat, em todos os canais"
+      members_heading: "Chat · Membros — canais que os membros criam e administram"
+      manage_own_channels: "Próprios canais: gerenciar (membros, moderadores do canal, fechar, arquivar, excluir, remover mensagens)"
+      edit_own_channels: "Próprios canais: editar as configurações"
       moderate: Moderar o chat
       send_stickers: Enviar stickers no chat
       upload: Enviar arquivos no chat

@@ -4,6 +4,13 @@ import type Channel from "../../common/models/Channel";
 import type Message from "../../common/models/Message";
 import type Thread from "../../common/models/Thread";
 import type Upload from "../../common/models/Upload";
+import {
+  purgeSnapshots,
+  readSnapshot,
+  serialize,
+  writeSnapshot,
+  type Document,
+} from "../utils/snapshot";
 
 /**
  * One channel's loaded message window plus its paging state.
@@ -20,6 +27,12 @@ interface ChannelStream {
    * bottom as each message is marked read.
    */
   dividerAfterId: number | null;
+  /**
+   * Seeded from the local snapshot rather than from the server. Painted at once,
+   * and replaced by the server's answer the first time the channel is shown —
+   * see loadChannel() and revalidateStream().
+   */
+  stale: boolean;
 }
 
 interface TypingEntry {
@@ -38,6 +51,12 @@ interface TypingEntry {
 }
 
 const PAGE_SIZE = 50;
+
+/** How many recently viewed channels the local snapshot keeps a tail for. */
+const SNAPSHOT_CHANNELS = 3;
+
+/** Quiet period before a snapshot write; see scheduleSnapshot(). */
+const SNAPSHOT_DEBOUNCE_MS = 1500;
 
 /**
  * The collection size a paginated response reports, or null when it does not.
@@ -90,6 +109,21 @@ export default class ChatState {
    */
   private draftsLoaded = false;
   private draftsRequest: Promise<void> | null = null;
+
+  /** The sidebar came from the local snapshot; refetch it on first use. */
+  private channelsStale = false;
+
+  /** Channels whose pinned preview came from the local snapshot. */
+  private pinnedStale = new Set<number>();
+
+  /** Pending debounced snapshot write, if any. */
+  private snapshotTimer: number | null = null;
+
+  /**
+   * Channels viewed this session, most recent first. What the snapshot keeps
+   * message tails for — the ones the reader is likely to open next visit.
+   */
+  private recentChannelIds: number[] = [];
 
   /** Loaded message windows, keyed by channel id. */
   streams: Record<number, ChannelStream> = {};
@@ -265,6 +299,8 @@ export default class ChatState {
   }
 
   private persistDrawer(): void {
+    this.persistDrawerCookie();
+
     const key = this.storageKey();
 
     if (!key) return;
@@ -281,6 +317,32 @@ export default class ChatState {
       );
     } catch {
       // Non-fatal, as above.
+    }
+  }
+
+  /**
+   * Mirrors "drawer open, on this channel" into a cookie the server can read.
+   *
+   * localStorage is invisible to the page render, so a reload on a forum page
+   * with the drawer open used to boot with nothing preloaded and assemble the
+   * conversation over three round trips. Content\PreloadChat reads this cookie
+   * and puts the drawer's channel list and conversation into the boot payload
+   * of every page, the way it already does for /chat routes.
+   *
+   * Only a channel id, never content; absent whenever the drawer is closed, so
+   * the server does no chat work for a page the reader is not chatting on.
+   */
+  private persistDrawerCookie(): void {
+    try {
+      const secure = location.protocol === "https:" ? "; Secure" : "";
+
+      if (this.drawerOpen && !this.drawerSuspended) {
+        document.cookie = `ramon_chat_drawer=${this.activeChannelId ?? 0}; path=/; max-age=31536000; SameSite=Lax${secure}`;
+      } else {
+        document.cookie = `ramon_chat_drawer=; path=/; max-age=0; SameSite=Lax${secure}`;
+      }
+    } catch {
+      // Non-fatal.
     }
   }
 
@@ -346,6 +408,14 @@ export default class ChatState {
    */
   setActiveChannel(channelId: number | null): void {
     this.activeChannelId = channelId;
+
+    if (channelId !== null) {
+      this.recentChannelIds = [
+        channelId,
+        ...this.recentChannelIds.filter((id) => id !== channelId),
+      ].slice(0, SNAPSHOT_CHANNELS);
+    }
+
     this.persistDrawer();
   }
 
@@ -404,6 +474,155 @@ export default class ChatState {
       // A preload that broke the chat would be worse than the flash it removes.
       // Whatever was not hydrated is simply fetched the way it always was.
     }
+  }
+
+  /**
+   * Seeds whatever the boot payload did not carry from the copy the last visit
+   * left in localStorage — the sidebar and the tails of the channels most
+   * recently viewed.
+   *
+   * Runs right after hydrateFromBoot() and before anything mounts, which is why
+   * the snapshot lives in localStorage rather than IndexedDB: the read has to be
+   * synchronous to land before the first view(), and at the size kept here
+   * (see MAX_BYTES in utils/snapshot) it costs a few milliseconds. This is what
+   * lets the chat open finished on a page the server did not preload — the
+   * drawer opened by its button after a reload, or a channel visited last time.
+   *
+   * Nothing read here is trusted past the first paint. Each section is marked
+   * stale, and the first thing that shows it replaces it with the server's
+   * answer in the background — see loadChannels(), loadChannel() and
+   * loadPinnedPreview(). The reader sees the conversation as it was, then the
+   * few rows that changed, rather than a skeleton and then everything.
+   *
+   * Reads the user id from `app.data`, not `app.session`, for the same reason
+   * hydrateFromBoot() does: the session is not built yet.
+   */
+  hydrateFromSnapshot(): void {
+    const userId = this.snapshotUserId();
+
+    if (!userId) return;
+
+    const snapshot = readSnapshot(userId);
+
+    if (!snapshot) return;
+
+    try {
+      if (!this.channelsLoaded) {
+        this.hydrateChannels(snapshot.channels);
+
+        if (this.channelsLoaded) this.channelsStale = true;
+      }
+
+      for (const [key, document] of Object.entries(snapshot.streams)) {
+        const channelId = Number(key);
+
+        if (!(channelId > 0)) continue;
+
+        const stream = this.stream(channelId);
+
+        if (stream.loadedInitial) continue;
+
+        this.hydrateStream(stream, document, channelId);
+
+        if (stream.loadedInitial) stream.stale = true;
+      }
+
+      for (const [key, document] of Object.entries(snapshot.pinned)) {
+        const channelId = Number(key);
+
+        if (!(channelId > 0) || channelId in this.pinnedPreviews) continue;
+
+        this.hydratePinned(channelId, document);
+
+        if (channelId in this.pinnedPreviews) this.pinnedStale.add(channelId);
+      }
+    } catch {
+      // Same stance as the boot payload: a snapshot that broke the chat would be
+      // worse than the flash it removes.
+    }
+  }
+
+  private snapshotUserId(): string | null {
+    const id = (app as unknown as { data?: { session?: { userId?: unknown } } })
+      .data?.session?.userId;
+
+    return typeof id === "number" && id > 0 ? String(id) : null;
+  }
+
+  /**
+   * Writes the snapshot soon, once things settle.
+   *
+   * Called wherever the sidebar or a stream changes — a page landing, a message
+   * arriving, a channel being read. Debounced because those come in bursts, and
+   * serialising fifty messages on every one of them would cost more than the
+   * snapshot saves.
+   */
+  scheduleSnapshot(): void {
+    if (this.snapshotTimer !== null) return;
+
+    this.snapshotTimer = window.setTimeout(() => {
+      this.snapshotTimer = null;
+      this.flushSnapshot();
+    }, SNAPSHOT_DEBOUNCE_MS);
+  }
+
+  /**
+   * Writes the snapshot now. Also the `pagehide` and hidden-tab hook, so a
+   * message that arrived a moment before the tab closed is in the next boot.
+   *
+   * Only what the server has confirmed: a stale stream is the previous
+   * snapshot's, and writing it back would only ever age it.
+   */
+  flushSnapshot(): void {
+    if (this.snapshotTimer !== null) {
+      window.clearTimeout(this.snapshotTimer);
+      this.snapshotTimer = null;
+    }
+
+    const userId = this.snapshotUserId();
+
+    if (!userId || !this.channelsLoaded || this.channelsStale) return;
+
+    try {
+      const streams: Record<string, Document> = {};
+      const pinned: Record<string, Document> = {};
+
+      for (const channelId of this.recentChannelIds) {
+        const stream = this.streams[channelId];
+
+        if (stream?.loadedInitial && !stream.loading && !stream.stale) {
+          streams[channelId] = serialize(stream.messages.slice(-PAGE_SIZE));
+        }
+
+        if (
+          channelId in this.pinnedPreviews &&
+          !this.pinnedStale.has(channelId)
+        ) {
+          const preview = this.pinnedPreviews[channelId];
+          const document = preview ? serialize([preview]) : { data: [] };
+
+          pinned[channelId] = {
+            ...document,
+            meta: { page: { total: this.pinnedTotals[channelId] ?? 0 } },
+          };
+        }
+      }
+
+      writeSnapshot(userId, {
+        version: 1,
+        savedAt: Date.now(),
+        channels: serialize(this.channels),
+        streams,
+        pinned,
+      });
+    } catch {
+      // Non-fatal: the next visit loads the way it always did.
+    }
+  }
+
+  /** Drops every account's snapshot; see utils/snapshot. */
+  purgeSnapshots(): void {
+    purgeSnapshots();
   }
 
   /**
@@ -494,6 +713,7 @@ export default class ChatState {
     stream.messages = page.slice().reverse();
     this.sortStream(stream);
     stream.loadedInitial = true;
+    stream.stale = false;
   }
 
   private hydratePinned(channelId: number, document: unknown): void {
@@ -540,7 +760,16 @@ export default class ChatState {
     // Join a request already in flight rather than issuing a second one.
     if (this.channelsRequest) return this.channelsRequest;
 
-    if (this.channelsLoaded && !force) return this.channels;
+    if (this.channelsLoaded && !force) {
+      // A list painted from the snapshot is served at once and refetched
+      // behind it, so the sidebar never waits but never stays yesterday's.
+      if (this.channelsStale) {
+        this.channelsStale = false;
+        this.loadChannels(true).catch(() => {});
+      }
+
+      return this.channels;
+    }
 
     this.channelsLoading = true;
 
@@ -554,6 +783,8 @@ export default class ChatState {
 
         this.channels = Array.isArray(results) ? results : [];
         this.channelsLoaded = true;
+        this.channelsStale = false;
+        this.scheduleSnapshot();
 
         return this.channels;
       } finally {
@@ -749,6 +980,7 @@ export default class ChatState {
         loading: false,
         loadedInitial: false,
         dividerAfterId: null,
+        stale: false,
       };
     }
 
@@ -761,6 +993,15 @@ export default class ChatState {
    */
   async loadChannel(channelId: number): Promise<void> {
     const stream = this.stream(channelId);
+
+    // Painted from the snapshot: it is on screen already, so nothing is awaited.
+    // The server's page replaces it as soon as it lands.
+    if (stream.stale && stream.loadedInitial && !stream.loading) {
+      stream.stale = false;
+      this.revalidateStream(channelId).catch(() => {});
+
+      return;
+    }
 
     if (stream.loadedInitial || stream.loading) return;
 
@@ -822,6 +1063,54 @@ export default class ChatState {
 
       stream.messages = [...fresh, ...stream.messages];
       this.sortStream(stream);
+      this.scheduleSnapshot();
+    } finally {
+      stream.loading = false;
+      m.redraw();
+    }
+  }
+
+  /**
+   * Replaces a snapshot-seeded window with the server's newest page.
+   *
+   * One request, the same one a cold open makes — but not awaited, because the
+   * conversation is already drawn. Within the range the page covers the server
+   * is the authority: rows it no longer returns were deleted while this browser
+   * was away and go; rows it returns land edited, reacted and re-pinned as they
+   * now are. Rows older than the page were not asked about and are kept — the
+   * reader scrolled to them last time and can still see them.
+   *
+   * On failure the snapshot stays on screen unrevalidated; the poller's
+   * `greaterThan` and `updatedSince` cursors catch it up on the next tick.
+   */
+  private async revalidateStream(channelId: number): Promise<void> {
+    const stream = this.stream(channelId);
+
+    if (stream.loading) return;
+
+    stream.loading = true;
+
+    try {
+      const results = (await app.store.find("chat-messages", {
+        filter: { channel: channelId },
+        sort: "-id",
+        page: { limit: PAGE_SIZE },
+      })) as unknown as Message[];
+
+      const fresh = (Array.isArray(results) ? results : []).slice().reverse();
+      const complete = fresh.length < PAGE_SIZE;
+      const oldest = fresh[0] ? Number(fresh[0].id()) : 0;
+
+      const kept = complete
+        ? []
+        : stream.messages.filter((msg) => Number(msg.id()) < oldest);
+
+      stream.messages = [...kept, ...fresh];
+      this.sortStream(stream);
+
+      if (complete) stream.hasMore = false;
+
+      this.scheduleSnapshot();
     } finally {
       stream.loading = false;
       m.redraw();
@@ -848,6 +1137,7 @@ export default class ChatState {
         loadedInitial: false,
         // Threads carry no read marker of their own, so no divider.
         dividerAfterId: null,
+        stale: false,
       };
     }
 
@@ -928,7 +1218,14 @@ export default class ChatState {
    * drops this cache — see `onMessageChanged`.
    */
   async loadPinnedPreview(channelId: number, force = false): Promise<void> {
-    if (!force && channelId in this.pinnedPreviews) return;
+    if (!force && channelId in this.pinnedPreviews) {
+      // From the snapshot: shown already, re-asked behind it.
+      if (this.pinnedStale.delete(channelId)) {
+        this.loadPinnedPreview(channelId, true).catch(() => {});
+      }
+
+      return;
+    }
 
     try {
       const results = (await app.store.find("chat-messages", {
@@ -949,6 +1246,7 @@ export default class ChatState {
       // json-api-server puts a count beside every paginated collection — so
       // knowing it costs nothing beyond the request already being made.
       this.pinnedTotals[channelId] = readTotal(results) ?? 0;
+      this.scheduleSnapshot();
     } catch {
       // A missing bar is not worth an error; the pin itself still shows on the row.
       this.pinnedPreviews[channelId] = null;
@@ -1080,6 +1378,8 @@ export default class ChatState {
       message,
       !threadId || this.isThreadRoot(message),
     );
+
+    this.scheduleSnapshot();
   }
 
   private isThreadRoot(message: Message): boolean {
@@ -1123,6 +1423,8 @@ export default class ChatState {
     stream.messages = stream.messages.filter(
       (msg) => Number(msg.id()) !== messageId,
     );
+
+    this.scheduleSnapshot();
   }
 
   /**
@@ -1261,6 +1563,8 @@ export default class ChatState {
       unreadMentionsCount: 0,
       lastReadMessageId: upTo,
     });
+
+    this.scheduleSnapshot();
 
     app
       .request({

@@ -244,6 +244,22 @@ class Channel extends AbstractModel
         return $this->belongsTo(User::class, 'creator_id');
     }
 
+    /**
+     * Whether the user created this channel. What that grants is decided by
+     * Service\ChannelOwnership, which reads the forum's ownership mode; this
+     * only answers the fact. Direct channels never qualify: their creator merely
+     * opened the conversation, and a group DM's participant list is governed by
+     * ChannelPolicy::manageMembers on its own terms.
+     */
+    public function isOwnedBy(?User $user): bool
+    {
+        if ($user === null || $user->isGuest() || $this->creator_id === null) {
+            return false;
+        }
+
+        return $this->isCategory() && (int) $this->creator_id === (int) $user->id;
+    }
+
     public function messages(): HasMany
     {
         return $this->hasMany(Message::class, 'channel_id');
@@ -279,6 +295,7 @@ class Channel extends AbstractModel
     public function participants(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'chat_channel_user', 'channel_id', 'user_id')
+            ->withPivot('is_moderator')
             ->whereNull('chat_channel_user.left_at')
             ->where('chat_channel_user.hidden', false);
     }

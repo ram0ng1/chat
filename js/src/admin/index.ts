@@ -1,4 +1,7 @@
 import app from "flarum/admin/app";
+import { extend } from "flarum/common/extend";
+import PermissionGrid from "flarum/admin/components/PermissionGrid";
+import type { PermissionConfig } from "flarum/admin/components/PermissionGrid";
 
 import Channel from "../common/models/Channel";
 import Webhook from "../common/models/Webhook";
@@ -33,6 +36,38 @@ app.initializers.add("ramon-chat", () => {
     // rendering, so the webhooks list and the announcer panel were simply absent
     // with no error to explain why.
     .registerPage(WebhooksPage)
+
+    // ── Owner channels ────────────────────────────────────────────────────────
+    // First, because it is the decision the rest depends on. One switch rather
+    // than a spread of "own channel" permission rows: in "administrators" mode
+    // nobody else creates a channel, whatever the grid says; in "members" mode
+    // whoever may create a channel runs the ones they created — members,
+    // settings, closing, archiving, deleting, and removing messages in it —
+    // while administrators and chat moderators keep every channel and can
+    // inspect one through a hidden join that never shows in the member list.
+    .registerSetting({
+      setting: "ramon-chat.channel_ownership",
+      type: "select",
+      options: {
+        admin: app.translator.trans(
+          "ramon-chat.admin.settings.channel_ownership_admin",
+          {},
+          true,
+        ),
+        members: app.translator.trans(
+          "ramon-chat.admin.settings.channel_ownership_members",
+          {},
+          true,
+        ),
+      },
+      default: "admin",
+      label: app.translator.trans(
+        "ramon-chat.admin.settings.channel_ownership",
+      ),
+      help: app.translator.trans(
+        "ramon-chat.admin.settings.channel_ownership_help",
+      ),
+    })
 
     // ── Appearance ────────────────────────────────────────────────────────────
     .registerSetting({
@@ -230,28 +265,6 @@ app.initializers.add("ramon-chat", () => {
     )
     .registerPermission(
       {
-        icon: "fas fa-plus",
-        label: app.translator.trans(
-          "ramon-chat.admin.permissions.create_channel",
-        ),
-        permission: "ramon-chat.createChannel",
-      },
-      "start",
-      93,
-    )
-    .registerPermission(
-      {
-        icon: "fas fa-pen-to-square",
-        label: app.translator.trans(
-          "ramon-chat.admin.permissions.edit_channel",
-        ),
-        permission: "ramon-chat.editChannel",
-      },
-      "start",
-      92,
-    )
-    .registerPermission(
-      {
         icon: "fas fa-note-sticky",
         label: app.translator.trans(
           "ramon-chat.admin.permissions.send_stickers",
@@ -346,5 +359,164 @@ app.initializers.add("ramon-chat", () => {
       },
       "moderate",
       95,
+    )
+    // Registered under a core section like every other row, so the registry
+    // knows the extension has permissions at all — the extension page draws its
+    // grid only then. Where they are actually shown is decided below.
+    .registerPermission(
+      {
+        icon: "fas fa-plus",
+        label: app.translator.trans(
+          "ramon-chat.admin.permissions.create_channel",
+        ),
+        permission: "ramon-chat.createChannel",
+      },
+      "start",
+      93,
+    )
+    .registerPermission(
+      {
+        icon: "fas fa-user-shield",
+        label: app.translator.trans(
+          "ramon-chat.admin.permissions.manage_own_channels",
+        ),
+        permission: "ramon-chat.manageOwnChannels",
+      },
+      "start",
+      92,
+    )
+    .registerPermission(
+      {
+        icon: "fas fa-user-pen",
+        label: app.translator.trans(
+          "ramon-chat.admin.permissions.edit_own_channels",
+        ),
+        permission: "ramon-chat.editOwnChannels",
+      },
+      "start",
+      91,
+    )
+    .registerPermission(
+      {
+        icon: "fas fa-pen-to-square",
+        label: app.translator.trans(
+          "ramon-chat.admin.permissions.edit_channel",
+        ),
+        permission: "ramon-chat.editChannel",
+      },
+      "moderate",
+      93,
     );
+
+  // ── How the grid is organised ─────────────────────────────────────────────
+  // Core sorts every extension's rows into Read / Create / Participate /
+  // Moderate. For the chat that hides the one distinction an operator needs:
+  // what applies to the whole chat, and what members get in the channels they
+  // create and run. So the chat's rows are lifted out of the core sections and
+  // laid out as two blocks of its own — "Chat · Global" first, "Chat · Members"
+  // below it. The second block exists only while channels are in members'
+  // hands (the ownership setting): in "administrators" mode nothing in it would
+  // do anything, so it is not shown, and the participation rows it would hold
+  // sit in the global block instead.
+  //
+  // Done in permissionItems() rather than through registerPermission(): the
+  // registry only knows the four core sections, and the extension page's grid
+  // calls this same method, so both grids get the same layout.
+  extend(PermissionGrid.prototype, "permissionItems", function (items) {
+    const membersMode =
+      app.data.settings["ramon-chat.channel_ownership"] === "members";
+
+    // Lift every chat row out of the core sections, keeping its config.
+    const ours = new Map<string, PermissionConfig>();
+
+    for (const type of ["view", "start", "reply", "moderate"] as const) {
+      if (!items.has(type)) continue;
+
+      const section = items.get(type);
+
+      section.children = section.children.filter((entry) => {
+        const permission =
+          "permission" in entry ? (entry.permission ?? "") : "";
+
+        if (!permission.startsWith("ramon-chat.")) return true;
+
+        ours.set(permission, entry as PermissionConfig);
+
+        return false;
+      });
+    }
+
+    const pick = (keys: readonly string[]): PermissionConfig[] =>
+      keys
+        .map((key) => ours.get(key))
+        .filter((entry): entry is PermissionConfig => Boolean(entry));
+
+    const trans = (key: string) =>
+      app.translator.trans(`ramon-chat.admin.permissions.${key}`);
+
+    const global = pick(
+      membersMode
+        ? GLOBAL_PERMISSIONS
+        : [...GLOBAL_PERMISSIONS, ...PARTICIPATION_PERMISSIONS],
+    );
+
+    if (global.length > 0) {
+      items.add(
+        "ramon-chat-global",
+        { label: trans("global_heading"), children: global },
+        60,
+      );
+    }
+
+    if (!membersMode) return;
+
+    const members = pick([
+      ...OWN_CHANNEL_PERMISSIONS,
+      ...PARTICIPATION_PERMISSIONS,
+    ]);
+
+    if (members.length > 0) {
+      items.add(
+        "ramon-chat-members",
+        { label: trans("members_heading"), children: members },
+        55,
+      );
+    }
+  });
 });
+
+/**
+ * Applies to the whole chat, in every channel, whatever the ownership mode.
+ * Listed top to bottom in the order the grid shows them: reading, then
+ * taking part, then moderating.
+ */
+const GLOBAL_PERMISSIONS = [
+  "ramon-chat.use",
+  "ramon-chat.accessPrivateChannels",
+  "ramon-chat.startDirect",
+  "ramon-chat.mentionChannelWide",
+  "ramon-chat.flagMessage",
+  "ramon-chat.bypassSlowMode",
+  "ramon-chat.pinMessage",
+  "ramon-chat.moderate",
+  "ramon-chat.editChannel",
+] as const;
+
+/**
+ * What members do inside channels: files, stickers, reactions, threads. Global
+ * while administrators run the channels; part of the members block once
+ * members do.
+ */
+const PARTICIPATION_PERMISSIONS = [
+  "ramon-chat.upload",
+  "ramon-chat.sendStickers",
+  "ramon-chat.react",
+  "ramon-chat.createThread",
+] as const;
+
+/** Creating and running one's own channels. Members mode only. */
+const OWN_CHANNEL_PERMISSIONS = [
+  "ramon-chat.createChannel",
+  "ramon-chat.manageOwnChannels",
+  "ramon-chat.editOwnChannels",
+] as const;

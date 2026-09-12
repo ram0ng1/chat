@@ -17,6 +17,7 @@ use Ramon\Chat\Access\MessagePolicy;
 use Ramon\Chat\Access\VisibilityCache;
 use Ramon\Chat\Channel;
 use Ramon\Chat\Message;
+use Ramon\Chat\Service\ChannelOwnership;
 
 /**
  * The two rules added for pinning and threading.
@@ -43,7 +44,7 @@ class MessagePolicyTest extends QueryTestCase
         // A real cache, not a mock: it is a memo with no collaborators, and a
         // mock would have to be told the answer to every `remember()` — which is
         // the thing under test in the branches that reach visibility.
-        return new MessagePolicy($settings, new VisibilityCache());
+        return new MessagePolicy($settings, new VisibilityCache(), new ChannelOwnership($settings));
     }
 
     protected function channel(bool $threading = true): Channel

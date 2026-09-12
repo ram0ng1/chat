@@ -101,6 +101,11 @@ export default class Channel extends Model {
   canArchive = Model.attribute<boolean>("canArchive");
   canDelete = Model.attribute<boolean>("canDelete");
   canManageMembers = Model.attribute<boolean>("canManageMembers");
+  /** May promote members to moderators of this channel — its owner, or chat moderators. */
+  canManageModerators = Model.attribute<boolean>("canManageModerators");
+  creatorId = Model.attribute<number | null>("creatorId");
+  /** Members holding the channel's own moderator role; filled when participants are loaded. */
+  moderatorIds = Model.attribute<number[]>("moderatorIds");
   canMentionChannelWide = Model.attribute<boolean>("canMentionChannelWide");
 
   // ── Relationships ──────────────────────────────────────────────────────────

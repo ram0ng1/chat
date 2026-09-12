@@ -11,6 +11,7 @@ namespace Ramon\Chat\Access;
 
 use Flarum\User\Access\AbstractPolicy;
 use Flarum\User\User;
+use Ramon\Chat\Service\ChannelOwnership;
 use Ramon\Chat\Thread;
 
 /**
@@ -19,7 +20,8 @@ use Ramon\Chat\Thread;
 class ThreadPolicy extends AbstractPolicy
 {
     public function __construct(
-        protected VisibilityCache $cache
+        protected VisibilityCache $cache,
+        protected ChannelOwnership $ownership
     ) {
     }
 
@@ -69,7 +71,8 @@ class ThreadPolicy extends AbstractPolicy
     }
 
     /**
-     * The thread's creator may retitle it; moderators may retitle any thread.
+     * The thread's creator may retitle it; moderators may retitle any thread, and
+     * so may whoever moderates the channel it lives in.
      */
     public function rename(User $actor, Thread $thread): ?bool
     {
@@ -77,16 +80,28 @@ class ThreadPolicy extends AbstractPolicy
             return true;
         }
 
-        return $actor->can('ramon-chat.moderate') ? true : null;
+        return $this->moderates($actor, $thread) ? true : null;
     }
 
     public function close(User $actor, Thread $thread): ?bool
     {
-        return $actor->can('ramon-chat.moderate') ? true : null;
+        return $this->moderates($actor, $thread) ? true : null;
     }
 
     public function delete(User $actor, Thread $thread): ?bool
     {
-        return $actor->can('ramon-chat.moderate') ? true : null;
+        return $this->moderates($actor, $thread) ? true : null;
+    }
+
+    /**
+     * Forum-wide `moderate`, or owning or moderating the thread's channel.
+     */
+    protected function moderates(User $actor, Thread $thread): bool
+    {
+        if ($actor->can('ramon-chat.moderate')) {
+            return true;
+        }
+
+        return $thread->channel !== null && $this->ownership->moderates($actor, $thread->channel);
     }
 }

@@ -11,6 +11,7 @@ namespace Ramon\Chat\Access;
 
 use Flarum\User\Access\AbstractPolicy;
 use Flarum\User\User;
+use Ramon\Chat\Service\ChannelOwnership;
 
 /**
  * Global chat abilities.
@@ -37,6 +38,11 @@ use Flarum\User\User;
  */
 class GlobalPolicy extends AbstractPolicy
 {
+    public function __construct(
+        protected ChannelOwnership $ownership
+    ) {
+    }
+
     /**
      * Opening the chat at all.
      *
@@ -70,10 +76,19 @@ class GlobalPolicy extends AbstractPolicy
         return $actor->hasPermission('ramon-chat.startDirect');
     }
 
+    /**
+     * Gated by the ownership mode before the permission: with channels in the
+     * administrators' hands, nobody else creates one whatever the grid says, so
+     * an operator who wants that has exactly one switch to set.
+     */
     public function createChannel(User $actor): bool
     {
         if (! $actor->hasPermission('ramon-chat.use')) {
             return false;
+        }
+
+        if (! $this->ownership->membersOwnChannels()) {
+            return $actor->isAdmin();
         }
 
         return $actor->hasPermission('ramon-chat.createChannel');
