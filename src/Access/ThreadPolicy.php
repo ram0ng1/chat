@@ -52,6 +52,7 @@ class ThreadPolicy extends AbstractPolicy
                 return ScopeThreadVisibility::rowVisibleTo(
                     $thread,
                     ScopeChannelVisibility::visibleTo($actor, $channel, $this->cache)
+                        && ScopeChannelVisibility::readsContents($actor, $channel)
                 );
             }
         );

@@ -171,7 +171,7 @@ class AutomaticJoinAnnouncementTest extends TestCase
             $this->request('POST', '/api/chat-channels/'.self::CHANNEL.'/join', ['authenticatedAs' => self::REPLIER])
         );
 
-        $this->assertSame(204, $response->getStatusCode(), (string) $response->getBody());
+        $this->assertSame(200, $response->getStatusCode(), (string) $response->getBody());
 
         $this->assertTrue($this->isMember(self::REPLIER));
         $this->assertSame(['user_joined'], $this->systemKeys());

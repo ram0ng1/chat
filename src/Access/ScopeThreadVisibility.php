@@ -36,10 +36,12 @@ class ScopeThreadVisibility
         $query
             ->whereNull('chat_threads.deleted_at')
             ->whereIn('chat_threads.channel_id', function ($sub) use ($actor) {
-                Channel::query()
+                $channels = Channel::query()
                     ->setQuery($sub->from('chat_channels'))
                     ->whereVisibleTo($actor)
                     ->select('chat_channels.id');
+
+                ScopeChannelVisibility::restrictContents($channels, $actor);
             });
     }
 }

@@ -39,6 +39,12 @@ class ScopeMessageVisibility
             return false;
         }
 
+        // Seeing the channel is not reading it: an invitee to a private channel
+        // sees the row and none of its messages until they accept.
+        if ($message->channel !== null && ! ScopeChannelVisibility::readsContents($actor, $message->channel)) {
+            return false;
+        }
+
         if ($actor->can('ramon-chat.moderate')) {
             return true;
         }
@@ -53,10 +59,12 @@ class ScopeMessageVisibility
     public function __invoke(User $actor, Builder $query): void
     {
         $query->whereIn('chat_messages.channel_id', function ($sub) use ($actor) {
-            Channel::query()
+            $channels = Channel::query()
                 ->setQuery($sub->from('chat_channels'))
                 ->whereVisibleTo($actor)
                 ->select('chat_channels.id');
+
+            ScopeChannelVisibility::restrictContents($channels, $actor);
         });
 
         if ($actor->can('ramon-chat.moderate')) {

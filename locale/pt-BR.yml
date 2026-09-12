@@ -32,6 +32,7 @@ ramon-chat:
     members_too_many: "{max, plural, one {Você pode adicionar no máximo # usuário por vez.} other {Você pode adicionar no máximo # usuários por vez.}}"
     cannot_remove_self: Use "Sair do canal" para se remover.
     not_a_member: Esse usuário não está neste canal.
+    invite_not_found: Não há convite pendente para responder aqui.
 
     transcript_empty: Nenhuma mensagem foi selecionada, ou você não pode lê-las.
     transcript_too_many: "{max, plural, one {Você pode citar no máximo # mensagem por vez.} other {Você pode citar no máximo # mensagens por vez.}}"
@@ -62,7 +63,8 @@ ramon-chat:
   notifications:
     chat_mention: "{username} mencionou você em {channel}"
     chat_message: "{username} enviou uma mensagem em {channel}"
-    chat_channel_invite: "{username} adicionou você a {channel}"
+    chat_channel_invite: "{username} convidou você para {channel}"
+    chat_channel_invite_declined: "{username} recusou seu convite para {channel}"
 
   lib:
     gdpr:
@@ -109,6 +111,7 @@ ramon-chat:
       members: "{count, plural, one {# membro} other {# membros}}"
       view_info: Detalhes do canal
       search_in_channel: Buscar neste canal
+      threads: Tópicos deste canal
       pinned_messages: Mensagens fixadas
       view_all_pinned: "Ver todas as {count} mensagens fixadas"
       close_pinned: Fechar mensagens fixadas
@@ -122,6 +125,16 @@ ramon-chat:
       joined_hidden: Você está inspecionando o canal. Você não aparece na lista de membros, e nem sua entrada nem sua saída são anunciadas.
       join_failed: Não foi possível entrar no canal.
       muted: Silenciado
+
+      # Um convite pendente, como a caixa de mensagem o mostra no lugar do campo.
+      invited_by: "{username} convidou você para este canal."
+      invited: Você foi convidado para este canal.
+      accept_invite: Aceitar convite
+      decline_invite: Recusar
+      decline_invite_confirm: Recusar este convite? Quem convidou você será avisado.
+      invite_accepted: Você entrou no canal.
+      invite_declined: Você recusou o convite.
+      invite_failed: Não foi possível responder a esse convite.
 
     message:
       edited: editada
@@ -161,6 +174,7 @@ ramon-chat:
       system:
         user_joined: "{username} entrou no canal."
         user_added: "{username} foi adicionado por {actor}."
+        user_accepted_invite: "{username} entrou no canal, a convite de {actor}."
         user_left: "{username} saiu do canal."
         channel_closed: O canal foi fechado.
         channel_reopened: O canal foi reaberto.
@@ -233,6 +247,7 @@ ramon-chat:
       tracking_mentions: Apenas menções
       tracking_never: Silenciado
       no_threads: Você não está acompanhando nenhum tópico.
+      no_threads_in_channel: Nenhum tópico neste canal ainda. Responda em tópico a uma mensagem para começar um.
       no_replies: Nenhuma resposta ainda. Seja o primeiro.
       close: Fechar painel do tópico
 
@@ -334,17 +349,23 @@ ramon-chat:
       archive_confirm: Arquivar este canal? O histórico é copiado para uma discussão e o canal é congelado permanentemente.
 
     add_members:
-      title: Adicionar membros
-      hint: Digite ao menos duas letras para encontrar um usuário.
-      empty: Nenhum usuário encontrado, ou quem corresponde já é membro.
-      search_placeholder: Buscar usuários
+      title: Convidar membros
+      intro: "Cada pessoa escolhida recebe uma notificação e decide se entra em {channel}."
+      hint: Digite ao menos duas letras para encontrar alguém.
+      suggested: Ativos recentemente
+      no_results: "Ninguém corresponde a “{query}”."
+      search_placeholder: Buscar pelo nome
       searching: Buscando…
       search_failed: Não foi possível buscar usuários agora.
       deselect: "Tirar {username} da seleção"
-      submit: Adicionar
-      submit_count: "Adicionar {count}"
-      added: "{count, plural, one {# usuário adicionado ao canal.} other {# usuários adicionados ao canal.}}"
-      failed: Não foi possível adicionar esses usuários.
+      you_badge: Você
+      member_badge: Membro
+      invited_badge: Convidado
+      selected_count: "{count, plural, one {# pessoa selecionada} other {# pessoas selecionadas}}"
+      submit: Convidar
+      submit_count: "Convidar {count}"
+      added: "{count, plural, one {Convite enviado para {names}.} other {# convites enviados: {names}.}}"
+      failed: Não foi possível convidar esses usuários.
 
     emoji_picker:
       placeholder: Buscar emoji
@@ -370,6 +391,8 @@ ramon-chat:
       clear_search: Limpar busca
       load_failed: Não foi possível carregar a lista de canais.
       joined: Participando
+      inspecting: Inspecionando
+      invited: Convidado
       no_description: Sem descrição.
       open: Abrir
       new_channel: Novo canal
@@ -418,6 +441,13 @@ ramon-chat:
       member_removed: "{username} foi removido do canal."
       remove_member: "Remover {username}"
       remove_member_confirm: "Remover {username} deste canal?"
+
+      # Convites pendentes, listados abaixo dos membros para quem os gerencia.
+      invited_heading: "{count, plural, one {# convite pendente} other {# convites pendentes}}"
+      invited_badge: Convidado
+      cancel_invite: "Retirar o convite de {username}"
+      cancel_invite_confirm: "Retirar o convite de {username}? A notificação dessa pessoa é removida."
+      invite_cancelled: "O convite de {username} foi retirado."
       owner_badge: Dono
       moderator_badge: Moderador
       moderator_help: Moderadores do canal adicionam e removem membros, removem mensagens e gerenciam tópicos aqui, e não passam pelo modo lento deste canal. Só você pode promovê-los e rebaixá-los.
@@ -454,7 +484,10 @@ ramon-chat:
 
     notifications:
       message_flagged: "{username} denunciou uma mensagem em {channel}"
-      channel_invite: "{username} adicionou você a {channel}"
+      channel_invite: "{username} convidou você para {channel}"
+      channel_invite_declined: "{username} recusou seu convite para {channel}"
+      invite_accept: Aceitar
+      invite_decline: Recusar
       someone: Alguém
 
     # Rótulo de autoria do próprio chat, nas mensagens que ele envia.
@@ -471,7 +504,8 @@ ramon-chat:
       sound: Som de notificação
       sound_none: Nenhum
       notify_message_flagged: Alguém denunciar uma mensagem do chat
-      notify_channel_invite: Alguém me adiciona a um canal de chat
+      notify_channel_invite: Alguém me convida para um canal de chat
+      notify_channel_invite_declined: Alguém recusa meu convite para um canal de chat
 
   admin:
     settings:
@@ -479,27 +513,28 @@ ramon-chat:
       channel_ownership: Quem cria e administra os canais
       channel_ownership_admin: Apenas administradores
       channel_ownership_members: Membros criam e gerenciam os próprios canais
-      channel_ownership_help: "Com os membros no comando, a grade de permissões se divide em dois blocos: \"Chat · Global\", que vale em todo lugar, e \"Chat · Membros\" logo abaixo, para os canais que os membros criam e administram — criar, gerenciar, editar, e o que os membros podem enviar neles. O dono de um canal pode promover membros a moderadores daquele canal; donos e moderadores do canal não passam pelo modo lento. Administradores e moderadores do chat continuam com todos os canais, e podem inspecionar um sem aparecer na lista de membros."
-      retention_title: Retenção de mensagens
-      retention_help: Mensagens antigas são removidas pela tarefa noturna de limpeza.
+      channel_ownership_help: "Com os membros no comando, a grade de permissões abaixo se divide em dois blocos. \"Chat: global\" vale para todo o chat, em todos os canais. \"Chat: canais dos membros\" vale só dentro dos canais que os membros criam e administram: criar, gerenciar, editar, e o que os membros podem enviar neles. O dono de um canal pode promover membros a moderadores daquele canal; donos e moderadores do canal não passam pelo modo lento. Administradores e moderadores do chat continuam com todos os canais."
+      allow_archiving_channels_help: Um canal fechado pode ser arquivado em uma discussão que guarda a transcrição.
+      threading_default_help: Canais novos já nascem com tópicos ligados. Cada canal ainda pode mudar isso.
       retention_warning: A retenção exclui mensagens permanentemente. Não há como desfazer.
       channel_retention_days: Retenção em canais (dias)
       channel_retention_help: Dias para manter mensagens em canais de categoria. 0 mantém para sempre.
       dm_retention_days: Retenção em mensagens diretas (dias)
       dm_retention_help: Dias para manter mensagens diretas e de grupo. 0 mantém para sempre.
 
-      limits_title: Limites e segurança
       max_messages_per_second: Máximo de mensagens por segundo, por usuário
+      max_messages_per_second_help: Envios acima desse ritmo são recusados. 0 desliga o limite.
       min_message_length: Tamanho mínimo da mensagem
       max_message_length: Tamanho máximo da mensagem
+      max_message_length_help: O limite do fórum inteiro. Um canal pode definir um limite menor só para ele.
       message_edit_window_minutes: Janela de edição (minutos)
       message_edit_window_help: Por quanto tempo o autor pode editar a mensagem. 0 significa sem limite.
 
-      uploads_title: Envio de arquivos
       allow_uploads: Permitir envio de arquivos no chat
+      allow_uploads_help: Anexos nas mensagens. Quais grupos podem anexar é uma permissão logo abaixo.
       max_upload_size: Tamanho máximo de envio (bytes)
+      max_upload_size_help: "10485760 equivale a 10 MB."
 
-      behaviour_title: Comportamento
       title_label: Nome do chat
       title_help: Exibido no botão do cabeçalho e no painel. Deixe vazio para usar "Chat".
       icon_label: Ícone do chat
@@ -521,19 +556,30 @@ ramon-chat:
       sound_chime: Sino
       sound_alert: Alerta
 
+      webhooks_enabled: Aceitar webhooks de entrada
+      webhooks_enabled_help: "Desligado, toda URL de webhook é recusada, esteja o webhook ativo ou não. Salvo junto com o resto da página."
+
+    # Os blocos com título da página de configurações. Cada um diz o que os seus
+    # campos governam antes de mostrá-los.
+    sections:
+      channels_title: Canais
+      channels_help: Quem cria e administra os canais, e com o que um canal novo começa.
+      appearance_title: Aparência
+      appearance_help: Como o chat é nomeado e marcado no cabeçalho e no painel.
+      messages_title: Mensagens
+      messages_help: Limites de tamanho, ritmo e edição para toda mensagem enviada.
+      uploads_title: Envio de arquivos
+      uploads_help: Se as mensagens podem levar arquivos, e de que tamanho.
+      retention_title: Retenção
+      retention_help: Por quanto tempo as mensagens ficam guardadas. As mais antigas são removidas pela tarefa noturna de limpeza.
+      realtime_title: Tempo real e som
+      realtime_help: Como as atualizações ao vivo são entregues, e que som uma mensagem nova faz.
+      announcer_title: Anunciante
+      announcer_help: Quem o chat usa como autor quando anuncia algo por conta própria, como uma nova discussão em uma categoria vinculada.
       webhooks_title: Webhooks de entrada
-      webhooks_help: Endpoints compatíveis com Slack que enviam mensagens em um canal.
-      webhook_new: Novo webhook de entrada
-      webhook_name: Nome
-      webhook_description: Descrição
-      webhook_username: Envia como
-      webhook_emoji: Emoji
-      webhook_channel: Canal
-      webhook_url: URL
-      webhook_copy: Copiar URL
-      webhook_regenerate: Regerar chave
-      webhook_delete: Excluir
-      webhook_empty: Nenhum webhook de entrada ainda.
+      webhooks_help: Endpoints compatíveis com Slack pelos quais um serviço externo publica em um canal. A URL é exibida uma única vez, ao criar ou ao rotacionar.
+      other_title: Outras configurações
+      other_help: Configurações registradas para o chat por outras extensões.
 
     permissions:
       use: Usar o chat
@@ -541,8 +587,11 @@ ramon-chat:
       start_direct: Iniciar mensagens diretas
       create_channel: Criar canais
       edit_channel: Editar qualquer canal
-      global_heading: "Chat · Global — vale para todo o chat, em todos os canais"
-      members_heading: "Chat · Membros — canais que os membros criam e administram"
+      inspect_channels: "Inspecionar canais sem ser notado: entrada oculta, sem anúncio, sem notificação"
+      global_heading: "Chat: global"
+      global_heading_help: Vale para todo o chat, em todos os canais, seja qual for a configuração de quem administra os canais.
+      members_heading: "Chat: canais dos membros"
+      members_heading_help: "Em vigor apenas enquanto \"Quem cria e administra os canais\" estiver em membros. Dentro dos canais que os membros criam e administram, valem estas linhas. Em todo o resto, vale o bloco global acima."
       manage_own_channels: "Próprios canais: gerenciar (membros, moderadores do canal, fechar, arquivar, excluir, remover mensagens)"
       edit_own_channels: "Próprios canais: editar as configurações"
       moderate: Moderar o chat
@@ -563,7 +612,7 @@ ramon-chat:
       remove_upload: Remover imagem
       upload_failed: Não foi possível enviar essa imagem.
       user_label: Enviar como um membro
-      user_help: Escolha uma conta e os anúncios viram mensagens comuns desse membro — sem nome de bot, sem imagem, sem etiqueta BOT.
+      user_help: "Escolha uma conta e os anúncios viram mensagens comuns desse membro: sem nome de bot, sem imagem, sem etiqueta BOT."
       user_search: Buscar usuários
       user_active: Os anúncios são enviados como este membro.
       use_bot: Usar o bot
@@ -581,5 +630,6 @@ ramon-chat:
       delete: Excluir
       delete_confirm: Excluir este webhook? Quem usa a URL dele vai parar de funcionar.
       deliveries: "{count, plural, one {# entrega} other {# entregas}}"
-      url_once: Copie esta URL agora — ela não é exibida de novo.
+      url_once: Copie esta URL agora. Ela não é exibida de novo.
+      disabled: Os webhooks de entrada estão desligados. Ligue o interruptor acima e salve para gerenciá-los.
       failed: Não foi possível salvar a alteração.

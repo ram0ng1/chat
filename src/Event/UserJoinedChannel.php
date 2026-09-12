@@ -37,7 +37,15 @@ class UserJoinedChannel
          * channel with `auto_join_on_reply` still receives deliberate joins, and
          * those are worth announcing.
          */
-        public bool $automatic = false
+        public bool $automatic = false,
+        /**
+         * Entrada por convite. `acceptedInvite` marca a transição e `invitedBy`
+         * diz quem convidou, quando a conta ainda existe: a sala narra o aceite
+         * como resposta a esse convite, e a notificação que o carregava é
+         * encerrada em nome desse convidador.
+         */
+        public bool $acceptedInvite = false,
+        public ?User $invitedBy = null
     ) {
     }
 }

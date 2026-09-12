@@ -53,6 +53,13 @@ class TypingController implements RequestHandlerInterface
             throw new ForbiddenException();
         }
 
+        // Someone inspecting the channel unnoticed must stay unnoticed: a
+        // "X is typing" row would give away a presence the member list hides.
+        // Answered as success so the client keeps nothing pending.
+        if ($channel->membershipFor($actor)?->isHidden()) {
+            return new EmptyResponse(204);
+        }
+
         $this->presence->typing(
             $channel,
             $actor,

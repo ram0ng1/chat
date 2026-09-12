@@ -31,6 +31,7 @@ import ChatComposer from "./components/ChatComposer";
 import BrowseChannelsPage from "./components/BrowseChannelsPage";
 import ChannelFormModal from "./components/ChannelFormModal";
 import ChannelInviteNotification from "./components/ChannelInviteNotification";
+import ChannelInviteDeclinedNotification from "./components/ChannelInviteDeclinedNotification";
 import MessageFlaggedNotification from "./components/MessageFlaggedNotification";
 import ChannelInfoModal from "./components/ChannelInfoModal";
 import AddMembersModal from "./components/AddMembersModal";
@@ -74,6 +75,7 @@ export {
   BrowseChannelsPage,
   ChannelFormModal,
   ChannelInviteNotification,
+  ChannelInviteDeclinedNotification,
   MessageFlaggedNotification,
   ChannelInfoModal,
   AddMembersModal,
@@ -209,6 +211,8 @@ app.initializers.add("ramon-chat", () => {
   // The component that renders the alert, and the row in the user's notification
   // preferences that lets them turn it off.
   app.notificationComponents.chatChannelInvite = ChannelInviteNotification;
+  app.notificationComponents.chatChannelInviteDeclined =
+    ChannelInviteDeclinedNotification;
   app.notificationComponents.chatMessageFlagged = MessageFlaggedNotification;
 
   extend(
@@ -217,9 +221,17 @@ app.initializers.add("ramon-chat", () => {
     function (items: ItemList<unknown>) {
       items.add("chatChannelInvite", {
         name: "chatChannelInvite",
-        icon: "fas fa-comments",
+        icon: "fas fa-envelope-open",
         label: app.translator.trans(
           "ramon-chat.forum.settings.notify_channel_invite",
+        ),
+      });
+
+      items.add("chatChannelInviteDeclined", {
+        name: "chatChannelInviteDeclined",
+        icon: "fas fa-user-xmark",
+        label: app.translator.trans(
+          "ramon-chat.forum.settings.notify_channel_invite_declined",
         ),
       });
 

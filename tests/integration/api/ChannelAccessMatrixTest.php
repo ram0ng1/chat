@@ -87,6 +87,9 @@ class ChannelAccessMatrixTest extends TestCase
                 ['group_id' => Group::MEMBER_ID, 'permission' => 'ramon-chat.use'],
                 ['group_id' => 100, 'permission' => 'ramon-chat.accessPrivateChannels'],
                 ['group_id' => 101, 'permission' => 'ramon-chat.moderate'],
+                // Hidden joins are their own right; the moderator here holds it
+                // too, as the upgrade migration seeds it for moderating groups.
+                ['group_id' => 101, 'permission' => 'ramon-chat.inspectChannels'],
                 ['group_id' => 102, 'permission' => 'tag2.viewForum'],
             ],
             'tags' => [
@@ -343,7 +346,7 @@ class ChannelAccessMatrixTest extends TestCase
 
     public function test_join_matches_what_can_be_seen(): void
     {
-        // 204 grants; 404 is the refusal for a channel the actor cannot see.
+        // 200 grants; 404 is the refusal for a channel the actor cannot see.
         //
         // 404 rather than 403, and deliberately: the join route is model-scoped, so
         // the channel is resolved through the same visibility scope the listing
@@ -355,10 +358,10 @@ class ChannelAccessMatrixTest extends TestCase
         // there is no state where a member watches a room they cannot join. The
         // structural refusals are asserted separately below.
         $expected = [
-            self::PLAIN     => [self::CH_PUBLIC => 204, self::CH_PRIVATE => 404, self::CH_RESTRICTED => 404, self::CH_DIRECT => 404],
-            self::ACCESS    => [self::CH_PUBLIC => 204, self::CH_PRIVATE => 204, self::CH_RESTRICTED => 404, self::CH_DIRECT => 404],
-            self::MODERATOR => [self::CH_PUBLIC => 204, self::CH_PRIVATE => 204, self::CH_RESTRICTED => 404, self::CH_DIRECT => 404],
-            self::ADMIN     => [self::CH_PUBLIC => 204, self::CH_PRIVATE => 204, self::CH_RESTRICTED => 204, self::CH_DIRECT => 404],
+            self::PLAIN     => [self::CH_PUBLIC => 200, self::CH_PRIVATE => 404, self::CH_RESTRICTED => 404, self::CH_DIRECT => 404],
+            self::ACCESS    => [self::CH_PUBLIC => 200, self::CH_PRIVATE => 200, self::CH_RESTRICTED => 404, self::CH_DIRECT => 404],
+            self::MODERATOR => [self::CH_PUBLIC => 200, self::CH_PRIVATE => 200, self::CH_RESTRICTED => 404, self::CH_DIRECT => 404],
+            self::ADMIN     => [self::CH_PUBLIC => 200, self::CH_PRIVATE => 200, self::CH_RESTRICTED => 200, self::CH_DIRECT => 404],
         ];
 
         foreach ($expected as $actor => $channels) {
@@ -413,7 +416,7 @@ class ChannelAccessMatrixTest extends TestCase
                     sprintf('POST before joining channel %d as %s', $channel, $label)
                 );
 
-                $joined = $this->joinStatus($actor, $channel) === 204;
+                $joined = $this->joinStatus($actor, $channel) === 200;
 
                 $this->assertSame(
                     $joined ? 201 : $status,
@@ -736,7 +739,7 @@ class ChannelAccessMatrixTest extends TestCase
 
     public function test_a_join_is_announced_in_the_channel(): void
     {
-        $this->assertSame(204, $this->joinStatus(self::PLAIN, self::CH_PUBLIC));
+        $this->assertSame(200, $this->joinStatus(self::PLAIN, self::CH_PUBLIC));
 
         $this->assertSame(
             ['user_joined'],
@@ -754,7 +757,7 @@ class ChannelAccessMatrixTest extends TestCase
             ])
         );
 
-        $this->assertSame(204, $response->getStatusCode(), (string) $response->getBody());
+        $this->assertSame(200, $response->getStatusCode(), (string) $response->getBody());
         $this->assertSame([], $this->systemKeysIn(self::CH_PUBLIC), 'a hidden join says nothing');
 
         $leave = $this->send(
@@ -771,7 +774,7 @@ class ChannelAccessMatrixTest extends TestCase
 
     public function test_a_visible_join_and_departure_are_both_announced(): void
     {
-        $this->assertSame(204, $this->joinStatus(self::PLAIN, self::CH_PUBLIC));
+        $this->assertSame(200, $this->joinStatus(self::PLAIN, self::CH_PUBLIC));
 
         $leave = $this->send(
             $this->request('POST', '/api/chat-channels/'.self::CH_PUBLIC.'/leave', ['authenticatedAs' => self::PLAIN])
@@ -786,7 +789,7 @@ class ChannelAccessMatrixTest extends TestCase
         );
     }
 
-    public function test_being_added_by_someone_else_is_announced_as_an_addition(): void
+    public function test_being_invited_is_announced_only_once_the_invitation_is_accepted(): void
     {
         $response = $this->send(
             $this->request('POST', '/api/chat-channels/'.self::CH_PUBLIC.'/members', [
@@ -797,13 +800,25 @@ class ChannelAccessMatrixTest extends TestCase
 
         $this->assertSame(200, $response->getStatusCode(), (string) $response->getBody());
 
-        // Not `user_joined`: the same membership row arrives by two different
-        // routes, and narrating both as an arrival credits the added member with
-        // a decision that was someone else's.
-        $this->assertSame(['user_added'], $this->systemKeysIn(self::CH_PUBLIC));
+        // Nothing yet: an invitation is a question, and the room only hears the
+        // answer. Narrating the question would announce an arrival that may
+        // never happen.
+        $this->assertSame([], $this->systemKeysIn(self::CH_PUBLIC));
 
-        // Both names, because the sentence needs both. A row that says only who
-        // was added leaves the room unable to tell an invitation from a join.
+        $accept = $this->send(
+            $this->request('POST', '/api/chat/invites/'.self::CH_PUBLIC.'/accept', [
+                'authenticatedAs' => self::PLAIN,
+            ])
+        );
+
+        $this->assertSame(200, $accept->getStatusCode(), (string) $accept->getBody());
+
+        // Not `user_joined`: the membership arrives as the answer to somebody
+        // else's invitation, and narrating it as a plain arrival leaves the
+        // room unable to tell an invitation from a walk-in.
+        $this->assertSame(['user_accepted_invite'], $this->systemKeysIn(self::CH_PUBLIC));
+
+        // Both names, because the sentence needs both.
         $this->assertSame(
             ['actor' => 'moderator', 'username' => 'normal'],
             $this->systemDataIn(self::CH_PUBLIC)

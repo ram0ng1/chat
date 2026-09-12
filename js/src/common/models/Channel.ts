@@ -81,6 +81,11 @@ export default class Channel extends Model {
 
   // ── Per-actor membership state ─────────────────────────────────────────────
   isFollowing = Model.attribute<boolean>("isFollowing");
+
+  /** A pending invitation for the reader, and who sent it. */
+  isInvited = Model.attribute<boolean>("isInvited");
+  invitedById = Model.attribute<number | null>("invitedById");
+  invitedByName = Model.attribute<string | null>("invitedByName");
   isMuted = Model.attribute<boolean>("isMuted");
   notificationLevel = Model.attribute<NotificationLevel>("notificationLevel");
   lastReadMessageId = Model.attribute<number>("lastReadMessageId");
@@ -112,6 +117,12 @@ export default class Channel extends Model {
   creator = Model.hasOne<User | null>("creator");
   lastMessage = Model.hasOne<Message | null>("lastMessage");
   participants = Model.hasMany<User>("participants");
+
+  /**
+   * People asked in who have not answered. Served only to whoever manages the
+   * member list, and only when the members tab includes it.
+   */
+  invitedUsers = Model.hasMany<User>("invitedUsers");
 
   /**
    * The other side of a conversation, default-included on the channel list.

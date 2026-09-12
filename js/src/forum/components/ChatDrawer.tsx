@@ -16,6 +16,7 @@ import ChannelView from "./ChannelView";
 import PinnedPanel from "./PinnedPanel";
 import ChatSearch from "./ChatSearch";
 import ThreadPanel from "./ThreadPanel";
+import ThreadsList from "./ThreadsList";
 import { chatTitle, chatIcon } from "../utils/branding";
 import { isNarrowViewport } from "../utils/surface";
 
@@ -395,6 +396,25 @@ export default class ChatDrawer extends Component<ComponentAttrs> {
           state={chatState}
           onClose={() => {
             chatState.closeThread();
+            m.redraw();
+          }}
+        />,
+      );
+
+      return panes;
+    }
+
+    // The channel's threads, over the conversation, for the same reason search
+    // is: `chat.threads` is a page, and routing there closes the drawer.
+    if (channel && chatState.showThreads) {
+      panes.push(
+        <ThreadsList
+          key={`threads-${channel.id()}`}
+          state={chatState}
+          channelId={Number(channel.id())}
+          embedded
+          onClose={() => {
+            chatState.showThreads = false;
             m.redraw();
           }}
         />,

@@ -38,14 +38,16 @@ class ChannelPolicyTest extends QueryTestCase
 
     protected const EDIT = ['ramon-chat.editOwnChannels' => true];
 
-    protected function policy(string $mode = ChannelOwnership::MODE_MEMBERS): ChannelPolicy
-    {
+    protected function policy(
+        string $mode = ChannelOwnership::MODE_MEMBERS,
+        ?VisibilityCache $cache = null
+    ): ChannelPolicy {
         $settings = Mockery::mock(SettingsRepositoryInterface::class);
         $settings->shouldReceive('get')->andReturnUsing(
             fn (string $key, $default = null) => $key === ChannelOwnership::SETTING ? $mode : true
         );
 
-        return new ChannelPolicy($settings, new VisibilityCache(), new ChannelOwnership($settings));
+        return new ChannelPolicy($settings, $cache ?? new VisibilityCache(), new ChannelOwnership($settings));
     }
 
     /**
@@ -68,6 +70,8 @@ class ChannelPolicyTest extends QueryTestCase
         $channel->shouldReceive('membershipFor')->andReturnUsing(
             fn (?User $user) => $user ? ($memberships[(int) $user->id] ?? null) : null
         );
+
+        $channel->shouldReceive('pendingInviteFor')->andReturn(null);
 
         return $channel;
     }
@@ -186,10 +190,33 @@ class ChannelPolicyTest extends QueryTestCase
         $this->assertFalse($this->policy()->delete($owner, $direct));
     }
 
-    /** Being unannounced in a room is a moderation power, never an ownership one. */
+    /** Being unannounced in a room is a right of its own, never an ownership one. */
     public function test_managing_does_not_grant_hidden_join(): void
     {
         $this->assertFalse($this->policy()->joinHidden($this->owner(self::MANAGE), $this->channel()));
+    }
+
+    /** Nor a moderation one: `inspectChannels` is the permission, and only it. */
+    public function test_inspecting_is_its_own_permission(): void
+    {
+        $moderator = $this->stranger(['ramon-chat.moderate' => true]);
+        $inspector = $this->stranger(['ramon-chat.inspectChannels' => true]);
+
+        $this->assertFalse($this->policy()->joinHidden($moderator, $this->channel()));
+
+        // Past the permission gate the policy asks the visibility scope, and
+        // there is no database here to ask. The cache answers first, so it is
+        // told the channel is visible before the policy looks.
+        $cache = new VisibilityCache();
+        $cache->remember($inspector, 'channel', 1, fn () => true);
+
+        $this->assertTrue($this->policy(cache: $cache)->joinHidden($inspector, $this->channel()));
+
+        // And it opens a private channel, since a room the inspector cannot
+        // enter is one they cannot inspect.
+        $private = $this->channel(['is_private' => true]);
+
+        $this->assertTrue($this->policy(cache: $cache)->joinHidden($inspector, $private));
     }
 
     // ── channel moderators: people and messages, not the room itself ───────────

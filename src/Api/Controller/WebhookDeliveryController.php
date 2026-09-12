@@ -50,6 +50,12 @@ class WebhookDeliveryController implements RequestHandlerInterface
         // did not pass through ResolveRoute, and `null['key']` would fatal.
         $key = (string) Arr::get((array) $request->getAttribute('routeParameters'), 'key', '');
 
+        // The admin switch for the whole feature. Refused before the key is
+        // even looked at, so a valid URL is no help while webhooks are off.
+        if (! (bool) $this->settings->get('ramon-chat.webhooks_enabled', true)) {
+            throw new ForbiddenException();
+        }
+
         $webhook = $this->resolve($key);
 
         if ($webhook === null) {

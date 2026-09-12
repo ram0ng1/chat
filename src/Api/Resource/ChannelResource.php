@@ -17,23 +17,25 @@ use Flarum\Api\Schema;
 use Flarum\Api\Sort\SortColumn;
 use Flarum\Foundation\ValidationException;
 use Flarum\Locale\Translator;
-use Flarum\Notification\NotificationSyncer;
 use Flarum\User\User;
 use Illuminate\Contracts\Events\Dispatcher as Events;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Arr;
 use Laminas\Diactoros\Response\EmptyResponse;
+use Ramon\Chat\Access\ScopeChannelVisibility;
 use Ramon\Chat\Channel;
 use Ramon\Chat\ChannelUser;
 use Ramon\Chat\Event\ChannelStatusChanged;
 use Ramon\Chat\Event\ChannelWasCreated;
 use Ramon\Chat\Event\ChannelWasDeleted;
 use Ramon\Chat\Event\ChannelWasEdited;
+use Ramon\Chat\Event\InviteWasCancelled;
 use Ramon\Chat\Event\UserJoinedChannel;
 use Ramon\Chat\Event\UserLeftChannel;
-use Ramon\Chat\Notification\ChannelInviteBlueprint;
+use Ramon\Chat\Event\UserWasInvited;
 use Ramon\Chat\Service\ChannelArchiver;
 use Ramon\Chat\Service\ChannelOwnership;
+use Ramon\Chat\Service\InvitationManager;
 use Ramon\Chat\Service\MembershipManager;
 use Ramon\Chat\Service\SlowMode;
 use Ramon\Chat\Service\UnreadTracker;
@@ -51,8 +53,8 @@ class ChannelResource extends AbstractDatabaseResource
         protected UnreadTracker $unread,
         protected MembershipManager $memberships,
         protected ChannelArchiver $archiver,
-        protected NotificationSyncer $notifications,
-        protected ChannelOwnership $ownership
+        protected ChannelOwnership $ownership,
+        protected InvitationManager $invitations
     ) {
     }
 
@@ -166,6 +168,11 @@ class ChannelResource extends AbstractDatabaseResource
                         ->where('user_id', $context->getActor()->id)
                         ->whereNull('left_at')
                 )
+                ->eagerLoadWhere(
+                    'actorInvite',
+                    fn ($query, Context $context) => $query
+                        ->where('user_id', $context->getActor()->id)
+                )
                 // Restricted to direct channels: a category channel's label comes
                 // from its own name, and loading its whole membership to find that
                 // out is exactly the query this is meant to save.
@@ -205,6 +212,11 @@ class ChannelResource extends AbstractDatabaseResource
                     fn ($query, Context $context) => $query
                         ->where('user_id', $context->getActor()->id)
                         ->whereNull('left_at')
+                )
+                ->eagerLoadWhere(
+                    'actorInvite',
+                    fn ($query, Context $context) => $query
+                        ->where('user_id', $context->getActor()->id)
                 )
                 // Restricted to direct channels: a category channel's label comes
                 // from its own name, and loading its whole membership to find that
@@ -302,15 +314,34 @@ class ChannelResource extends AbstractDatabaseResource
                         throw new ForbiddenException();
                     }
 
+                    // Accepting an invitation is joining. Consumed first, so the
+                    // membership is created knowing it answers one, and the
+                    // announcement can say who asked them in.
+                    $invite = $this->invitations->accept($channel, $actor);
+
                     $this->memberships->join($channel, $actor, hidden: $hidden);
 
-                    $this->events->dispatch(new UserJoinedChannel($channel, $actor, $actor, $hidden));
-                })
-                ->response(fn () => new EmptyResponse(204)),
+                    $this->events->dispatch(new UserJoinedChannel(
+                        $channel,
+                        $actor,
+                        $actor,
+                        $hidden,
+                        acceptedInvite: $invite !== null,
+                        invitedBy: $invite?->inviter
+                    ));
 
-            // Adding other people. Separate from `join`, which is the actor letting
-            // themselves in: this puts someone else in a room, and for a private
-            // channel it is the only way in, so it is the invitation mechanism.
+                    // The record as it now stands, capability flags included. The
+                    // client draws the composer from `canPostMessage`, and a bare
+                    // 204 left it reading the pre-join answer until a reload: the
+                    // channel looked closed to someone who had just joined it.
+                    return $channel;
+                }),
+
+            // Inviting other people. Separate from `join`, which is the actor
+            // letting themselves in: this asks someone else into a room, and for a
+            // private channel it is the only way in. Nobody is put in a channel
+            // without a say: the invitee gets a notification with the choice, and
+            // accepting it is what creates the membership.
             Endpoint\Endpoint::make('addMembers')
                 ->route('POST', '/{id}/members')
                 ->authenticated()
@@ -347,37 +378,65 @@ class ChannelResource extends AbstractDatabaseResource
                         ->whereIn('id', $ids)
                         ->get();
 
-                    $added = [];
+                    // Members and people already invited are skipped inside, so a
+                    // repeated request cannot pile up invites or re-notify anyone.
+                    $invited = $this->invitations->invite($channel, $users, $actor);
 
-                    foreach ($users as $user) {
-                        // Already here: joining again would be a no-op, but it would
-                        // still fire a notification telling them about a channel
-                        // they have been in for weeks.
-                        if ($channel->membershipFor($user) !== null) {
-                            continue;
-                        }
-
-                        $this->memberships->join($channel, $user);
-
-                        $this->events->dispatch(new UserJoinedChannel($channel, $user, $actor));
-
-                        $added[] = $user;
+                    foreach ($invited as $invite) {
+                        $this->events->dispatch(new UserWasInvited($channel, $invite->user, $actor, $invite));
                     }
 
-                    // Told after the fact rather than asked first: this endpoint
-                    // adds people, so the notification is "you were added", and its
-                    // job is to make sure a channel never just appears in someone's
-                    // sidebar with no explanation of where it came from.
-                    if ($added !== []) {
-                        $this->notifications->sync(
-                            new ChannelInviteBlueprint($channel, $actor),
-                            $added
-                        );
-                    }
+                    $channel->unsetRelation('invitedUsers');
 
                     return $channel;
                 })
-                ->defaultInclude(['participants']),
+                ->defaultInclude(['participants', 'invitedUsers']),
+
+            // Taking an invitation back before it is answered. The counterpart of
+            // `removeMember` for people who are not members yet. The invitee's own
+            // answers live on their own routes (Controller\AcceptInviteController,
+            // Controller\DeclineInviteController): a private channel is not
+            // visible to them yet, so a model-scoped endpoint could not find it.
+            Endpoint\Endpoint::make('cancelInvite')
+                ->route('POST', '/{id}/invites/cancel')
+                ->authenticated()
+                ->action(function (Context $context) {
+                    /** @var Channel $channel */
+                    $channel = $context->model;
+                    $actor = $context->getActor();
+
+                    if (! $actor->can('manageMembers', $channel)) {
+                        throw new ForbiddenException();
+                    }
+
+                    $userId = (int) Arr::get($context->body(), 'data.attributes.userId', 0);
+
+                    $user = $userId > 0
+                        // @phpstan-ignore method.notFound (Flarum model scope)
+                        ? User::query()->whereVisibleTo($actor)->whereKey($userId)->first()
+                        : null;
+
+                    if ($user === null) {
+                        throw new ValidationException([
+                            'userId' => $this->translator->trans('ramon-chat.api.members_empty'),
+                        ]);
+                    }
+
+                    $invite = $this->invitations->cancel($channel, $user);
+
+                    if ($invite === null) {
+                        throw new ValidationException([
+                            'userId' => $this->translator->trans('ramon-chat.api.invite_not_found'),
+                        ]);
+                    }
+
+                    $this->events->dispatch(new InviteWasCancelled($channel, $user, $actor, $invite->inviter));
+
+                    $channel->unsetRelation('invitedUsers');
+
+                    return $channel;
+                })
+                ->defaultInclude(['participants', 'invitedUsers']),
 
             // Removing someone else. `leave` is the self-service counterpart; this is
             // the moderation one, and it is a separate endpoint precisely so the
@@ -765,6 +824,20 @@ class ChannelResource extends AbstractDatabaseResource
             Schema\Boolean::make('canJoin')
                 ->get(fn (Channel $c, Context $context) => $context->getActor()->can('join', $c)),
 
+            // A pending invitation for the reader, and who sent it. Read from the
+            // `actorInvite` relation the list endpoints eager-load, so the
+            // sidebar pays nothing per row for the common answer of "none".
+            Schema\Boolean::make('isInvited')
+                ->get(fn (Channel $c, Context $context) => $c->pendingInviteFor($context->getActor()) !== null),
+
+            Schema\Integer::make('invitedById')
+                ->nullable()
+                ->get(fn (Channel $c, Context $context) => $c->pendingInviteFor($context->getActor())?->inviter_id),
+
+            Schema\Str::make('invitedByName')
+                ->nullable()
+                ->get(fn (Channel $c, Context $context) => $c->pendingInviteFor($context->getActor())?->inviter?->display_name),
+
             Schema\Boolean::make('canClose')
                 ->get(fn (Channel $c, Context $context) => $context->getActor()->can('close', $c)),
 
@@ -808,9 +881,12 @@ class ChannelResource extends AbstractDatabaseResource
                 ->type('users')
                 ->includable(),
 
+            // Only where the contents may be read: an invitee to a private
+            // channel sees the row, not its last message.
             Schema\Relationship\ToOne::make('lastMessage')
                 ->type('chat-messages')
-                ->includable(),
+                ->includable()
+                ->visible(fn (Channel $c, Context $context) => ScopeChannelVisibility::readsContents($context->getActor(), $c)),
 
             // `includable()` is what makes `?include=participants` legal; without it
             // the request is rejected outright with a 400 rather than merely omitting
@@ -819,6 +895,14 @@ class ChannelResource extends AbstractDatabaseResource
                 ->type('users')
                 ->includable()
                 ->visible(fn (Channel $c, Context $context) => $context->getActor()->can('viewMembers', $c)),
+
+            // Who has been asked in and not answered yet. Only for whoever can
+            // manage the member list: a pending invite is between the channel's
+            // managers and the person invited, not something the room reads.
+            Schema\Relationship\ToMany::make('invitedUsers')
+                ->type('users')
+                ->includable()
+                ->visible(fn (Channel $c, Context $context) => $context->getActor()->can('manageMembers', $c)),
 
             /*
              * The other side of a direct channel, for the avatars the sidebar draws

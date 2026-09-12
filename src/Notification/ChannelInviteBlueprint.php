@@ -16,14 +16,14 @@ use Flarum\User\User;
 use Ramon\Chat\Channel;
 
 /**
- * "You were added to a channel."
+ * "X invited you to a channel", with accept and decline on the row.
  *
- * The only way into a private channel is for someone with `manageMembers` to put
- * you there, and that happens entirely on their screen — without this the channel
- * simply appears in your sidebar one day with no explanation of who added you or
- * why it exists.
+ * The only way into a private channel is for someone with `manageMembers` to
+ * ask you in, and this is the asking: nothing is joined until the invitee says
+ * yes. The row is kept in step with the invite table by Listener\NotifyInvitations,
+ * so once the invite is answered or withdrawn it leaves the bell.
  *
- * Not mailable. Being added to a chat room is not urgent enough to interrupt
+ * Not mailable. Being asked into a chat room is not urgent enough to interrupt
  * someone's inbox, and the alert is seen the next time they look at the forum.
  */
 /*
