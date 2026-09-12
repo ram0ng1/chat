@@ -253,7 +253,7 @@ class Channel extends AbstractModel
      */
     public function isOwnedBy(?User $user): bool
     {
-        if ($user === null || $user->id === null || $this->creator_id === null) {
+        if ($user === null || $user->isGuest() || $this->creator_id === null) {
             return false;
         }
 
