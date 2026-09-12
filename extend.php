@@ -215,6 +215,7 @@ return [
 
     // ── Settings ─────────────────────────────────────────────────────────────
     (new Extend\Settings())
+        ->default('ramon-chat.channel_ownership', 'admin')
         ->default('ramon-chat.channel_retention_days', 90)
         ->default('ramon-chat.dm_retention_days', 0)
         ->default('ramon-chat.max_messages_per_second', 2)

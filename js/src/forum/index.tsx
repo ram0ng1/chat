@@ -172,6 +172,11 @@ app.initializers.add("ramon-chat", () => {
   // `app.session` are not, and nothing in hydrateFromBoot touches them.
   chatState.hydrateFromBoot();
 
+  // Then the local copy, for whatever the page did not carry: the sidebar and
+  // the last channels viewed, as they stood when the previous visit ended.
+  // Synchronous for the same reason, and revalidated once shown.
+  chatState.hydrateFromSnapshot();
+
   // ── Routes ────────────────────────────────────────────────────────────────
   // Names match the server-side declarations in extend.php. Without these the
   // URLs would serve the SPA and then render "not found".
@@ -327,6 +332,9 @@ app.initializers.add("ramon-chat", () => {
     // extension must never be able to take the forum down with it — a broken
     // chat is an annoyance, an unmountable forum is an outage.
     try {
+      // Signed out: nothing of the last account's conversations stays on disk.
+      if (!app.session.user) chatState.purgeSnapshots();
+
       if (!canUseChat()) return;
 
       // ── Live updates ──────────────────────────────────────────────────────
@@ -342,6 +350,21 @@ app.initializers.add("ramon-chat", () => {
       setPollingFallback(startPolling);
       bindRealtime();
       startPolling();
+
+      // Coming back to the tab, or back online, asks at once for what arrived
+      // meanwhile. The poller skips hidden tabs and a proven socket drops it to
+      // once a minute, so without this a tab woken after an hour could sit up
+      // to a minute behind; the cursors it uses make the request cheap. Going
+      // hidden writes the snapshot, so the next boot starts from this moment.
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden) {
+          chatState.flushSnapshot();
+        } else {
+          poll();
+        }
+      });
+      window.addEventListener("online", () => poll());
+      window.addEventListener("pagehide", () => chatState.flushSnapshot());
 
       // ── Drawer ────────────────────────────────────────────────────────────
       // Its own root outside the page tree, so navigating the forum never tears

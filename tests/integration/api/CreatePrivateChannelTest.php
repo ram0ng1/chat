@@ -45,6 +45,11 @@ class CreatePrivateChannelTest extends TestCase
 
         $this->extension('ramon-chat');
 
+        // The permission only counts once channels are in members' hands; in the
+        // default "administrators" mode nobody else creates one, whatever the
+        // grid says. Registered before boot, as the harness asks for settings.
+        $this->setting('ramon-chat.channel_ownership', 'members');
+
         $this->prepareDatabase([
             'users' => [
                 $this->normalUser(),
@@ -132,6 +137,14 @@ class CreatePrivateChannelTest extends TestCase
 
     public function test_a_member_without_the_permission_creates_neither(): void
     {
+        // The ownership migration seeds `createChannel` to the Member group, so
+        // "a member without the permission" has to be made by revoking it — which
+        // is also what an operator does to narrow creation to a smaller group.
+        $this->database()->table('group_permission')
+            ->where('group_id', Group::MEMBER_ID)
+            ->where('permission', 'ramon-chat.createChannel')
+            ->delete();
+
         $this->assertSame(403, $this->create(2, false)->getStatusCode());
         $this->assertSame(403, $this->create(2, true)->getStatusCode());
     }

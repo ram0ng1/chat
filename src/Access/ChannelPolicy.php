@@ -13,6 +13,7 @@ use Flarum\Settings\SettingsRepositoryInterface;
 use Flarum\User\Access\AbstractPolicy;
 use Flarum\User\User;
 use Ramon\Chat\Channel;
+use Ramon\Chat\Service\ChannelOwnership;
 
 /**
  * Return semantics matter here. Flarum's Gate only applies its admin fallback
@@ -29,7 +30,8 @@ class ChannelPolicy extends AbstractPolicy
 {
     public function __construct(
         protected SettingsRepositoryInterface $settings,
-        protected VisibilityCache $cache
+        protected VisibilityCache $cache,
+        protected ChannelOwnership $ownership
     ) {
     }
 
@@ -73,9 +75,11 @@ class ChannelPolicy extends AbstractPolicy
 
         // An announcement channel: everyone reads, moderators write. Administrators
         // pass because `hasPermission` grants them everything, so there is no
-        // separate admin branch to keep in step with this one.
+        // separate admin branch to keep in step with this one. The channel's own
+        // creator passes too when members run their channels — a room whose
+        // owner cannot speak in it would be a strange thing to have set up.
         if ($channel->restrictsPostingToModerators()
-            && ! $actor->hasPermission('ramon-chat.moderate')) {
+            && ! $this->ownership->moderates($actor, $channel)) {
             return false;
         }
 
@@ -123,11 +127,12 @@ class ChannelPolicy extends AbstractPolicy
         //  - `accessPrivateChannels` is the dedicated right, so opening private
         //    channels to a group does not mean handing them moderation.
         //  - `moderate` keeps it, so a moderator who left a channel can get back
-        //    in to moderate it.
+        //    in to moderate it — and so does the creator when members run their
+        //    channels, for the same reason and for their channel only.
         if ($channel->isPrivate()
             && $channel->membershipFor($actor) === null
             && ! $actor->hasPermission('ramon-chat.accessPrivateChannels')
-            && ! $actor->hasPermission('ramon-chat.moderate')) {
+            && ! $this->ownership->moderates($actor, $channel)) {
             return false;
         }
 
@@ -154,10 +159,14 @@ class ChannelPolicy extends AbstractPolicy
      * Editing a channel's name, description, emoji, bound tag and threading.
      *
      * Three independent grants, checked in order of specificity:
-     *  - the creator of a direct group chat manages their own conversation;
-     *  - `editChannel` is the dedicated right, for a group that should curate
-     *    channels without being able to create or moderate them;
-     *  - `moderate` implies it, since a chat moderator manages channels anyway.
+     *  - `editChannel` is the dedicated forum-wide right, for a group that should
+     *    curate channels without being able to create or moderate them;
+     *  - `editOwnChannels` is the same right narrowed to channels the actor
+     *    created, when members run their channels (ChannelOwnership);
+     *  - `moderate` implies it, since a chat moderator manages channels anyway —
+     *    and so does `manageOwnChannels` over the actor's own, by the same
+     *    reasoning. A channel moderator does not: they act on people and
+     *    messages in the room, not on what the room is.
      */
     public function edit(User $actor, Channel $channel): ?bool
     {
@@ -177,6 +186,10 @@ class ChannelPolicy extends AbstractPolicy
             return true;
         }
 
+        if ($this->ownership->edits($actor, $channel)) {
+            return true;
+        }
+
         return $actor->hasPermission('ramon-chat.moderate') ? true : null;
     }
 
@@ -186,7 +199,7 @@ class ChannelPolicy extends AbstractPolicy
             return false;
         }
 
-        return $actor->can('ramon-chat.moderate') ? true : null;
+        return $this->ownership->moderates($actor, $channel) ? true : null;
     }
 
     /**
@@ -204,7 +217,7 @@ class ChannelPolicy extends AbstractPolicy
             return false;
         }
 
-        return $actor->can('ramon-chat.moderate') ? true : null;
+        return $this->ownership->controls($actor, $channel) ? true : null;
     }
 
     public function delete(User $actor, Channel $channel): ?bool
@@ -215,9 +228,14 @@ class ChannelPolicy extends AbstractPolicy
             return $actor->isAdmin() ? true : false;
         }
 
-        return $actor->can('ramon-chat.moderate') ? true : null;
+        return $this->ownership->controls($actor, $channel) ? true : null;
     }
 
+    /**
+     * Adding and removing other people. For a category channel this is what
+     * ownership chiefly grants: when members run their channels, the creator
+     * fills their own room — and so does anyone they made a channel moderator.
+     */
     public function manageMembers(User $actor, Channel $channel): ?bool
     {
         if ($channel->isDirect()) {
@@ -226,7 +244,22 @@ class ChannelPolicy extends AbstractPolicy
             }
         }
 
-        return $actor->can('ramon-chat.moderate') ? true : null;
+        return $this->ownership->moderates($actor, $channel) ? true : null;
+    }
+
+    /**
+     * Choosing who moderates the room: its owner and chat moderators, never a
+     * channel moderator — trust handed out inside a room stays with whoever
+     * owns it. Off entirely while channels are in administrators' hands, when
+     * the role would be inert (see ChannelOwnership).
+     */
+    public function manageModerators(User $actor, Channel $channel): ?bool
+    {
+        if ($channel->isDirect() || ! $this->ownership->membersOwnChannels()) {
+            return false;
+        }
+
+        return $this->ownership->controls($actor, $channel) ? true : null;
     }
 
     /**

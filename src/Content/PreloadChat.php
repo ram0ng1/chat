@@ -37,10 +37,23 @@ use Throwable;
  * Registered on the forum frontend as a whole rather than per route, because
  * Extend\Frontend::route() already spends its third argument on
  * RequireChatAccess. The route guard below is what keeps these queries off the
- * rest of the forum.
+ * rest of the forum — except where the drawer is open.
+ *
+ * The drawer is the case the route list cannot see. It stays open across the
+ * forum, and a reload on any page brings it back — so that page's boot is where
+ * the conversation is assembled, over the same round trips /chat used to pay.
+ * ChatState mirrors "drawer open, on channel N" into a cookie (see
+ * persistDrawerCookie), and when it is present this preloads for that channel
+ * on every route. The cookie is absent whenever the drawer is closed, so a
+ * reader who is not chatting costs nothing here.
  */
 class PreloadChat
 {
+    /**
+     * Set by the client while the drawer is open; carries the open channel's id,
+     * or 0 for an open drawer with nothing selected.
+     */
+    private const DRAWER_COOKIE = 'ramon_chat_drawer';
     /**
      * The routes this runs for.
      *
@@ -87,8 +100,10 @@ class PreloadChat
     public function __invoke(Document $document, ServerRequestInterface $request): void
     {
         $route = (string) $request->getAttribute('routeName');
+        $onChatRoute = in_array($route, self::ROUTES, true);
+        $drawerChannel = $this->drawerChannel($request);
 
-        if (! in_array($route, self::ROUTES, true)) {
+        if (! $onChatRoute && $drawerChannel === null) {
             return;
         }
 
@@ -123,9 +138,13 @@ class PreloadChat
             $payload['drafts'] = $drafts;
         }
 
-        $channelId = in_array($route, self::CHANNEL_ROUTES, true)
-            ? $this->activeChannelId($request, $channels)
-            : null;
+        $channelId = null;
+
+        if (in_array($route, self::CHANNEL_ROUTES, true)) {
+            $channelId = $this->activeChannelId($request, $channels, $drawerChannel);
+        } elseif (! $onChatRoute && $drawerChannel > 0) {
+            $channelId = $drawerChannel;
+        }
 
         if ($channelId !== null) {
             // Sent so the client knows which stream the messages below belong to.
@@ -161,7 +180,7 @@ class PreloadChat
             }
         }
 
-        $threadId = $this->threadId($request);
+        $threadId = $onChatRoute ? $this->threadId($request) : null;
 
         if ($channelId !== null && $threadId !== null) {
             $payload['threadId'] = $threadId;
@@ -188,24 +207,27 @@ class PreloadChat
      * the list is still returned — a deep link into a channel the sidebar does not
      * carry is the case that benefits most from arriving already loaded.
      *
-     * Bare /chat is a guess, and knowingly so. ChatState restores the last channel
-     * the reader had open from localStorage, which the server cannot see, so a
-     * reader whose last channel is not the most recently active one gets a stream
-     * preloaded for a channel they are not about to open. Nothing breaks — that
-     * stream is simply cached for when they do switch to it, and the channel they
-     * land on loads the way it always did — and the sort makes the guess right
-     * most of the time, since the last channel read is usually the last one
-     * written to. /chat/c/{id}, which is what a reload or a shared link produces,
-     * is exact.
+     * Bare /chat restores the last channel the reader had open, which ChatState
+     * keeps in localStorage — invisible here — and mirrors into the drawer
+     * cookie. With the cookie the answer is exact; without it the first channel
+     * in the list is a guess, and knowingly so: the sort makes it right most of
+     * the time, since the last channel read is usually the last one written to,
+     * and a miss costs only the stream loading the way it always did.
+     * /chat/c/{id}, which is what a reload or a shared link produces, is exact
+     * either way.
      *
      * @param array<string, mixed> $channels
      */
-    private function activeChannelId(ServerRequestInterface $request, array $channels): ?int
+    private function activeChannelId(ServerRequestInterface $request, array $channels, ?int $remembered): ?int
     {
         $id = $this->routeParameter($request, 'id');
 
         if ($id !== null) {
             return $id;
+        }
+
+        if ($remembered !== null && $remembered > 0) {
+            return $remembered;
         }
 
         $first = $channels['data'][0]['id'] ?? null;
@@ -216,6 +238,23 @@ class PreloadChat
     private function threadId(ServerRequestInterface $request): ?int
     {
         return $this->routeParameter($request, 'threadId');
+    }
+
+    /**
+     * The drawer cookie: null when absent or malformed, otherwise the channel id
+     * it carries (0 for an open drawer with nothing selected). A bare digit
+     * string is all that is accepted — it is client-written, so nothing else
+     * about it is trusted, and the id still goes through the API as the actor.
+     */
+    private function drawerChannel(ServerRequestInterface $request): ?int
+    {
+        $value = $request->getCookieParams()[self::DRAWER_COOKIE] ?? null;
+
+        if (! is_string($value) || ! preg_match('/^\d{1,10}$/', $value)) {
+            return null;
+        }
+
+        return (int) $value;
     }
 
     private function routeParameter(ServerRequestInterface $request, string $name): ?int

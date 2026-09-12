@@ -14,6 +14,7 @@ use Flarum\Settings\SettingsRepositoryInterface;
 use Flarum\User\Access\AbstractPolicy;
 use Flarum\User\User;
 use Ramon\Chat\Message;
+use Ramon\Chat\Service\ChannelOwnership;
 
 /**
  * @see ChannelPolicy for why these methods return `?bool` rather than `bool`.
@@ -22,7 +23,8 @@ class MessagePolicy extends AbstractPolicy
 {
     public function __construct(
         protected SettingsRepositoryInterface $settings,
-        protected VisibilityCache $cache
+        protected VisibilityCache $cache,
+        protected ChannelOwnership $ownership
     ) {
     }
 
@@ -94,6 +96,13 @@ class MessagePolicy extends AbstractPolicy
         return $this->withinEditWindow($message);
     }
 
+    /**
+     * Moderators may delete anything; so may the channel's owner and the
+     * moderators they appointed, since removing a message from your own room is
+     * the plainest form of looking after it. Restoring stays with moderators: a
+     * deleted message is hidden from everyone but its author and them
+     * (ScopeMessageVisibility), so the creator could not see what to restore.
+     */
     public function delete(User $actor, Message $message): ?bool
     {
         if ($message->isDeleted()) {
@@ -101,6 +110,10 @@ class MessagePolicy extends AbstractPolicy
         }
 
         if ($actor->can('ramon-chat.moderate')) {
+            return true;
+        }
+
+        if ($message->channel !== null && $this->ownership->moderates($actor, $message->channel)) {
             return true;
         }
 

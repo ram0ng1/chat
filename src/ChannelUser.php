@@ -21,6 +21,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $channel_id
  * @property int $user_id
  * @property bool $following
+ * @property bool $is_moderator
  * @property int $notification_level
  * @property bool $muted
  * @property int|null $last_read_message_id
@@ -53,6 +54,7 @@ class ChannelUser extends AbstractModel
         'user_id'               => 'integer',
         'following'             => 'boolean',
         'hidden'                => 'boolean',
+        'is_moderator'          => 'boolean',
         'notification_level'    => 'integer',
         'muted'                 => 'boolean',
         'last_read_message_id'  => 'integer',
@@ -81,6 +83,15 @@ class ChannelUser extends AbstractModel
     public function hasLeft(): bool
     {
         return $this->left_at !== null;
+    }
+
+    /**
+     * Whether the channel's owner made this member a moderator of it. What that
+     * grants is decided by Service\ChannelOwnership.
+     */
+    public function isModerator(): bool
+    {
+        return (bool) $this->is_moderator;
     }
 
     /**

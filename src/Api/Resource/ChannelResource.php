@@ -33,6 +33,7 @@ use Ramon\Chat\Event\UserJoinedChannel;
 use Ramon\Chat\Event\UserLeftChannel;
 use Ramon\Chat\Notification\ChannelInviteBlueprint;
 use Ramon\Chat\Service\ChannelArchiver;
+use Ramon\Chat\Service\ChannelOwnership;
 use Ramon\Chat\Service\MembershipManager;
 use Ramon\Chat\Service\SlowMode;
 use Ramon\Chat\Service\UnreadTracker;
@@ -50,7 +51,8 @@ class ChannelResource extends AbstractDatabaseResource
         protected UnreadTracker $unread,
         protected MembershipManager $memberships,
         protected ChannelArchiver $archiver,
-        protected NotificationSyncer $notifications
+        protected NotificationSyncer $notifications,
+        protected ChannelOwnership $ownership
     ) {
     }
 
@@ -425,6 +427,17 @@ class ChannelResource extends AbstractDatabaseResource
                         throw new ForbiddenException();
                     }
 
+                    // The same rule inside the room: a channel moderator must not
+                    // eject the owner or a fellow moderator. Only whoever controls
+                    // the channel — its owner, or a chat moderator — may.
+                    $target = $channel->membershipFor($user);
+
+                    if (! $this->ownership->controls($actor, $channel)
+                        && ((int) $channel->creator_id === (int) $user->id
+                            || ($target !== null && $target->isModerator()))) {
+                        throw new ForbiddenException();
+                    }
+
                     $membership = $this->memberships->leave($channel, $user);
 
                     // Not a member — nothing to do, and reporting success on a no-op
@@ -439,6 +452,21 @@ class ChannelResource extends AbstractDatabaseResource
 
                     return $channel;
                 })
+                ->defaultInclude(['participants']),
+
+            // Making a member a moderator of this channel, and undoing it. What
+            // the role grants is decided by ChannelOwnership; who may hand it out
+            // by ChannelPolicy::manageModerators.
+            Endpoint\Endpoint::make('promoteModerator')
+                ->route('POST', '/{id}/moderators')
+                ->authenticated()
+                ->action(fn (Context $context) => $this->setModerator($context, true))
+                ->defaultInclude(['participants']),
+
+            Endpoint\Endpoint::make('demoteModerator')
+                ->route('POST', '/{id}/moderators/remove')
+                ->authenticated()
+                ->action(fn (Context $context) => $this->setModerator($context, false))
                 ->defaultInclude(['participants']),
 
             Endpoint\Endpoint::make('leave')
@@ -749,6 +777,30 @@ class ChannelResource extends AbstractDatabaseResource
             Schema\Boolean::make('canManageMembers')
                 ->get(fn (Channel $c, Context $context) => $context->getActor()->can('manageMembers', $c)),
 
+            Schema\Boolean::make('canManageModerators')
+                ->get(fn (Channel $c, Context $context) => $context->getActor()->can('manageModerators', $c)),
+
+            // So the members tab can label the owner without loading the creator.
+            Schema\Integer::make('creatorId')
+                ->property('creator_id')
+                ->nullable(),
+
+            // Which members hold the channel's own moderator role. Read off the
+            // participants relation when it is loaded — the members tab asks for
+            // it — and empty otherwise, so the channel list pays no query per row.
+            Schema\Arr::make('moderatorIds')
+                ->get(function (Channel $c) {
+                    if (! $c->relationLoaded('participants')) {
+                        return [];
+                    }
+
+                    return $c->participants
+                        ->filter(fn (User $user) => (bool) ($user->pivot->is_moderator ?? false))
+                        ->map(fn (User $user) => (int) $user->id)
+                        ->values()
+                        ->all();
+                }),
+
             Schema\Boolean::make('canMentionChannelWide')
                 ->get(fn (Channel $c, Context $context) => $context->getActor()->can('mentionChannelWide', $c)),
 
@@ -851,6 +903,55 @@ class ChannelResource extends AbstractDatabaseResource
      * @var array<string, ChannelUser|null|false>
      */
     protected array $membershipCache = [];
+
+    /**
+     * Sets or clears the channel-moderator role on a current member.
+     *
+     * Only on a live membership: the role is a fact about someone being in the
+     * room, and granting it to somebody who is not would give them nothing
+     * today and a surprise the day they are added back.
+     */
+    protected function setModerator(Context $context, bool $moderator): Channel
+    {
+        /** @var Channel $channel */
+        $channel = $context->model;
+        $actor = $context->getActor();
+
+        if (! $actor->can('manageModerators', $channel)) {
+            throw new ForbiddenException();
+        }
+
+        $userId = (int) Arr::get($context->body(), 'data.attributes.userId', 0);
+
+        $user = $userId > 0
+            ? User::query()->whereVisibleTo($actor)->whereKey($userId)->first()
+            : null;
+
+        if ($user === null) {
+            throw new ValidationException([
+                'userId' => $this->translator->trans('ramon-chat.api.members_empty'),
+            ]);
+        }
+
+        $membership = $channel->membershipFor($user);
+
+        if ($membership === null || $membership->hasLeft()) {
+            throw new ValidationException([
+                'userId' => $this->translator->trans('ramon-chat.api.not_a_member'),
+            ]);
+        }
+
+        if ($membership->isModerator() !== $moderator) {
+            $membership->is_moderator = $moderator;
+            $membership->save();
+        }
+
+        // The response includes participants; a copy loaded before the change
+        // would carry the old role on its pivot.
+        $channel->unsetRelation('participants');
+
+        return $channel;
+    }
 
     protected function membership(Channel $channel, User $actor): ?ChannelUser
     {
