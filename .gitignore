@@ -7,6 +7,12 @@ js/node_modules
 # their own versions against the forum they install it into.
 composer.lock
 
+# End-to-end harness output. The tokens file holds live API keys for the local
+# forum and must never be committed; results and screenshots are per run.
+/tests/E2E/.tokens.json
+/tests/E2E/results
+/tests/E2E/screenshots
+
 # Test and analysis caches
 .phpunit.cache
 .phpunit.result.cache

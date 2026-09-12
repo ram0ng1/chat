@@ -305,6 +305,20 @@ export default class ChatSidebar extends Component<ChatSidebarAttrs> {
           />
         ) : null}
 
+        {/* Inspecting: a membership the room cannot see. Marked here so the
+            reader knows which of their rows is the quiet one. */}
+        {channel.isHiddenMember() ? (
+          <i
+            className="ChatChannelRow-lock fas fa-user-secret"
+            title={app.translator.trans(
+              "ramon-chat.forum.browse.inspecting",
+              {},
+              true,
+            )}
+            aria-hidden="true"
+          />
+        ) : null}
+
         {/* Muting is per-user and its only other sign in the list is the row
             being dimmed — which reads as "inactive" just as easily as "muted",
             and reads as nothing at all next to a row that is dim for its own

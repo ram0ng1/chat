@@ -10,8 +10,11 @@
 namespace Ramon\Chat\Realtime;
 
 use Flarum\User\User;
+use Ramon\Chat\Channel;
 use Ramon\Chat\Event\ChannelStatusChanged;
 use Ramon\Chat\Event\ChannelWasEdited;
+use Ramon\Chat\Event\InviteWasCancelled;
+use Ramon\Chat\Event\InviteWasDeclined;
 use Ramon\Chat\Event\MessagePinToggled;
 use Ramon\Chat\Event\MessageWasDeleted;
 use Ramon\Chat\Event\MessageWasEdited;
@@ -20,6 +23,9 @@ use Ramon\Chat\Event\MessageWasRestored;
 use Ramon\Chat\Event\MessageWasSent;
 use Ramon\Chat\Event\ReactionToggled;
 use Ramon\Chat\Event\ThreadWasCreated;
+use Ramon\Chat\Event\UserJoinedChannel;
+use Ramon\Chat\Event\UserLeftChannel;
+use Ramon\Chat\Event\UserWasInvited;
 use Ramon\Chat\Message;
 use Ramon\Chat\Upload;
 
@@ -48,6 +54,13 @@ class BroadcastListener
     public const EVENT_REACTION = 'ramonChat.reaction';
     public const EVENT_THREAD = 'ramonChat.thread';
     public const EVENT_CHANNEL = 'ramonChat.channel';
+
+    /**
+     * Who is in, invited to, or out of a channel. Delivered to the person the
+     * change is about, so their other tabs follow, and to the channel's members
+     * when the change is one the room can see.
+     */
+    public const EVENT_MEMBERSHIP = 'ramonChat.membership';
 
     public function __construct(
         protected ChatBroadcaster $broadcaster
@@ -202,6 +215,80 @@ class BroadcastListener
             // them would leave a moderator with two browser tabs out of step.
             null
         );
+    }
+
+    public function whenInvited(UserWasInvited $event): void
+    {
+        $this->membership($event->channel, $event->user, 'invited', $event->inviter, tellMembers: false);
+    }
+
+    public function whenJoined(UserJoinedChannel $event): void
+    {
+        // A hidden arrival is not the room's to know; the member's own tabs are.
+        $this->membership($event->channel, $event->user, 'joined', $event->actor, tellMembers: ! $event->hidden);
+    }
+
+    public function whenLeft(UserLeftChannel $event): void
+    {
+        $this->membership($event->channel, $event->user, 'left', $event->actor, tellMembers: ! $event->hidden);
+    }
+
+    public function whenInviteDeclined(InviteWasDeclined $event): void
+    {
+        // The inviter is the actor here so their members tab hears the answer;
+        // the refusal itself reaches them as a notification.
+        $this->membership($event->channel, $event->user, 'invite_declined', $event->inviter, tellMembers: false);
+    }
+
+    public function whenInviteCancelled(InviteWasCancelled $event): void
+    {
+        $this->membership($event->channel, $event->user, 'invite_cancelled', $event->actor, tellMembers: false);
+    }
+
+    /**
+     * One membership change, addressed to everyone it concerns.
+     *
+     * The person it is about always hears it: that is what keeps a second tab,
+     * or the drawer on another page, in step with the sidebar that acted. The
+     * actor hears it too when they are somebody else, so a members tab that
+     * just sent an invite sees it answered. The room as a whole hears only the
+     * changes it can see anyway (arrivals and departures), and never the
+     * invitations, which are between the managers and the person asked.
+     *
+     * The payload carries ids and display names only; the client refetches the
+     * channel through the API when it needs the row, and the visibility scope
+     * decides there whether it may have it.
+     */
+    protected function membership(
+        Channel $channel,
+        User $user,
+        string $action,
+        ?User $actor,
+        bool $tellMembers
+    ): void {
+        $payload = [
+            'channelId'   => (int) $channel->id,
+            'channelName' => $channel->name,
+            'isPrivate'   => (bool) $channel->is_private,
+            'userId'      => (int) $user->id,
+            'username'    => $user->display_name,
+            'action'      => $action,
+            'actorId'     => $actor?->id !== null ? (int) $actor->id : null,
+            'actorName'   => $actor?->display_name,
+            'userCount'   => (int) $channel->user_count,
+        ];
+
+        $this->broadcaster->toUser((int) $user->id, self::EVENT_MEMBERSHIP, $payload);
+
+        if ($tellMembers) {
+            $this->broadcaster->toChannelMembers($channel, self::EVENT_MEMBERSHIP, $payload, (int) $user->id);
+
+            return;
+        }
+
+        if ($actor !== null && (int) $actor->id !== (int) $user->id) {
+            $this->broadcaster->toUser((int) $actor->id, self::EVENT_MEMBERSHIP, $payload);
+        }
     }
 
     /**

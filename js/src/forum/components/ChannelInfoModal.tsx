@@ -36,10 +36,15 @@ export interface ChannelInfoModalAttrs extends IInternalModalAttrs {
 export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
   private tab: "settings" | "members" = "settings";
   private members: User[] = [];
+  /** People invited and not yet answered. Served to managers only. */
+  private invited: User[] = [];
   private loadingMembers = false;
   private loadedMembers = false;
   private memberFilter = "";
   private working = false;
+
+  /** Stops listening for membership pushes; set while the modal is open. */
+  private stopListening: (() => void) | null = null;
 
   /**
    * Which immediate action is running, or null.
@@ -413,8 +418,109 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
             </div>
           ) : null}
         </div>
+
+        {this.invitedList()}
       </div>
     );
+  }
+
+  /**
+   * Who has been asked in and not answered, for whoever manages the list.
+   *
+   * Under the members rather than among them: an invitation is not a
+   * membership, and a name in the member list that cannot be messaged would
+   * be a lie. Each row can be withdrawn, which is the manager's half of the
+   * exchange the invitee's accept and decline are the other half of.
+   */
+  protected invitedList(): Mithril.Children {
+    if (!this.attrs.channel.canManageMembers() || this.invited.length === 0) {
+      return null;
+    }
+
+    return (
+      <div className="ChatChannelInfo-invited">
+        <div className="ChatChannelInfo-memberHeader">
+          <span className="ChatChannelInfo-memberCount">
+            {app.translator.trans("ramon-chat.forum.info.invited_heading", {
+              count: this.invited.length,
+            })}
+          </span>
+        </div>
+
+        <div className="ChatChannelInfo-memberList">
+          {this.invited.map((user) => (
+            <div
+              key={user.id()}
+              className="ChatChannelInfo-member ChatChannelInfo-member--invited"
+            >
+              <Avatar user={user} className="Avatar" />
+              <span>{userLink(user)}</span>
+              <span className="ChatChannelInfo-member-badge">
+                {app.translator.trans("ramon-chat.forum.info.invited_badge")}
+              </span>
+              <Button
+                className="Button Button--icon Button--flat ChatChannelInfo-member-remove"
+                icon="fas fa-user-xmark"
+                disabled={this.working}
+                title={app.translator.trans(
+                  "ramon-chat.forum.info.cancel_invite",
+                  { username: username(user) },
+                  true,
+                )}
+                onclick={() => this.cancelInvite(user)}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  /**
+   * Withdraws an invitation. The invitee's notification goes with it, so
+   * confirmed first: the person may be reading it at that very moment.
+   */
+  protected async cancelInvite(user: User): Promise<void> {
+    const confirmed = confirm(
+      app.translator.trans(
+        "ramon-chat.forum.info.cancel_invite_confirm",
+        { username: username(user) },
+        true,
+      ),
+    );
+
+    if (!confirmed) return;
+
+    this.working = true;
+    m.redraw();
+
+    try {
+      const payload = await app.request<any>({
+        method: "POST",
+        url: `${app.forum.attribute("apiUrl")}/chat-channels/${this.attrs.channel.id()}/invites/cancel`,
+        body: { data: { attributes: { userId: Number(user.id()) } } },
+      });
+
+      if (payload?.data) app.store.pushPayload(payload);
+
+      this.invited = this.invited.filter((entry) => entry.id() !== user.id());
+
+      app.alerts.show(
+        { type: "success" },
+        app.translator.trans("ramon-chat.forum.info.invite_cancelled", {
+          username: username(user),
+        }),
+      );
+    } catch (e: any) {
+      app.alerts.show(
+        { type: "error" },
+        e?.response?.errors?.[0]?.detail ??
+          app.translator.trans("ramon-chat.forum.info.save_failed"),
+      );
+    } finally {
+      this.working = false;
+      m.redraw();
+    }
   }
 
   protected isOwner(user: User): boolean {
@@ -559,25 +665,33 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
       AddMembersModal,
       {
         channel: this.attrs.channel,
-        existing: this.members,
-        onAdded: (users: User[]) => this.onMembersAdded(users),
+        // Both lists: the picker shows them marked rather than offering them,
+        // so someone already in, or already asked, is not a mystery absence.
+        members: this.members,
+        invited: this.invited,
+        onAdded: (users: User[]) => this.onMembersInvited(users),
       },
       true,
     );
   }
 
-  /** Folds the picker's result into the list this tab is already showing. */
-  protected onMembersAdded(users: User[]): void {
-    const known = new Set(this.members.map((member) => member.id()));
+  /**
+   * Folds the picker's result into the pending list.
+   *
+   * Invited, not added: nobody is a member until they say yes, so the count
+   * does not move and the names go under "invitations pending" rather than
+   * into the member list.
+   */
+  protected onMembersInvited(users: User[]): void {
+    const known = new Set([
+      ...this.members.map((member) => member.id()),
+      ...this.invited.map((user) => user.id()),
+    ]);
     const fresh = users.filter((user) => !known.has(user.id()));
 
     if (fresh.length === 0) return;
 
-    this.members = [...this.members, ...fresh];
-
-    this.attrs.channel.pushAttributes({
-      userCount: (this.attrs.channel.userCount() ?? 0) + fresh.length,
-    });
+    this.invited = [...this.invited, ...fresh];
 
     m.redraw();
   }
@@ -643,25 +757,45 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
 
     this.loadingMembers = true;
 
+    // From here on, a membership push for this channel re-reads the list, so
+    // an invitation answered while the tab is open is seen being answered.
+    this.stopListening ??= chatState.onMembershipChange((channelId) => {
+      if (channelId !== Number(this.attrs.channel.id())) return;
+
+      this.loadedMembers = false;
+      void this.loadMembers();
+    });
+
     try {
-      // Re-fetched with the relationship included rather than read off the
-      // sidebar's copy, which is loaded without participants.
+      // Re-fetched with the relationships included rather than read off the
+      // sidebar's copy, which is loaded without participants. The pending
+      // invitations ride along; the server omits them for anyone who may not
+      // manage the list.
       const channel = (await app.store.find(
         "chat-channels",
         String(this.attrs.channel.id()),
         {
-          include: "participants",
+          include: "participants,invitedUsers",
         },
       )) as unknown as Channel;
 
       this.members = (channel.participants() || []).filter(Boolean) as User[];
+      this.invited = (channel.invitedUsers() || []).filter(Boolean) as User[];
     } catch {
       this.members = [];
+      this.invited = [];
     } finally {
       this.loadingMembers = false;
       this.loadedMembers = true;
       m.redraw();
     }
+  }
+
+  onremove(vnode: Mithril.VnodeDOM<ChannelInfoModalAttrs, this>): void {
+    super.onremove(vnode);
+
+    this.stopListening?.();
+    this.stopListening = null;
   }
 
   // ── Actions ────────────────────────────────────────────────────────────────

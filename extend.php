@@ -233,6 +233,9 @@ return [
         // continuously — see Realtime\ChatBroadcaster. Never serialised to the
         // forum: it changes nothing the client can see or act on.
         ->default('ramon-chat.queue_realtime', false)
+        // The switch for incoming webhooks as a whole. Off, the delivery route
+        // refuses every key; each webhook still has its own active flag.
+        ->default('ramon-chat.webhooks_enabled', true)
         // Notification sound. 'none' disables it; the others name a file under
         // assets/sounds, published to public/assets/extensions/ramon-chat.
         ->default('ramon-chat.notification_sound', 'chime')
@@ -298,6 +301,12 @@ return [
         ->post('/chat/drafts', 'chat.drafts.store', Api\Controller\DraftController::class)
         ->get('/chat/drafts', 'chat.drafts.index', Api\Controller\ListDraftsController::class)
         ->post('/chat/direct', 'chat.direct.start', Api\Controller\StartDirectController::class)
+        // The invitee's answer. Off the resource on purpose: a private channel
+        // is not visible to someone who has not joined it, so a model-scoped
+        // endpoint could never find the channel being accepted. The invite row
+        // is the authorisation here; {id} is the channel.
+        ->post('/chat/invites/{id:\d+}/accept', 'chat.invites.accept', Api\Controller\AcceptInviteController::class)
+        ->post('/chat/invites/{id:\d+}/decline', 'chat.invites.decline', Api\Controller\DeclineInviteController::class)
         ->post('/chat/transcript', 'chat.transcript', Api\Controller\TranscriptController::class)
         ->post('/chat/messages/move', 'chat.messages.move', Api\Controller\MoveMessagesController::class)
         // Slack-compatible incoming webhook, authenticated by the secret path key.
@@ -331,7 +340,11 @@ return [
         // No channels at all. Still registered so notification rows written by the
         // earlier version stay resolvable instead of rendering as an unknown type.
         ->type(Notification\ChatMessageBlueprint::class, [])
+        // The invitation itself, with accept and decline on the row, and the
+        // answer that comes back to whoever asked. Alert only, both of them: a
+        // channel invite is not urgent enough to interrupt an inbox.
         ->type(Notification\ChannelInviteBlueprint::class, ['alert'])
+        ->type(Notification\ChannelInviteDeclinedBlueprint::class, ['alert'])
 
         // Reports reach the moderators the way a flag on a post does, rather than
         // waiting to be found the next time someone opens the queue. Alert only:
@@ -361,7 +374,14 @@ return [
         // Narrates membership changes into the stream, so a departure is visible to
         // whoever is left rather than silent.
         ->listen(Event\UserJoinedChannel::class, Listener\AnnounceMembershipChanges::class.'@whenJoined')
-        ->listen(Event\UserLeftChannel::class, Listener\AnnounceMembershipChanges::class.'@whenLeft'),
+        ->listen(Event\UserLeftChannel::class, Listener\AnnounceMembershipChanges::class.'@whenLeft')
+        // Invitations: the notification that asks, kept in step with the invite
+        // table so answering or cancelling one takes it off the bell, and the
+        // notification that tells the owner and the inviter of a refusal.
+        ->listen(Event\UserWasInvited::class, Listener\NotifyInvitations::class.'@whenInvited')
+        ->listen(Event\UserJoinedChannel::class, Listener\NotifyInvitations::class.'@whenJoined')
+        ->listen(Event\InviteWasDeclined::class, Listener\NotifyInvitations::class.'@whenDeclined')
+        ->listen(Event\InviteWasCancelled::class, Listener\NotifyInvitations::class.'@whenCancelled'),
 
     // ── Console ──────────────────────────────────────────────────────────────
     (new Extend\Console())
@@ -440,7 +460,16 @@ return [
                 ->listen(Event\ReactionToggled::class, Realtime\BroadcastListener::class.'@whenReactionToggled')
                 ->listen(Event\ThreadWasCreated::class, Realtime\BroadcastListener::class.'@whenThreadChanged')
                 ->listen(Event\ChannelStatusChanged::class, Realtime\BroadcastListener::class.'@whenChannelChanged')
-                ->listen(Event\ChannelWasEdited::class, Realtime\BroadcastListener::class.'@whenChannelChanged'),
+                ->listen(Event\ChannelWasEdited::class, Realtime\BroadcastListener::class.'@whenChannelChanged')
+                // Membership: who was invited, came in, or went out. What lets a
+                // channel appear in the sidebar the moment its invite is
+                // accepted, and disappear the moment someone is removed, without
+                // the page being reloaded.
+                ->listen(Event\UserWasInvited::class, Realtime\BroadcastListener::class.'@whenInvited')
+                ->listen(Event\UserJoinedChannel::class, Realtime\BroadcastListener::class.'@whenJoined')
+                ->listen(Event\UserLeftChannel::class, Realtime\BroadcastListener::class.'@whenLeft')
+                ->listen(Event\InviteWasDeclined::class, Realtime\BroadcastListener::class.'@whenInviteDeclined')
+                ->listen(Event\InviteWasCancelled::class, Realtime\BroadcastListener::class.'@whenInviteCancelled'),
         ]),
 
     // ── Privacy and auditing ─────────────────────────────────────────────────

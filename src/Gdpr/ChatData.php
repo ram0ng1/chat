@@ -12,6 +12,7 @@ namespace Ramon\Chat\Gdpr;
 use Flarum\Gdpr\Data\Type;
 use Illuminate\Contracts\Filesystem\Factory;
 use Illuminate\Support\Arr;
+use Ramon\Chat\ChannelInvite;
 use Ramon\Chat\ChannelUser;
 use Ramon\Chat\Draft;
 use Ramon\Chat\Message;
@@ -157,6 +158,7 @@ class ChatData extends Type
         MessageReaction::query()->where('user_id', $this->user->id)->delete();
         Draft::query()->where('user_id', $this->user->id)->delete();
         ChannelUser::query()->where('user_id', $this->user->id)->delete();
+        ChannelInvite::query()->where('user_id', $this->user->id)->delete();
     }
 
     protected function deleteUploads(): void

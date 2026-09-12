@@ -1,16 +1,210 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// ramon/chat — admin styles
+// ramon/chat: admin styles
+//
+// The settings page is laid out as titled cards (see ChatSettingsPage) on top
+// of core's ExtensionPage, so everything here is additive: core still draws
+// each field, the save bar and the permission grid.
 // ─────────────────────────────────────────────────────────────────────────────
 
+@chat-admin-radius: 10px;
+@chat-admin-gap: 16px;
+
+.ChatAdmin {
+  // Core's .Form is a flex column with `align-items: flex-start`, which lets
+  // its children shrink to their content. Both grids, inside the form and
+  // below it, take the full width so the record panels line up with the
+  // settings cards and the save bar above them.
+  .Form {
+    width: 100%;
+    align-items: stretch;
+  }
+
+  // A grid of cards. One column on a narrow window, two from 1100px, so a
+  // long page of unrelated settings becomes a set of blocks that can be read
+  // side by side.
+  &-grid {
+    display: grid;
+    width: 100%;
+    box-sizing: border-box;
+    grid-template-columns: 1fr;
+    gap: @chat-admin-gap;
+    margin-bottom: @chat-admin-gap;
+
+    @media (min-width: 1100px) {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  &-section {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    padding: 18px 20px 20px;
+    border: 1px solid var(--control-bg);
+    border-radius: @chat-admin-radius;
+    background: var(--body-bg);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+
+    // The two record panels (announcer, webhooks) span the row: they hold
+    // lists, and a half-width list wraps its rows twice.
+    &--announcer,
+    &--webhooks {
+      @media (min-width: 1100px) {
+        // Escaped: the LESS compiler reads a bare `1 / -1` as a division.
+        grid-column: ~"1 / -1";
+      }
+    }
+  }
+
+  &-sectionHeader {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--control-bg);
+
+    > div {
+      min-width: 0;
+      flex: 1;
+    }
+  }
+
+  &-sectionIcon {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--control-bg);
+    color: var(--primary-color);
+    font-size: 15px;
+  }
+
+  &-sectionTitle {
+    margin: 0 0 2px;
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1.3;
+    color: var(--heading-color);
+  }
+
+  &-sectionHelp {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  &-sectionBody {
+    flex: 1;
+  }
+
+  // Fields inside a card. Core's .Form-group is `display: flex; flex-direction:
+  // column` with its own bottom margin, which the grid gap replaces.
+  &-fields {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px 18px;
+
+    > .Form-group {
+      margin: 0;
+      min-width: 0;
+    }
+
+    &--two {
+      @media (min-width: 640px) {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      // A switch or a select with long help reads better full width.
+      > .Form-group:has(.Checkbox),
+      > .Form-group:has(select) {
+        // Escaped: the LESS compiler reads a bare `1 / -1` as a division.
+        grid-column: ~"1 / -1";
+      }
+    }
+  }
+
+  &-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 14px 0 0;
+    padding: 10px 12px;
+    border-radius: 6px;
+    background: var(--alert-bg);
+    color: var(--alert-color);
+    font-size: 13px;
+    line-height: 1.4;
+
+    i {
+      margin-top: 2px;
+      flex-shrink: 0;
+    }
+  }
+
+  // The save bar is the last thing on the page: every card above it, the
+  // webhooks switch included, is saved by it.
+  &-controls {
+    margin: 0 0 @chat-admin-gap * 1.5;
+  }
+
+  // The feature switch at the top of the webhooks card, set off from the
+  // records under it by the same rule the card header uses.
+  &-switch {
+    margin-bottom: 14px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--control-bg);
+  }
+
+  &-muted {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    color: var(--muted-color);
+    font-size: 13px;
+  }
+}
+
+// ── Permission grid headings ─────────────────────────────────────────────────
+// Each chat block's heading carries a second line saying when the block is in
+// force, so "global" and "channels run by members" never have to be guessed.
+.ChatPermissionHeading {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+
+  &-title {
+    font-weight: 700;
+  }
+
+  &-help {
+    font-size: 12px;
+    font-weight: normal;
+    line-height: 1.35;
+    color: var(--muted-color);
+    white-space: normal;
+    max-width: 420px;
+  }
+}
+
+.PermissionGrid-section th .ChatPermissionHeading {
+  padding: 4px 0;
+}
+
+// ── Incoming webhooks ────────────────────────────────────────────────────────
 .ChatWebhooks {
   &-create {
     display: flex;
 
     // Explicit, and not redundant: the element also carries core's `.Form-group`,
     // which is `display: flex; flex-direction: column`. Setting only `display`
-    // here left that column direction in force, so the row stacked — and
-    // `flex: 1 1 200px` below, which was written to size widths, sized heights
-    // instead and turned each field into a 200px-tall box.
+    // here left that column direction in force, so the row stacked, and
+    // `flex: 1 1 200px` below, written to size widths, sized heights instead and
+    // turned each field into a 200px-tall box.
     flex-direction: row;
     flex-wrap: wrap;
     align-items: center;
@@ -18,7 +212,7 @@
     // leaves the row hugging its content instead of filling the panel.
     width: 100%;
     gap: 8px;
-    margin-bottom: 20px;
+    margin-bottom: 16px;
 
     .FormControl {
       width: auto;
@@ -30,6 +224,10 @@
     }
   }
 
+  &-empty {
+    margin: 0;
+  }
+
   &-list {
     display: grid;
     gap: 10px;
@@ -37,7 +235,7 @@
 
   &-row {
     padding: 12px 14px;
-    border: 1px solid rgba(0, 0, 0, 0.1);
+    border: 1px solid var(--control-bg);
     border-radius: 8px;
 
     &-main {
@@ -73,11 +271,9 @@
 }
 
 // ── Announcer settings ───────────────────────────────────────────────────────
-// Who the chat posts as. See BotSettings.tsx — the two halves are exclusive, so
+// Who the chat posts as. See BotSettings.tsx: the two halves are exclusive, so
 // only one of them is ever on screen.
 .ChatBotSettings {
-  margin-bottom: 24px;
-
   &-intro {
     margin-bottom: 12px;
   }

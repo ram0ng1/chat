@@ -1,8 +1,8 @@
 import app from "flarum/admin/app";
-import ExtensionPage from "flarum/admin/components/ExtensionPage";
+import Component from "flarum/common/Component";
+import type { ComponentAttrs } from "flarum/common/Component";
 import Button from "flarum/common/components/Button";
 import LoadingIndicator from "flarum/common/components/LoadingIndicator";
-import BotSettings from "./BotSettings";
 import Switch from "flarum/common/components/Switch";
 import type Mithril from "mithril";
 
@@ -19,14 +19,16 @@ interface WebhookModel {
  *
  * Each webhook posts into one channel with a secret key in its URL. The key is
  * returned by the API only on create and on rotate, so it is shown once here and
- * then never again — which is why the freshly minted URL is held in component state
- * and called out rather than listed with the rest of the row.
+ * then never again, which is why the freshly minted URL is held in component
+ * state and called out rather than listed with the rest of the row.
+ *
+ * A component rather than part of the page: the page decides where the panel
+ * sits, and the panel owns the records.
  */
-export default class WebhooksPage extends ExtensionPage {
+export default class WebhooksPanel extends Component<ComponentAttrs> {
   private webhooks: WebhookModel[] = [];
   private channels: any[] = [];
-  // `loading` is taken by ExtensionPage.
-  private loadingHooks = true;
+  private loading = true;
 
   /** URLs revealed this session, keyed by webhook id. Never re-fetchable. */
   private revealed: Record<string, string> = {};
@@ -35,57 +37,24 @@ export default class WebhooksPage extends ExtensionPage {
   private draftChannel = "";
   private working = false;
 
-  oninit(vnode: Mithril.Vnode): void {
+  oninit(vnode: Mithril.Vnode<ComponentAttrs, this>): void {
     super.oninit(vnode);
 
     this.load();
   }
 
-  /**
-   * `super.content()` first, and it is not optional.
-   *
-   * ExtensionPage.content() is where core renders the entire registered-settings
-   * grid — every `registerSetting` call, plus the save and reset buttons. This
-   * class overrode it without calling super, so none of those settings were ever
-   * drawn: the extension page showed webhooks and nothing else.
-   */
-  content(vnode: Mithril.VnodeDOM<any, any>) {
-    // A fragment, not a wrapper <div>.
-    //
-    // The base signature wants a single vnode, so the first attempt wrapped both
-    // halves in a plain div — and that extra DOM node broke the layout the core
-    // stylesheet builds around `.ExtensionPage-settings` being where it expects it,
-    // leaving the webhook form as a column of stretched boxes. A fragment satisfies
-    // the signature without adding an element, so the cascade is untouched.
-    //
-    // Both children are unkeyed, which matters: Mithril decides a fragment is keyed
-    // from its first child and then demands every sibling be keyed too.
+  view(): Mithril.Children {
     return (
-      <>
-        {super.content(vnode)}
-
-        <div className="ExtensionPage-settings">
-          <div className="container">
-            {/* Who the chat posts as. Its own component rather than settings rows
-                because the choice is exclusive — an announcing account makes the
-                bot's name and picture moot, so the form has to collapse rather
-                than show controls that do nothing. */}
-            <h3>{app.translator.trans("ramon-chat.admin.bot.title")}</h3>
-            <BotSettings />
-
-            <h3>{app.translator.trans("ramon-chat.admin.webhooks.title")}</h3>
-            <p className="helpText">
-              {app.translator.trans("ramon-chat.admin.webhooks.help")}
-            </p>
-
-            {this.loadingHooks ? (
-              <LoadingIndicator />
-            ) : (
-              [this.createForm(), this.list()]
-            )}
-          </div>
-        </div>
-      </>
+      <div className="ChatWebhooks">
+        {this.loading ? (
+          <LoadingIndicator />
+        ) : (
+          <>
+            {this.createForm()}
+            {this.list()}
+          </>
+        )}
+      </div>
     );
   }
 
@@ -141,7 +110,7 @@ export default class WebhooksPage extends ExtensionPage {
   protected list(): Mithril.Children {
     if (this.webhooks.length === 0) {
       return (
-        <p className="helpText">
+        <p className="helpText ChatWebhooks-empty">
           {app.translator.trans("ramon-chat.admin.webhooks.empty")}
         </p>
       );
@@ -232,7 +201,7 @@ export default class WebhooksPage extends ExtensionPage {
       this.webhooks = [];
       this.channels = [];
     } finally {
-      this.loadingHooks = false;
+      this.loading = false;
       m.redraw();
     }
   }

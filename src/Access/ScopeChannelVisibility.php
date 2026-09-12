@@ -141,8 +141,9 @@ class ScopeChannelVisibility
      */
     protected function restrictPrivate(Builder $query, User $actor): void
     {
-        if ($actor->hasPermission('ramon-chat.accessPrivateChannels')
-            || $actor->hasPermission('ramon-chat.moderate')) {
+        // `inspectChannels` too: observing a room unnoticed starts with being
+        // able to find it, and a private channel is the one most worth a look.
+        if (self::bypassesPrivacy($actor)) {
             return;
         }
 
@@ -162,6 +163,81 @@ class ScopeChannelVisibility
                     ->where('chat_channel_user.user_id', $actor->id)
                     ->whereNull('chat_channel_user.left_at');
             });
+
+            // A pending invitation opens the row, and only the row: the invitee
+            // sees what they are being asked into (name, description, member
+            // count), the notification about it can be listed (core hides a
+            // notification whose subject the reader cannot see), and Browse can
+            // offer the answer. The channel's contents stay behind
+            // `restrictContents()`, which requires the membership accepting
+            // creates.
+            $query->orWhereExists(function ($sub) use ($actor) {
+                $sub->selectRaw(1)
+                    ->from('chat_channel_invites')
+                    ->whereColumn('chat_channel_invites.channel_id', 'chat_channels.id')
+                    ->where('chat_channel_invites.user_id', $actor->id);
+            });
         });
+    }
+
+    /**
+     * Whether the actor may read what is *in* the channel, as opposed to that
+     * the channel exists.
+     *
+     * The two differ only for a private channel with a pending invitation: its
+     * row is visible so the invitation can be answered, but its messages,
+     * threads and attachments are not until the invitation is accepted. The PHP
+     * form of the rule; `restrictContents()` is the SQL form, and the two must
+     * stay in step.
+     */
+    public static function readsContents(User $actor, Channel $channel): bool
+    {
+        if (! $channel->isPrivate()) {
+            return true;
+        }
+
+        if (self::bypassesPrivacy($actor)) {
+            return true;
+        }
+
+        return $channel->membershipFor($actor) !== null;
+    }
+
+    /**
+     * Narrows a query over `chat_channels` to the channels whose contents the
+     * actor may read. Applied by the message and thread scopes on top of
+     * `whereVisibleTo`.
+     */
+    public static function restrictContents(Builder $query, User $actor): void
+    {
+        if (self::bypassesPrivacy($actor)) {
+            return;
+        }
+
+        $query->where(function (Builder $query) use ($actor) {
+            $query->where('chat_channels.is_private', false);
+
+            if (! $actor->exists) {
+                return;
+            }
+
+            $query->orWhereExists(function ($sub) use ($actor) {
+                $sub->selectRaw(1)
+                    ->from('chat_channel_user')
+                    ->whereColumn('chat_channel_user.channel_id', 'chat_channels.id')
+                    ->where('chat_channel_user.user_id', $actor->id)
+                    ->whereNull('chat_channel_user.left_at');
+            });
+        });
+    }
+
+    /**
+     * The three grants that see every private channel, members or not.
+     */
+    protected static function bypassesPrivacy(User $actor): bool
+    {
+        return $actor->hasPermission('ramon-chat.accessPrivateChannels')
+            || $actor->hasPermission('ramon-chat.moderate')
+            || $actor->hasPermission('ramon-chat.inspectChannels');
     }
 }

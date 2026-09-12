@@ -10,33 +10,47 @@ import type User from "flarum/common/models/User";
 import type Mithril from "mithril";
 
 import type Channel from "../../common/models/Channel";
+import { isOnline } from "../utils/presence";
 
-/** What the endpoint accepts in one call — mirrors ChannelResource::addMembers. */
+/** What the endpoint accepts in one call; mirrors ChannelResource::addMembers. */
 const MAX_PER_REQUEST = 50;
+
+/** How many recently active people are offered before anything is typed. */
+const SUGGESTIONS = 8;
 
 export interface AddMembersModalAttrs extends IFormModalAttrs {
   channel: Channel;
-  /** Who is already in, so they are never offered as candidates. */
-  existing: User[];
-  /** Called with the people the server actually added. */
+  /** Already in the channel: listed, but not offered. */
+  members: User[];
+  /** Already asked and not answered: listed, but not offered again. */
+  invited: User[];
+  /** Called with the people the server was asked to invite. */
   onAdded: (users: User[]) => void;
 }
 
 /**
- * Picks people to put into a channel.
+ * Picks people to invite into a channel.
  *
- * A modal rather than the field that used to unfold inside the members tab.
- * That field could only add one person per click, each one its own request and
- * its own alert, and it shared the tab with the member list and the member
- * filter — three search-shaped controls stacked on top of each other, two of
- * which searched different things. Choosing several people is one task, so it
- * gets one surface and one request.
+ * A token field: the chosen people sit inside the search box as chips, so the
+ * question "who am I about to invite" is answered where the typing happens.
+ * Before anything is typed the box offers the people most recently seen on the
+ * forum, so the dialog never opens onto an empty grey square; typing narrows
+ * that to a search. People who are already in, or already asked, still appear
+ * in the results, marked and unselectable, so their absence from the offer is
+ * explained rather than silent.
+ *
+ * The keyboard works the way a token field is expected to: arrows move along
+ * the list, Enter picks, Backspace on an empty box takes the last chip back,
+ * Escape clears the query.
  */
 export default class AddMembersModal extends FormModal<AddMembersModalAttrs> {
   private query = "";
   private results: User[] = [];
+  private suggestions: User[] = [];
   private selected: User[] = [];
   private searching = false;
+  private loadingSuggestions = true;
+  private highlighted = 0;
   private timer: number | null = null;
 
   /**
@@ -46,6 +60,12 @@ export default class AddMembersModal extends FormModal<AddMembersModalAttrs> {
    * slower of the two wins and the list contradicts the field.
    */
   private sequence = 0;
+
+  oninit(vnode: Mithril.Vnode<AddMembersModalAttrs, this>): void {
+    super.oninit(vnode);
+
+    void this.loadSuggestions();
+  }
 
   onremove(vnode: Mithril.VnodeDOM<AddMembersModalAttrs, this>): void {
     super.onremove(vnode);
@@ -64,24 +84,61 @@ export default class AddMembersModal extends FormModal<AddMembersModalAttrs> {
   content(): Mithril.Children {
     return (
       <div className="Modal-body ChatAddMembers-body">
-        <div className="ChatAddMembers-search">
+        <p className="ChatAddMembers-intro">
+          {app.translator.trans("ramon-chat.forum.add_members.intro", {
+            channel: (
+              <strong>{this.attrs.channel.displayName()}</strong>
+            ) as unknown as string,
+          })}
+        </p>
+
+        <div className="ChatAddMembers-field" onclick={() => this.focusInput()}>
           <i
-            className="ChatAddMembers-search-icon fas fa-magnifying-glass"
+            className="ChatAddMembers-field-icon fas fa-magnifying-glass"
             aria-hidden="true"
           />
+
+          {this.selected.map((user) => (
+            <button
+              type="button"
+              key={user.id()}
+              className="ChatAddMembers-chip"
+              disabled={this.loading}
+              title={app.translator.trans(
+                "ramon-chat.forum.add_members.deselect",
+                { username: username(user) },
+                true,
+              )}
+              onclick={(e: MouseEvent) => {
+                e.stopPropagation();
+                this.toggle(user);
+              }}
+            >
+              <Avatar user={user} className="Avatar" />
+              <span>{user.displayName()}</span>
+              <i className="fas fa-xmark" aria-hidden="true" />
+            </button>
+          ))}
+
           <input
-            className="ChatAddMembers-search-input"
-            type="search"
-            placeholder={app.translator.trans(
-              "ramon-chat.forum.add_members.search_placeholder",
-              {},
-              true,
-            )}
+            className="ChatAddMembers-input"
+            type="text"
+            autocomplete="off"
+            placeholder={
+              this.selected.length === 0
+                ? app.translator.trans(
+                    "ramon-chat.forum.add_members.search_placeholder",
+                    {},
+                    true,
+                  )
+                : ""
+            }
             value={this.query}
             disabled={this.loading}
             oninput={(e: Event) =>
               this.search((e.target as HTMLInputElement).value)
             }
+            onkeydown={(e: KeyboardEvent) => this.onKey(e)}
             oncreate={(vnode: Mithril.VnodeDOM) =>
               (vnode.dom as HTMLInputElement).focus()
             }
@@ -92,54 +149,45 @@ export default class AddMembersModal extends FormModal<AddMembersModalAttrs> {
           ) : null}
         </div>
 
-        {this.chips()}
-        {this.candidates()}
+        {this.list()}
       </div>
     );
   }
 
   /**
-   * The current selection, as removable chips.
-   *
-   * Kept outside the results list because a chosen person stops matching as soon
-   * as the query changes — without this, selecting three people and typing a
-   * fourth name leaves nothing on screen saying who is about to be added.
+   * The offer: suggestions until two letters are typed, then the search.
    */
-  protected chips(): Mithril.Children {
-    if (this.selected.length === 0) return null;
-
-    return (
-      <div className="ChatAddMembers-chips">
-        {this.selected.map((user) => (
-          <button
-            type="button"
-            key={user.id()}
-            className="ChatAddMembers-chip"
-            disabled={this.loading}
-            title={app.translator.trans(
-              "ramon-chat.forum.add_members.deselect",
-              { username: username(user) },
-              true,
-            )}
-            onclick={() => this.toggle(user)}
-          >
-            <Avatar user={user} className="Avatar" />
-            <span>{username(user)}</span>
-            <i className="fas fa-xmark" aria-hidden="true" />
-          </button>
-        ))}
-      </div>
-    );
-  }
-
-  protected candidates(): Mithril.Children {
+  protected list(): Mithril.Children {
     const typed = this.query.trim().length;
 
     if (typed < 2) {
+      if (this.loadingSuggestions) {
+        return (
+          <div className="ChatAddMembers-results ChatAddMembers-results--empty">
+            <LoadingIndicator display="inline" size="small" />
+          </div>
+        );
+      }
+
+      const candidates = this.suggestions.filter(
+        (user) => this.statusOf(user) === null,
+      );
+
+      if (candidates.length === 0) {
+        return (
+          <p className="ChatAddMembers-hint">
+            {app.translator.trans("ramon-chat.forum.add_members.hint")}
+          </p>
+        );
+      }
+
       return (
-        <p className="ChatAddMembers-hint">
-          {app.translator.trans("ramon-chat.forum.add_members.hint")}
-        </p>
+        <div className="ChatAddMembers-results">
+          <div className="ChatAddMembers-heading">
+            {app.translator.trans("ramon-chat.forum.add_members.suggested")}
+          </div>
+          {candidates.map((user, index) => this.row(user, index))}
+        </div>
       );
     }
 
@@ -148,43 +196,87 @@ export default class AddMembersModal extends FormModal<AddMembersModalAttrs> {
         <p className="ChatAddMembers-hint">
           {this.searching
             ? app.translator.trans("ramon-chat.forum.add_members.searching")
-            : app.translator.trans("ramon-chat.forum.add_members.empty")}
+            : app.translator.trans("ramon-chat.forum.add_members.no_results", {
+                query: this.query.trim(),
+              })}
         </p>
       );
     }
 
     return (
-      <div className="ChatAddMembers-results">
-        {this.results.map((user) => {
-          const picked = this.isSelected(user);
-
-          return (
-            <button
-              type="button"
-              key={user.id()}
-              className={classList("ChatAddMembers-result", {
-                "ChatAddMembers-result--selected": picked,
-              })}
-              // Checkbox semantics: the row is a toggle, not a command, and the
-              // selection is only applied when the form is submitted.
-              role="checkbox"
-              aria-checked={picked}
-              disabled={this.loading}
-              onclick={() => this.toggle(user)}
-            >
-              <Avatar user={user} className="Avatar" />
-
-              <span className="ChatAddMembers-result-name">
-                {username(user)}
-              </span>
-
-              <span className="ChatAddMembers-result-mark" aria-hidden="true">
-                <i className={picked ? "fas fa-check" : "fas fa-plus"} />
-              </span>
-            </button>
-          );
-        })}
+      <div className="ChatAddMembers-results" role="listbox">
+        {this.rows(this.results)}
       </div>
+    );
+  }
+
+  /**
+   * Rows for a list that mixes people who can be picked with people who
+   * cannot. The highlight counts only the former, the way the arrow keys do,
+   * so a marked row in the middle of the results does not shift it.
+   */
+  protected rows(users: User[]): Mithril.Children {
+    let offeredIndex = 0;
+
+    return users.map((user) =>
+      this.row(user, this.statusOf(user) === null ? offeredIndex++ : -1),
+    );
+  }
+
+  protected row(user: User, index: number): Mithril.Children {
+    const status = this.statusOf(user);
+    const picked = this.isSelected(user);
+    const offered = status === null;
+
+    return (
+      <button
+        type="button"
+        key={user.id()}
+        className={classList("ChatAddMembers-result", {
+          "ChatAddMembers-result--selected": picked,
+          "ChatAddMembers-result--highlighted":
+            offered && index === this.highlighted,
+          "ChatAddMembers-result--taken": !offered,
+        })}
+        role="option"
+        aria-selected={picked}
+        disabled={this.loading || !offered}
+        onmouseenter={() => {
+          this.highlighted = index;
+        }}
+        onclick={() => this.toggle(user)}
+      >
+        <span
+          className={classList("ChatAddMembers-result-avatar", {
+            "ChatAddMembers-result-avatar--online": isOnline(user),
+          })}
+        >
+          <Avatar user={user} className="Avatar" />
+        </span>
+
+        <span className="ChatAddMembers-result-text">
+          <span className="ChatAddMembers-result-name">
+            {user.displayName()}
+          </span>
+          {user.displayName() !== user.username() ? (
+            <span className="ChatAddMembers-result-handle">
+              @{user.username()}
+            </span>
+          ) : null}
+        </span>
+
+        {status ? (
+          <span className="ChatAddMembers-result-status">
+            {app.translator.trans(
+              `ramon-chat.forum.add_members.${status}_badge`,
+            )}
+          </span>
+        ) : (
+          <span className="ChatAddMembers-result-mark" aria-hidden="true">
+            <i className={picked ? "fas fa-check" : "fas fa-plus"} />
+          </span>
+        )}
+      </button>
     );
   }
 
@@ -194,13 +286,18 @@ export default class AddMembersModal extends FormModal<AddMembersModalAttrs> {
 
     return (
       <div className="Modal-footer ChatAddMembers-footer">
-        {tooMany ? (
-          <span className="ChatAddMembers-footer-warning">
-            {app.translator.trans("ramon-chat.api.members_too_many", {
-              max: MAX_PER_REQUEST,
-            })}
-          </span>
-        ) : null}
+        <span className="ChatAddMembers-footer-count">
+          {tooMany
+            ? app.translator.trans("ramon-chat.api.members_too_many", {
+                max: MAX_PER_REQUEST,
+              })
+            : count > 0
+              ? app.translator.trans(
+                  "ramon-chat.forum.add_members.selected_count",
+                  { count },
+                )
+              : null}
+        </span>
 
         <Button
           className="Button Button--link"
@@ -214,6 +311,7 @@ export default class AddMembersModal extends FormModal<AddMembersModalAttrs> {
         <Button
           className="Button Button--primary"
           type="submit"
+          icon="fas fa-paper-plane"
           loading={this.loading}
           disabled={this.loading || count === 0 || tooMany}
         >
@@ -241,25 +339,143 @@ export default class AddMembersModal extends FormModal<AddMembersModalAttrs> {
 
   // ── Behaviour ──────────────────────────────────────────────────────────────
 
+  /**
+   * Why a person cannot be picked, or null when they can.
+   */
+  protected statusOf(user: User): "you" | "member" | "invited" | null {
+    const id = user.id();
+
+    if (id === app.session.user?.id()) return "you";
+    if (this.attrs.members.some((member) => member.id() === id))
+      return "member";
+    if (this.attrs.invited.some((pending) => pending.id() === id)) {
+      return "invited";
+    }
+
+    return null;
+  }
+
   protected isSelected(user: User): boolean {
     return this.selected.some((picked) => picked.id() === user.id());
   }
 
   protected toggle(user: User): void {
+    if (this.statusOf(user) !== null) return;
+
     this.selected = this.isSelected(user)
       ? this.selected.filter((picked) => picked.id() !== user.id())
       : [...this.selected, user];
+
+    // Picking someone from a search clears it, the way a token field does:
+    // the chip is the record of the choice, and the next name starts fresh.
+    if (this.query !== "") {
+      this.query = "";
+      this.results = [];
+      this.searching = false;
+      this.sequence++;
+    }
+
+    this.highlighted = 0;
+    this.focusInput();
+  }
+
+  protected offered(): User[] {
+    const typed = this.query.trim().length;
+    const pool = typed < 2 ? this.suggestions : this.results;
+
+    return pool.filter((user) => this.statusOf(user) === null);
+  }
+
+  protected onKey(e: KeyboardEvent): void {
+    const offered = this.offered();
+
+    if (e.key === "ArrowDown" && offered.length > 0) {
+      e.preventDefault();
+      this.highlighted = (this.highlighted + 1) % offered.length;
+    } else if (e.key === "ArrowUp" && offered.length > 0) {
+      e.preventDefault();
+      this.highlighted =
+        (this.highlighted - 1 + offered.length) % offered.length;
+    } else if (e.key === "Enter") {
+      // Enter picks; it must not submit the form behind the field, which is
+      // what a bare input inside a form does.
+      e.preventDefault();
+
+      const pick = offered[this.highlighted];
+
+      if (pick) this.toggle(pick);
+    } else if (e.key === "Backspace" && this.query === "") {
+      const last = this.selected[this.selected.length - 1];
+
+      if (last) this.toggle(last);
+    } else if (e.key === "Escape" && this.query !== "") {
+      e.stopPropagation();
+      this.search("");
+    }
+  }
+
+  protected focusInput(): void {
+    const input = this.element?.querySelector<HTMLInputElement>(
+      ".ChatAddMembers-input",
+    );
+
+    input?.focus();
+  }
+
+  /**
+   * A handful of people offered before any typing.
+   *
+   * The most recently seen when the actor may sort by that (core gates the
+   * `lastSeenAt` sort behind `user.viewLastSeenAt`, which ordinary members
+   * usually lack and which the API answers with a 400), the most active
+   * posters otherwise. Fetched once per opening; the list is small and the
+   * point is only to give the dialog something to open onto.
+   */
+  protected async loadSuggestions(): Promise<void> {
+    const limit = SUGGESTIONS + 1 + this.attrs.members.length;
+    // Administrators hold every permission; anyone else who happens to hold
+    // this one is caught by the fallback rather than by a second request
+    // for everyone.
+    const orders = app.session.user?.isAdmin()
+      ? ["-lastSeenAt", "-commentCount"]
+      : ["-commentCount", "-lastSeenAt"];
+
+    try {
+      let results: User[] = [];
+
+      for (const sort of orders) {
+        try {
+          const found = await app.store.find<User[]>("users", {
+            sort,
+            page: { limit },
+          });
+
+          results = Array.isArray(found) ? found : [];
+
+          break;
+        } catch {
+          // A sort this actor may not use; the next one is open to everyone.
+        }
+      }
+
+      this.suggestions = results.slice(0, limit);
+    } finally {
+      this.loadingSuggestions = false;
+      m.redraw();
+    }
   }
 
   /** Debounced so typing does not issue a request per keystroke. */
   protected search(value: string): void {
     this.query = value;
+    this.highlighted = 0;
 
     if (this.timer !== null) window.clearTimeout(this.timer);
 
     if (value.trim().length < 2) {
       this.results = [];
       this.searching = false;
+      this.sequence++;
 
       return;
     }
@@ -276,15 +492,7 @@ export default class AddMembersModal extends FormModal<AddMembersModalAttrs> {
         .then((results) => {
           if (mine !== this.sequence) return;
 
-          const already = new Set(
-            this.attrs.existing.map((member) => member.id()),
-          );
-
-          // Someone already in the channel is not a candidate; offering them and
-          // then silently doing nothing is worse than not offering.
-          this.results = (Array.isArray(results) ? results : []).filter(
-            (user) => !already.has(user.id()),
-          );
+          this.results = Array.isArray(results) ? results : [];
           this.searching = false;
 
           m.redraw();
@@ -320,7 +528,7 @@ export default class AddMembersModal extends FormModal<AddMembersModalAttrs> {
         method: "POST",
         url: `${app.forum.attribute("apiUrl")}/chat-channels/${this.attrs.channel.id()}/members`,
         // One request for the whole selection: the endpoint takes a list, and
-        // adding five people used to be five requests, five notifications'
+        // inviting five people used to be five requests, five notifications'
         // worth of round trips and five chances to half-fail.
         body: {
           data: { attributes: { userIds: chosen.map((u) => Number(u.id())) } },
@@ -335,6 +543,7 @@ export default class AddMembersModal extends FormModal<AddMembersModalAttrs> {
           { type: "success" },
           app.translator.trans("ramon-chat.forum.add_members.added", {
             count: chosen.length,
+            names: chosen.map((user) => user.displayName()).join(", "),
           }),
         );
 

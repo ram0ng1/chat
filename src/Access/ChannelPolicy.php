@@ -129,10 +129,17 @@ class ChannelPolicy extends AbstractPolicy
         //  - `moderate` keeps it, so a moderator who left a channel can get back
         //    in to moderate it — and so does the creator when members run their
         //    channels, for the same reason and for their channel only.
+        //  - `inspectChannels` keeps it, because a private channel an inspector
+        //    cannot enter is one they cannot inspect.
+        //  - a pending invitation, because accepting one *is* joining: whoever
+        //    manages the channel already said yes, and the invitee's join is
+        //    the other half of that answer. The endpoint consumes the invite.
         if ($channel->isPrivate()
             && $channel->membershipFor($actor) === null
             && ! $actor->hasPermission('ramon-chat.accessPrivateChannels')
-            && ! $this->ownership->moderates($actor, $channel)) {
+            && ! $actor->hasPermission('ramon-chat.inspectChannels')
+            && ! $this->ownership->moderates($actor, $channel)
+            && $channel->pendingInviteFor($actor) === null) {
             return false;
         }
 
@@ -142,13 +149,15 @@ class ChannelPolicy extends AbstractPolicy
     /**
      * Joining without appearing to anyone else.
      *
-     * Moderators only. A hidden member is absent from the participant list and the
-     * member count, so this is the ability to be in a room unannounced — which is a
-     * moderation power, not a preference.
+     * Its own permission, `inspectChannels`. A hidden member is absent from the
+     * participant list and the member count, nobody is told they arrived or
+     * left, and no notification is written; this is the ability to observe a
+     * room unnoticed, which a forum may want to hand to an audit or admin group
+     * without handing them moderation, and vice versa.
      */
     public function joinHidden(User $actor, Channel $channel): ?bool
     {
-        if (! $actor->hasPermission('ramon-chat.moderate')) {
+        if (! $actor->hasPermission('ramon-chat.inspectChannels')) {
             return false;
         }
 

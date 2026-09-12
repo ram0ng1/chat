@@ -93,6 +93,12 @@ class Channel extends AbstractModel
      */
     protected array $membershipCache = [];
 
+    /**
+     * Convites pendentes já consultados nesta instância, por id de usuário.
+     *
+     * @var array<int, ChannelInvite|null>
+     */
+    protected array $inviteCache = [];
 
     protected $casts = [
         'tag_id'                      => 'integer',
@@ -319,6 +325,84 @@ class Channel extends AbstractModel
     public function memberships(): HasMany
     {
         return $this->hasMany(ChannelUser::class, 'channel_id');
+    }
+
+    public function invites(): HasMany
+    {
+        return $this->hasMany(ChannelInvite::class, 'channel_id');
+    }
+
+    /**
+     * Quem foi convidado e ainda não respondeu, para a aba de membros de quem
+     * gerencia o canal.
+     */
+    public function invitedUsers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'chat_channel_invites', 'channel_id', 'user_id')
+            ->withPivot('inviter_id');
+    }
+
+    /**
+     * O convite de quem está pedindo, para os endpoints que o carregam junto.
+     *
+     * Sem restrição aqui, como `actorMembership()`: só o endpoint sabe quem é
+     * o ator, e é ele quem restringe no eager load. Nada além de
+     * `pendingInviteFor()` deve ler esta relação.
+     */
+    public function actorInvite(): HasOne
+    {
+        return $this->hasOne(ChannelInvite::class, 'channel_id');
+    }
+
+    /**
+     * O convite pendente do usuário, memoizado como `membershipFor()`.
+     *
+     * Um `actorInvite` já carregado responde sem consulta, inclusive quando
+     * veio vazio: a relação só é carregada restrita ao ator da requisição, e
+     * sem essa confiança a lista de canais custaria uma consulta por linha
+     * para descobrir que não há convite algum.
+     */
+    public function pendingInviteFor(?User $user): ?ChannelInvite
+    {
+        if ($user === null || ! $user->exists) {
+            return null;
+        }
+
+        $id = (int) $user->id;
+
+        if (array_key_exists($id, $this->inviteCache)) {
+            return $this->inviteCache[$id];
+        }
+
+        if ($this->relationLoaded('actorInvite')) {
+            $loaded = $this->getRelation('actorInvite');
+
+            if ($loaded === null) {
+                return $this->inviteCache[$id] = null;
+            }
+
+            if ($loaded instanceof ChannelInvite && (int) $loaded->user_id === $id) {
+                return $this->inviteCache[$id] = $loaded;
+            }
+        }
+
+        /** @var ChannelInvite|null $invite */
+        $invite = $this->invites()
+            ->where('user_id', $id)
+            ->first();
+
+        return $this->inviteCache[$id] = $invite;
+    }
+
+    public function forgetInvite(?User $user = null): void
+    {
+        if ($user === null) {
+            $this->inviteCache = [];
+
+            return;
+        }
+
+        unset($this->inviteCache[(int) $user->id]);
     }
 
     /**

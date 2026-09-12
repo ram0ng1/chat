@@ -19,6 +19,12 @@ import { sendsOnCtrlEnter } from "../utils/shortcuts";
 import MessageTooLongModal from "./MessageTooLongModal";
 import { authorName } from "../utils/bot";
 import {
+  acceptInvitation,
+  adoptChannelPayload,
+  declineInvitation,
+  invitationErrorText,
+} from "../utils/invitations";
+import {
   stickersAvailable,
   stickerIcon,
   stickerLabel,
@@ -399,6 +405,44 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
   }
 
   protected frozen(channel: Channel): Mithril.Children {
+    // Invited but not in. The first thing to check: an invitation is the one
+    // state where the reader has been asked a question, and the answer is what
+    // this bar is for.
+    if (!channel.isFollowing() && channel.isInvited() && channel.isOpen()) {
+      const inviter = channel.invitedByName();
+
+      return (
+        <div className="ChatChannel-frozen ChatChannel-frozen--join ChatChannel-frozen--invited">
+          <i className="fas fa-envelope-open" aria-hidden="true" />
+          <span>
+            {inviter
+              ? app.translator.trans("ramon-chat.forum.channel.invited_by", {
+                  username: inviter,
+                })
+              : app.translator.trans("ramon-chat.forum.channel.invited")}
+          </span>
+
+          <span className="ChatChannel-frozen-actions">
+            <Button
+              className="Button"
+              disabled={this.joining}
+              onclick={() => this.answerInvitation(channel, false)}
+            >
+              {app.translator.trans("ramon-chat.forum.channel.decline_invite")}
+            </Button>
+            <Button
+              className="Button Button--primary"
+              icon="fas fa-check"
+              loading={this.joining}
+              onclick={() => this.answerInvitation(channel, true)}
+            >
+              {app.translator.trans("ramon-chat.forum.channel.accept_invite")}
+            </Button>
+          </span>
+        </div>
+      );
+    }
+
     // Not a member. Checked before the read-only reasons because it is the only one
     // the reader can do something about, and telling them the channel is closed when
     // it is merely unjoined would be the same mistake as the announcement case.
@@ -452,32 +496,90 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
   /**
    * Joins the channel so the composer can appear.
    *
-   * Refetches the channel rather than assuming success: `canPostMessage` is the
-   * server's answer, and a join that succeeded for a channel that has since been
-   * closed should still leave the composer hidden.
+   * The join answers with the channel itself, so `canPostMessage` is the
+   * server's answer rather than an assumption: a join that succeeded for a
+   * channel that has since been closed still leaves the composer hidden, and
+   * one that succeeded for an open channel draws it without a second request.
    */
   protected async join(channel: Channel): Promise<void> {
     this.joining = true;
     m.redraw();
 
     try {
-      await app.request({
+      const payload = await app.request<any>({
         method: "POST",
         url: `${app.forum.attribute("apiUrl")}/chat-channels/${channel.id()}/join`,
         body: { data: { attributes: {} } },
       });
 
-      const fresh = await app.store.find("chat-channels", String(channel.id()));
+      if (!adoptChannelPayload(payload)) {
+        channel.pushAttributes({
+          isFollowing: true,
+          canPostMessage: channel.isOpen(),
+        });
+      }
 
-      channel.pushAttributes({
-        isFollowing: true,
-        canPostMessage: (fresh as any)?.canPostMessage?.() ?? true,
-      });
+      this.attrs.state.rememberChannel(channel);
     } catch (e: any) {
       app.alerts.show(
         { type: "error" },
         e?.response?.errors?.[0]?.detail ??
           app.translator.trans("ramon-chat.forum.channel.join_failed"),
+      );
+    } finally {
+      this.joining = false;
+      m.redraw();
+    }
+  }
+
+  /**
+   * Answers the invitation the bar above is showing.
+   *
+   * Accepting is a join that goes through the invite route, and lands the same
+   * way: the returned record carries `canPostMessage`, so the composer takes
+   * the bar's place on the next draw.
+   */
+  protected async answerInvitation(
+    channel: Channel,
+    accept: boolean,
+  ): Promise<void> {
+    if (
+      !accept &&
+      !confirm(
+        app.translator.trans(
+          "ramon-chat.forum.channel.decline_invite_confirm",
+          {},
+          true,
+        ),
+      )
+    ) {
+      return;
+    }
+
+    this.joining = true;
+    m.redraw();
+
+    try {
+      if (accept) {
+        const joined = await acceptInvitation(Number(channel.id()));
+
+        if (joined) this.attrs.state.rememberChannel(joined);
+      } else {
+        await declineInvitation(Number(channel.id()));
+      }
+
+      app.alerts.show(
+        { type: "success" },
+        app.translator.trans(
+          accept
+            ? "ramon-chat.forum.channel.invite_accepted"
+            : "ramon-chat.forum.channel.invite_declined",
+        ),
+      );
+    } catch (e: any) {
+      app.alerts.show(
+        { type: "error" },
+        invitationErrorText(e, "ramon-chat.forum.channel.invite_failed"),
       );
     } finally {
       this.joining = false;

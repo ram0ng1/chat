@@ -16,11 +16,14 @@ use Ramon\Chat\Event\ChannelStatusChanged;
 use Ramon\Chat\Event\ChannelWasArchived;
 use Ramon\Chat\Event\ChannelWasCreated;
 use Ramon\Chat\Event\ChannelWasDeleted;
+use Ramon\Chat\Event\InviteWasCancelled;
+use Ramon\Chat\Event\InviteWasDeclined;
 use Ramon\Chat\Event\MessagePinToggled;
 use Ramon\Chat\Event\MessageWasDeleted;
 use Ramon\Chat\Event\MessageWasMoved;
 use Ramon\Chat\Event\UserJoinedChannel;
 use Ramon\Chat\Event\UserLeftChannel;
+use Ramon\Chat\Event\UserWasInvited;
 
 /**
  * Audit-log integration, wired through `Flarum\Audit\Extend\Audit::using()` behind
@@ -59,6 +62,9 @@ class AuditIntegration
         'chat.user_joined',
         'chat.user_joined_hidden',
         'chat.user_left',
+        'chat.user_invited',
+        'chat.invite_declined',
+        'chat.invite_cancelled',
     ];
 
     public function __invoke(Container $container): void
@@ -74,6 +80,9 @@ class AuditIntegration
         $events->listen(MessageWasMoved::class, [$this, 'messagesMoved']);
         $events->listen(UserJoinedChannel::class, [$this, 'userJoined']);
         $events->listen(UserLeftChannel::class, [$this, 'userLeft']);
+        $events->listen(UserWasInvited::class, [$this, 'userInvited']);
+        $events->listen(InviteWasDeclined::class, [$this, 'inviteDeclined']);
+        $events->listen(InviteWasCancelled::class, [$this, 'inviteCancelled']);
     }
 
     public function channelCreated(ChannelWasCreated $event): void
@@ -160,6 +169,30 @@ class AuditIntegration
     public function userLeft(UserLeftChannel $event): void
     {
         $this->log($event->actor, 'chat.user_left', [
+            'channel_id' => $event->channel->id,
+            'user_id'    => $event->user->id,
+        ]);
+    }
+
+    public function userInvited(UserWasInvited $event): void
+    {
+        $this->log($event->inviter, 'chat.user_invited', [
+            'channel_id' => $event->channel->id,
+            'user_id'    => $event->user->id,
+        ]);
+    }
+
+    public function inviteDeclined(InviteWasDeclined $event): void
+    {
+        $this->log($event->user, 'chat.invite_declined', [
+            'channel_id' => $event->channel->id,
+            'inviter_id' => $event->inviter?->id,
+        ]);
+    }
+
+    public function inviteCancelled(InviteWasCancelled $event): void
+    {
+        $this->log($event->actor, 'chat.invite_cancelled', [
             'channel_id' => $event->channel->id,
             'user_id'    => $event->user->id,
         ]);

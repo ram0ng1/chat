@@ -61,6 +61,7 @@ class MessagePolicy extends AbstractPolicy
                     $actor,
                     $message,
                     ScopeChannelVisibility::visibleTo($actor, $channel, $this->cache)
+                        && ScopeChannelVisibility::readsContents($actor, $channel)
                 );
             }
         );

@@ -2,12 +2,15 @@ import app from "flarum/admin/app";
 import { extend } from "flarum/common/extend";
 import PermissionGrid from "flarum/admin/components/PermissionGrid";
 import type { PermissionConfig } from "flarum/admin/components/PermissionGrid";
+import type Mithril from "mithril";
 
 import Channel from "../common/models/Channel";
 import Webhook from "../common/models/Webhook";
-import WebhooksPage from "./components/WebhooksPage";
+import ChatSettingsPage from "./components/ChatSettingsPage";
+import WebhooksPanel from "./components/WebhooksPanel";
+import BotSettings from "./components/BotSettings";
 
-export { WebhooksPage, Webhook };
+export { ChatSettingsPage, WebhooksPanel, BotSettings, Webhook };
 
 app.initializers.add("ramon-chat", () => {
   // The admin store is a separate instance from the forum's, so these have to be
@@ -16,137 +19,104 @@ app.initializers.add("ramon-chat", () => {
   app.store.models["chat-webhooks"] = Webhook;
   app.store.models["chat-channels"] = Channel;
 
+  const trans = (key: string) =>
+    app.translator.trans(`ramon-chat.admin.${key}`);
+  const text = (key: string) =>
+    app.translator.trans(`ramon-chat.admin.${key}`, {}, true) as string;
+
   // Flarum 2 exposes the admin registration surface as `app.registry`
   // (AdminRegistry). `app.extensionData` was the Flarum 1 name and does not
-  // exist here — reaching for it throws during initialize(), before the admin
+  // exist here; reaching for it throws during initialize(), before the admin
   // app has mounted anything.
+  //
+  // The settings below are registered the ordinary way, so the registry stays
+  // the one place each field is defined. What changes is the page: core's
+  // ExtensionPage would draw them as one undifferentiated column, and
+  // ChatSettingsPage lays the same fields out in titled sections instead.
+  // Through `registerPage`, not `app.routes`: core registers ONE admin route
+  // and picks the component through ExtensionPageResolver, which asks the
+  // registry for a page registered under the extension's id.
   app.registry
     .for("ramon-chat")
+    .registerPage(ChatSettingsPage)
 
-    // The extension page is replaced wholesale rather than adding webhooks and the
-    // announcer as more settings rows: webhooks are records, not settings, and the
-    // announcer is an exclusive choice — neither has a shape the settings grid can
-    // express.
-    //
-    // Through `registerPage`, not `app.routes`. Core registers ONE admin route,
-    // `extension: /extension/:id`, and picks the component through
-    // ExtensionPageResolver, which asks the registry for a page registered under
-    // the extension's id. Assigning `app.routes['extension.ramon-chat']` therefore
-    // created a route that nothing ever matched: the default ExtensionPage kept
-    // rendering, so the webhooks list and the announcer panel were simply absent
-    // with no error to explain why.
-    .registerPage(WebhooksPage)
-
-    // ── Owner channels ────────────────────────────────────────────────────────
-    // First, because it is the decision the rest depends on. One switch rather
-    // than a spread of "own channel" permission rows: in "administrators" mode
-    // nobody else creates a channel, whatever the grid says; in "members" mode
-    // whoever may create a channel runs the ones they created — members,
-    // settings, closing, archiving, deleting, and removing messages in it —
-    // while administrators and chat moderators keep every channel and can
-    // inspect one through a hidden join that never shows in the member list.
+    // ── Channels ──────────────────────────────────────────────────────────────
+    // Who creates and runs channels is the decision the permission grid depends
+    // on: in "administrators" mode nobody else creates a channel, whatever the
+    // grid says; in "members" mode whoever may create a channel runs the ones
+    // they created, and the grid grows a second block for exactly those rows.
     .registerSetting({
       setting: "ramon-chat.channel_ownership",
       type: "select",
       options: {
-        admin: app.translator.trans(
-          "ramon-chat.admin.settings.channel_ownership_admin",
-          {},
-          true,
-        ),
-        members: app.translator.trans(
-          "ramon-chat.admin.settings.channel_ownership_members",
-          {},
-          true,
-        ),
+        admin: text("settings.channel_ownership_admin"),
+        members: text("settings.channel_ownership_members"),
       },
       default: "admin",
-      label: app.translator.trans(
-        "ramon-chat.admin.settings.channel_ownership",
-      ),
-      help: app.translator.trans(
-        "ramon-chat.admin.settings.channel_ownership_help",
-      ),
+      label: trans("settings.channel_ownership"),
+      help: trans("settings.channel_ownership_help"),
+    })
+    .registerSetting({
+      setting: "ramon-chat.allow_archiving_channels",
+      type: "boolean",
+      label: trans("settings.allow_archiving_channels"),
+      help: trans("settings.allow_archiving_channels_help"),
+    })
+    .registerSetting({
+      setting: "ramon-chat.threading_default",
+      type: "boolean",
+      label: trans("settings.threading_default"),
+      help: trans("settings.threading_default_help"),
     })
 
     // ── Appearance ────────────────────────────────────────────────────────────
     .registerSetting({
       setting: "ramon-chat.title",
       type: "string",
-      label: app.translator.trans("ramon-chat.admin.settings.title_label"),
-      help: app.translator.trans("ramon-chat.admin.settings.title_help"),
+      label: trans("settings.title_label"),
+      help: trans("settings.title_help"),
       placeholder: "Chat",
     })
     .registerSetting({
       setting: "ramon-chat.icon",
       type: "string",
-      label: app.translator.trans("ramon-chat.admin.settings.icon_label"),
-      help: app.translator.trans("ramon-chat.admin.settings.icon_help"),
+      label: trans("settings.icon_label"),
+      help: trans("settings.icon_help"),
       placeholder: "fas fa-comments",
     })
     .registerSetting({
       setting: "ramon-chat.show_icon",
       type: "boolean",
-      label: app.translator.trans("ramon-chat.admin.settings.show_icon_label"),
-      help: app.translator.trans("ramon-chat.admin.settings.show_icon_help"),
+      label: trans("settings.show_icon_label"),
+      help: trans("settings.show_icon_help"),
     })
 
-    // ── Limits and safety ─────────────────────────────────────────────────────
+    // ── Messages ──────────────────────────────────────────────────────────────
     .registerSetting({
-      setting: "ramon-chat.max_messages_per_second",
+      setting: "ramon-chat.max_message_length",
       type: "number",
-      label: app.translator.trans(
-        "ramon-chat.admin.settings.max_messages_per_second",
-      ),
-      min: 0,
+      label: trans("settings.max_message_length"),
+      help: trans("settings.max_message_length_help"),
+      min: 1,
     })
     .registerSetting({
       setting: "ramon-chat.min_message_length",
       type: "number",
-      label: app.translator.trans(
-        "ramon-chat.admin.settings.min_message_length",
-      ),
+      label: trans("settings.min_message_length"),
       min: 1,
     })
     .registerSetting({
-      setting: "ramon-chat.max_message_length",
+      setting: "ramon-chat.max_messages_per_second",
       type: "number",
-      label: app.translator.trans(
-        "ramon-chat.admin.settings.max_message_length",
-      ),
-      min: 1,
+      label: trans("settings.max_messages_per_second"),
+      help: trans("settings.max_messages_per_second_help"),
+      min: 0,
     })
     .registerSetting({
       setting: "ramon-chat.message_edit_window_minutes",
       type: "number",
-      label: app.translator.trans(
-        "ramon-chat.admin.settings.message_edit_window_minutes",
-      ),
-      help: app.translator.trans(
-        "ramon-chat.admin.settings.message_edit_window_help",
-      ),
-      min: 0,
-    })
-
-    // ── Retention ─────────────────────────────────────────────────────────────
-    .registerSetting({
-      setting: "ramon-chat.channel_retention_days",
-      type: "number",
-      label: app.translator.trans(
-        "ramon-chat.admin.settings.channel_retention_days",
-      ),
-      help: app.translator.trans(
-        "ramon-chat.admin.settings.channel_retention_help",
-      ),
-      min: 0,
-    })
-    .registerSetting({
-      setting: "ramon-chat.dm_retention_days",
-      type: "number",
-      label: app.translator.trans(
-        "ramon-chat.admin.settings.dm_retention_days",
-      ),
-      help: app.translator.trans("ramon-chat.admin.settings.dm_retention_help"),
+      label: trans("settings.message_edit_window_minutes"),
+      help: trans("settings.message_edit_window_help"),
       min: 0,
     })
 
@@ -154,37 +124,39 @@ app.initializers.add("ramon-chat", () => {
     .registerSetting({
       setting: "ramon-chat.allow_uploads",
       type: "boolean",
-      label: app.translator.trans("ramon-chat.admin.settings.allow_uploads"),
+      label: trans("settings.allow_uploads"),
+      help: trans("settings.allow_uploads_help"),
     })
     .registerSetting({
       setting: "ramon-chat.max_upload_size",
       type: "number",
-      label: app.translator.trans("ramon-chat.admin.settings.max_upload_size"),
+      label: trans("settings.max_upload_size"),
+      help: trans("settings.max_upload_size_help"),
       min: 0,
     })
 
-    // ── Behaviour ─────────────────────────────────────────────────────────────
+    // ── Retention ─────────────────────────────────────────────────────────────
     .registerSetting({
-      setting: "ramon-chat.threading_default",
-      type: "boolean",
-      label: app.translator.trans(
-        "ramon-chat.admin.settings.threading_default",
-      ),
+      setting: "ramon-chat.channel_retention_days",
+      type: "number",
+      label: trans("settings.channel_retention_days"),
+      help: trans("settings.channel_retention_help"),
+      min: 0,
     })
     .registerSetting({
-      setting: "ramon-chat.allow_archiving_channels",
-      type: "boolean",
-      label: app.translator.trans(
-        "ramon-chat.admin.settings.allow_archiving_channels",
-      ),
+      setting: "ramon-chat.dm_retention_days",
+      type: "number",
+      label: trans("settings.dm_retention_days"),
+      help: trans("settings.dm_retention_help"),
+      min: 0,
     })
+
+    // ── Realtime and sound ────────────────────────────────────────────────────
     .registerSetting({
       setting: "ramon-chat.queue_realtime",
       type: "boolean",
-      label: app.translator.trans("ramon-chat.admin.settings.queue_realtime"),
-      help: app.translator.trans(
-        "ramon-chat.admin.settings.queue_realtime_help",
-      ),
+      label: trans("settings.queue_realtime"),
+      help: trans("settings.queue_realtime_help"),
     })
 
     // A select rather than a boolean plus a file field: the choice is between two
@@ -194,70 +166,52 @@ app.initializers.add("ramon-chat", () => {
       setting: "ramon-chat.notification_sound",
       type: "select",
       options: {
-        none: app.translator.trans(
-          "ramon-chat.admin.settings.sound_none",
-          {},
-          true,
-        ),
-        chime: app.translator.trans(
-          "ramon-chat.admin.settings.sound_chime",
-          {},
-          true,
-        ),
-        alert: app.translator.trans(
-          "ramon-chat.admin.settings.sound_alert",
-          {},
-          true,
-        ),
+        none: text("settings.sound_none"),
+        chime: text("settings.sound_chime"),
+        alert: text("settings.sound_alert"),
       },
       default: "chime",
-      label: app.translator.trans("ramon-chat.admin.settings.sound"),
-      help: app.translator.trans("ramon-chat.admin.settings.sound_help"),
+      label: trans("settings.sound"),
+      help: trans("settings.sound_help"),
+    })
+
+    // ── Webhooks ──────────────────────────────────────────────────────────────
+    // The switch for the feature. Drawn at the top of the webhooks card, so the
+    // records under it are read as "what this switch turns on".
+    .registerSetting({
+      setting: "ramon-chat.webhooks_enabled",
+      type: "boolean",
+      label: trans("settings.webhooks_enabled"),
+      help: trans("settings.webhooks_enabled_help"),
     })
 
     // ── Permissions ───────────────────────────────────────────────────────────
-    // Under "Read", not "Create": this one opens the chat rather than making
-    // anything in it, and it is the gate every other permission here sits
-    // behind — a group without it cannot see a channel, never mind start one.
-    // Grouped with `viewForum`, which is the same kind of answer.
-    //
-    // High priority within that section because it is the master switch: an
-    // admin closing the chat to a group looks for it first.
+    // Registered under core sections like every other row, so the registry
+    // knows the extension has permissions at all (the extension page draws its
+    // grid only then). Where they are actually shown is decided below, in the
+    // permissionItems extension.
     .registerPermission(
       {
         icon: "fas fa-comments",
-        label: app.translator.trans("ramon-chat.admin.permissions.use"),
+        label: trans("permissions.use"),
         permission: "ramon-chat.use",
       },
       "view",
       95,
     )
-    // Also a "who can see what" answer, so it sits under the master switch
-    // rather than with the permissions that make things.
-    //
-    // One row on purpose. Seeing a private channel without being able to enter it
-    // is not a useful state — posting needs membership — so this grants both, and
-    // an admin opening private channels to a group has exactly one box to tick
-    // instead of having to hand out `moderate`.
     .registerPermission(
       {
         icon: "fas fa-lock-open",
-        label: app.translator.trans(
-          "ramon-chat.admin.permissions.access_private_channels",
-        ),
+        label: trans("permissions.access_private_channels"),
         permission: "ramon-chat.accessPrivateChannels",
       },
       "view",
       94,
     )
-    // The rest of this group does create something. Priorities descend so it
-    // reads in order of how much it grants: starting DMs, then channels.
     .registerPermission(
       {
         icon: "fas fa-envelope",
-        label: app.translator.trans(
-          "ramon-chat.admin.permissions.start_direct",
-        ),
+        label: trans("permissions.start_direct"),
         permission: "ramon-chat.startDirect",
       },
       "start",
@@ -266,9 +220,7 @@ app.initializers.add("ramon-chat", () => {
     .registerPermission(
       {
         icon: "fas fa-note-sticky",
-        label: app.translator.trans(
-          "ramon-chat.admin.permissions.send_stickers",
-        ),
+        label: trans("permissions.send_stickers"),
         permission: "ramon-chat.sendStickers",
       },
       "start",
@@ -277,7 +229,7 @@ app.initializers.add("ramon-chat", () => {
     .registerPermission(
       {
         icon: "fas fa-paperclip",
-        label: app.translator.trans("ramon-chat.admin.permissions.upload"),
+        label: trans("permissions.upload"),
         permission: "ramon-chat.upload",
       },
       "reply",
@@ -286,7 +238,7 @@ app.initializers.add("ramon-chat", () => {
     .registerPermission(
       {
         icon: "far fa-face-smile",
-        label: app.translator.trans("ramon-chat.admin.permissions.react"),
+        label: trans("permissions.react"),
         permission: "ramon-chat.react",
       },
       "reply",
@@ -295,9 +247,7 @@ app.initializers.add("ramon-chat", () => {
     .registerPermission(
       {
         icon: "fas fa-at",
-        label: app.translator.trans(
-          "ramon-chat.admin.permissions.mention_channel_wide",
-        ),
+        label: trans("permissions.mention_channel_wide"),
         permission: "ramon-chat.mentionChannelWide",
       },
       "reply",
@@ -306,37 +256,25 @@ app.initializers.add("ramon-chat", () => {
     .registerPermission(
       {
         icon: "fas fa-comments",
-        label: app.translator.trans(
-          "ramon-chat.admin.permissions.create_thread",
-        ),
+        label: trans("permissions.create_thread"),
         permission: "ramon-chat.createThread",
       },
       "reply",
       92,
     )
-    // Not "reply": this one is about the channel's pace, not about what someone
-    // may write. Grouped with moderation because that is who tends to hold it,
-    // though the whole point of it being separate is that it need not be.
     .registerPermission(
       {
         icon: "fas fa-gauge-high",
-        label: app.translator.trans(
-          "ramon-chat.admin.permissions.bypass_slow_mode",
-        ),
+        label: trans("permissions.bypass_slow_mode"),
         permission: "ramon-chat.bypassSlowMode",
       },
       "moderate",
       94,
     )
-
-    // Filing a report, not reading the queue. Under "reply" because it is
-    // something an ordinary member does; reading what they filed is `moderate`.
     .registerPermission(
       {
         icon: "fas fa-flag",
-        label: app.translator.trans(
-          "ramon-chat.admin.permissions.flag_message",
-        ),
+        label: trans("permissions.flag_message"),
         permission: "ramon-chat.flagMessage",
       },
       "reply",
@@ -345,7 +283,7 @@ app.initializers.add("ramon-chat", () => {
     .registerPermission(
       {
         icon: "fas fa-thumbtack",
-        label: app.translator.trans("ramon-chat.admin.permissions.pin_message"),
+        label: trans("permissions.pin_message"),
         permission: "ramon-chat.pinMessage",
       },
       "moderate",
@@ -354,21 +292,28 @@ app.initializers.add("ramon-chat", () => {
     .registerPermission(
       {
         icon: "fas fa-shield-halved",
-        label: app.translator.trans("ramon-chat.admin.permissions.moderate"),
+        label: trans("permissions.moderate"),
         permission: "ramon-chat.moderate",
       },
       "moderate",
       95,
     )
-    // Registered under a core section like every other row, so the registry
-    // knows the extension has permissions at all — the extension page draws its
-    // grid only then. Where they are actually shown is decided below.
+    // Observing a room unnoticed: no place in the member list, no arrival or
+    // departure announced, no notification written. Separate from `moderate`
+    // so an administration or audit group can hold it on its own.
+    .registerPermission(
+      {
+        icon: "fas fa-user-secret",
+        label: trans("permissions.inspect_channels"),
+        permission: "ramon-chat.inspectChannels",
+      },
+      "moderate",
+      92,
+    )
     .registerPermission(
       {
         icon: "fas fa-plus",
-        label: app.translator.trans(
-          "ramon-chat.admin.permissions.create_channel",
-        ),
+        label: trans("permissions.create_channel"),
         permission: "ramon-chat.createChannel",
       },
       "start",
@@ -377,9 +322,7 @@ app.initializers.add("ramon-chat", () => {
     .registerPermission(
       {
         icon: "fas fa-user-shield",
-        label: app.translator.trans(
-          "ramon-chat.admin.permissions.manage_own_channels",
-        ),
+        label: trans("permissions.manage_own_channels"),
         permission: "ramon-chat.manageOwnChannels",
       },
       "start",
@@ -388,9 +331,7 @@ app.initializers.add("ramon-chat", () => {
     .registerPermission(
       {
         icon: "fas fa-user-pen",
-        label: app.translator.trans(
-          "ramon-chat.admin.permissions.edit_own_channels",
-        ),
+        label: trans("permissions.edit_own_channels"),
         permission: "ramon-chat.editOwnChannels",
       },
       "start",
@@ -399,9 +340,7 @@ app.initializers.add("ramon-chat", () => {
     .registerPermission(
       {
         icon: "fas fa-pen-to-square",
-        label: app.translator.trans(
-          "ramon-chat.admin.permissions.edit_channel",
-        ),
+        label: trans("permissions.edit_channel"),
         permission: "ramon-chat.editChannel",
       },
       "moderate",
@@ -413,8 +352,9 @@ app.initializers.add("ramon-chat", () => {
   // Moderate. For the chat that hides the one distinction an operator needs:
   // what applies to the whole chat, and what members get in the channels they
   // create and run. So the chat's rows are lifted out of the core sections and
-  // laid out as two blocks of its own — "Chat · Global" first, "Chat · Members"
-  // below it. The second block exists only while channels are in members'
+  // laid out as two blocks of its own, "Chat: global" first and "Chat: channels
+  // run by members" below it. Each block's heading says in plain words when it
+  // is in force. The second block exists only while channels are in members'
   // hands (the ownership setting): in "administrators" mode nothing in it would
   // do anything, so it is not shown, and the participation rows it would hold
   // sit in the global block instead.
@@ -451,9 +391,6 @@ app.initializers.add("ramon-chat", () => {
         .map((key) => ours.get(key))
         .filter((entry): entry is PermissionConfig => Boolean(entry));
 
-    const trans = (key: string) =>
-      app.translator.trans(`ramon-chat.admin.permissions.${key}`);
-
     const global = pick(
       membersMode
         ? GLOBAL_PERMISSIONS
@@ -463,7 +400,13 @@ app.initializers.add("ramon-chat", () => {
     if (global.length > 0) {
       items.add(
         "ramon-chat-global",
-        { label: trans("global_heading"), children: global },
+        {
+          label: heading(
+            "permissions.global_heading",
+            "permissions.global_heading_help",
+          ),
+          children: global,
+        },
         60,
       );
     }
@@ -478,11 +421,30 @@ app.initializers.add("ramon-chat", () => {
     if (members.length > 0) {
       items.add(
         "ramon-chat-members",
-        { label: trans("members_heading"), children: members },
+        {
+          label: heading(
+            "permissions.members_heading",
+            "permissions.members_heading_help",
+          ),
+          children: members,
+        },
         55,
       );
     }
   });
+
+  /**
+   * A section heading with a second line saying when the block is in force.
+   *
+   * Hyperscript rather than JSX because this file is plain TypeScript; the
+   * grid accepts any vnode as a label.
+   */
+  function heading(titleKey: string, helpKey: string): Mithril.Children {
+    return m("span.ChatPermissionHeading", [
+      m("span.ChatPermissionHeading-title", trans(titleKey)),
+      m("span.ChatPermissionHeading-help", trans(helpKey)),
+    ]);
+  }
 });
 
 /**
@@ -499,6 +461,7 @@ const GLOBAL_PERMISSIONS = [
   "ramon-chat.bypassSlowMode",
   "ramon-chat.pinMessage",
   "ramon-chat.moderate",
+  "ramon-chat.inspectChannels",
   "ramon-chat.editChannel",
 ] as const;
 

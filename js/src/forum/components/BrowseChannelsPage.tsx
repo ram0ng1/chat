@@ -11,6 +11,12 @@ import ChannelFormModal from "./ChannelFormModal";
 import { BrowseSkeleton } from "./Skeletons";
 import { channelIcon } from "../utils/channelIcon";
 import { mobileTitleControl } from "../utils/toolbar";
+import {
+  acceptInvitation,
+  adoptChannelPayload,
+  declineInvitation,
+  invitationErrorText,
+} from "../utils/invitations";
 
 type BrowseFilter = "all" | "open" | "closed" | "archived" | "mine";
 
@@ -295,10 +301,20 @@ export default class BrowseChannelsPage<
 
               {/* Membership is the one badge that is about the reader rather
                   than the channel, so it is the one worth colouring. */}
-              {channel.isFollowing() ? (
+              {channel.isFollowing() && channel.isHiddenMember() ? (
+                <span className="ChatBrowseCard-status ChatBrowseCard-status--joined">
+                  <i className="fas fa-user-secret" aria-hidden="true" />
+                  {app.translator.trans("ramon-chat.forum.browse.inspecting")}
+                </span>
+              ) : channel.isFollowing() ? (
                 <span className="ChatBrowseCard-status ChatBrowseCard-status--joined">
                   <i className="fas fa-check" aria-hidden="true" />
                   {app.translator.trans("ramon-chat.forum.browse.joined")}
+                </span>
+              ) : channel.isInvited() ? (
+                <span className="ChatBrowseCard-status ChatBrowseCard-status--invited">
+                  <i className="fas fa-envelope-open" aria-hidden="true" />
+                  {app.translator.trans("ramon-chat.forum.browse.invited")}
                 </span>
               ) : null}
             </div>
@@ -351,14 +367,61 @@ export default class BrowseChannelsPage<
               >
                 {app.translator.trans("ramon-chat.forum.browse.open")}
               </Button>
-            ) : channel.canJoin() ? (
-              <Button
-                className="Button Button--primary"
-                onclick={() => this.join(channel)}
-              >
-                {app.translator.trans("ramon-chat.forum.channel.join")}
-              </Button>
-            ) : null}
+            ) : channel.isInvited() ? (
+              <>
+                <button
+                  type="button"
+                  className="ChatBrowseCard-iconButton"
+                  title={app.translator.trans(
+                    "ramon-chat.forum.channel.decline_invite",
+                    {},
+                    true,
+                  )}
+                  onclick={() => this.answerInvitation(channel, false)}
+                >
+                  <i className="fas fa-xmark" aria-hidden="true" />
+                </button>
+                <Button
+                  className="Button Button--primary"
+                  icon="fas fa-check"
+                  onclick={() => this.answerInvitation(channel, true)}
+                >
+                  {app.translator.trans(
+                    "ramon-chat.forum.channel.accept_invite",
+                  )}
+                </Button>
+              </>
+            ) : (
+              <>
+                {/* Inspecting: in without appearing in the list, for whoever
+                    holds the permission. Beside the join rather than behind a
+                    menu, since the card is the one place a channel not yet
+                    opened can be acted on. */}
+                {channel.canJoinHidden() ? (
+                  <button
+                    type="button"
+                    className="ChatBrowseCard-iconButton"
+                    title={app.translator.trans(
+                      "ramon-chat.forum.channel.join_hidden",
+                      {},
+                      true,
+                    )}
+                    onclick={() => this.join(channel, true)}
+                  >
+                    <i className="fas fa-user-secret" aria-hidden="true" />
+                  </button>
+                ) : null}
+
+                {channel.canJoin() ? (
+                  <Button
+                    className="Button Button--primary"
+                    onclick={() => this.join(channel)}
+                  >
+                    {app.translator.trans("ramon-chat.forum.channel.join")}
+                  </Button>
+                ) : null}
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -454,28 +517,93 @@ export default class BrowseChannelsPage<
     app.modal.show(ChannelFormModal, { channel, onSaved: () => this.load() });
   }
 
-  protected async join(channel: Channel): Promise<void> {
+  /**
+   * Joins, or with `hidden` inspects: in the channel with no place in the
+   * member list, nothing announced and nothing notified. The server refuses
+   * the hidden form for anyone without `inspectChannels`.
+   */
+  protected async join(channel: Channel, hidden = false): Promise<void> {
     try {
-      await app.request({
+      const payload = await app.request<any>({
         method: "POST",
         url: `${app.forum.attribute("apiUrl")}/chat-channels/${channel.id()}/join`,
+        body: { data: { attributes: { hidden } } },
       });
 
-      channel.pushAttributes({
-        isFollowing: true,
-        userCount: (channel.userCount() ?? 0) + 1,
-      });
+      // The server's record, capability flags included, so opening the channel
+      // straight from here draws the composer instead of a "closed" notice.
+      if (!adoptChannelPayload(payload)) {
+        channel.pushAttributes({
+          isFollowing: true,
+          isHiddenMember: hidden,
+          canPostMessage: channel.isOpen(),
+          userCount: hidden
+            ? channel.userCount()
+            : (channel.userCount() ?? 0) + 1,
+        });
+      }
 
-      if (!chatState.channels.some((c) => c.id() === channel.id())) {
-        chatState.channels.unshift(channel);
+      chatState.rememberChannel(channel);
+
+      if (hidden) {
+        app.alerts.show(
+          { type: "success" },
+          app.translator.trans("ramon-chat.forum.channel.joined_hidden"),
+        );
       }
 
       m.redraw();
     } catch (e: any) {
-      const detail = e?.response?.errors?.[0]?.detail;
       app.alerts.show(
         { type: "error" },
-        detail ?? app.translator.trans("ramon-chat.forum.channel.join"),
+        invitationErrorText(e, "ramon-chat.forum.channel.join_failed"),
+      );
+    }
+  }
+
+  /**
+   * Accepts or declines an invitation from the card. Accepting leaves the
+   * card in place as a joined one; declining leaves it as a plain channel the
+   * reader may still join on their own.
+   */
+  protected async answerInvitation(
+    channel: Channel,
+    accept: boolean,
+  ): Promise<void> {
+    if (
+      !accept &&
+      !confirm(
+        app.translator.trans(
+          "ramon-chat.forum.channel.decline_invite_confirm",
+          {},
+          true,
+        ),
+      )
+    ) {
+      return;
+    }
+
+    try {
+      if (accept) {
+        await acceptInvitation(Number(channel.id()));
+      } else {
+        await declineInvitation(Number(channel.id()));
+      }
+
+      app.alerts.show(
+        { type: "success" },
+        app.translator.trans(
+          accept
+            ? "ramon-chat.forum.channel.invite_accepted"
+            : "ramon-chat.forum.channel.invite_declined",
+        ),
+      );
+
+      m.redraw();
+    } catch (e: any) {
+      app.alerts.show(
+        { type: "error" },
+        invitationErrorText(e, "ramon-chat.forum.channel.invite_failed"),
       );
     }
   }

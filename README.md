@@ -24,7 +24,8 @@ I started it because every chat extension I tried sat beside the forum rather th
 - Public channels scoped to a category, so category permissions govern who reads and posts, with no parallel permission surface to keep in sync
 - Threads on any message, each with its own reply tracking and notification level
 - Direct and group messages, with the invite delivered through Flarum's notifications
-- Private channels an admin adds people to, and removes people from
+- Private channels people are invited into: the invitation arrives as a notification with Accept and Decline, nobody is a member until they say yes, and whoever asked hears back if they say no
+- A permission to inspect any channel unnoticed: no place in the member list, no arrival or departure announced, no notification written
 - Realtime delivery through `flarum/realtime`, falling back to polling when it is not installed
 - Reactions, `@` mentions including `@here` and `@all`, image and file uploads, and full text search across every channel you can read
 - New discussions in a bound category announced into the channel, posted by the chat's bot or by a member you nominate
@@ -52,6 +53,9 @@ Optional companions: `flarum/tags` unlocks category scoped channels, `flarum/rea
 - Attachments follow their channel. A file posted in a public channel is served straight from `public/assets/chat`; one posted in a private channel, a direct conversation or a channel on a restricted category is kept under `storage/chat-uploads`, outside the webroot, and served through `/api/chat/uploads/{id}/file` only to people who can see the message. Making a channel private, or moving a message into one, moves its files as well. Upgrading runs a migration that moves what was already there, so `storage/` must be writable when you run `php flarum migrate`.
 - The announcer posts as a bot by default, an ordinary message with no account behind it. Its name and picture are settings, so there is nothing to log into and nothing to impersonate. Nominate a member instead and the bot disappears entirely.
 - Everything the frontend does goes through the `/api/chat/*` endpoints, so channels, messages and membership can also be driven from outside.
+- Adding someone to a channel (`POST /api/chat-channels/{id}/members`) creates an invitation, not a membership. The invitee answers at `POST /api/chat/invites/{channelId}/accept` or `/decline`; a manager can withdraw one at `POST /api/chat-channels/{id}/invites/cancel`. Joining a public channel with a pending invitation accepts it. An invitee to a private channel sees the channel's row (so the invitation can be answered) and none of its messages until they accept.
+- Every membership change reaches the people it concerns over `flarum/realtime` as `ramonChat.membership`, so a channel appears in the sidebar the moment its invitation is accepted and disappears the moment someone is removed, on every open tab.
+- `tests/E2E/` holds end-to-end suites that run against a live forum, websocket included; see its README.
 
 ## License
 

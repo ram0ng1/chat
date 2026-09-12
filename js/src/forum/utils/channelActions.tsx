@@ -4,6 +4,12 @@ import type Channel from "../../common/models/Channel";
 import type ChatState from "../state/ChatState";
 import ChannelFormModal from "../components/ChannelFormModal";
 import ChannelInfoModal from "../components/ChannelInfoModal";
+import {
+  acceptInvitation,
+  adoptChannelPayload,
+  declineInvitation,
+  invitationErrorText,
+} from "./invitations";
 
 /**
  * One thing the actor can do to a channel from its header.
@@ -90,6 +96,25 @@ export function channelActions(
     },
   });
 
+  // The channel's threads, where the channel has them. On the page this is
+  // the threads section scoped to the channel; in the drawer it is an overlay
+  // like the pinned list, for the same reason search is one.
+  if (channel.threadingEnabled()) {
+    actions.push({
+      key: "threads",
+      icon: "fas fa-code-branch",
+      label: trans("threads"),
+      active: options.embedded ? state.showThreads : undefined,
+      onclick: options.embedded
+        ? () => {
+            state.toggleThreads();
+            m.redraw();
+          }
+        : () =>
+            m.route.set(app.route("chat.threads", { channel: channel.id() })),
+    });
+  }
+
   actions.push({
     key: "search",
     icon: "fas fa-magnifying-glass",
@@ -114,6 +139,28 @@ export function channelActions(
       label: trans("leave"),
       loading: busy,
       onclick: () => void leaveChannel(channel, state),
+    });
+
+    return actions;
+  }
+
+  // An open invitation. Accepting is joining, so it takes the join's place
+  // rather than sitting beside it; declining is the other half of the answer.
+  if (channel.isInvited()) {
+    actions.push({
+      key: "acceptInvite",
+      icon: "fas fa-check",
+      label: trans("accept_invite"),
+      loading: busy,
+      onclick: () => void answerInvitation(channel, state, true),
+    });
+
+    actions.push({
+      key: "declineInvite",
+      icon: "fas fa-xmark",
+      label: trans("decline_invite"),
+      loading: busy,
+      onclick: () => void answerInvitation(channel, state, false),
     });
 
     return actions;
@@ -168,18 +215,27 @@ async function joinChannel(
   m.redraw();
 
   try {
-    await app.request({
+    const payload = await app.request<any>({
       method: "POST",
       url: `${app.forum.attribute("apiUrl")}/chat-channels/${id}/join`,
       body: { data: { attributes: { hidden } } },
     });
 
-    channel.pushAttributes({
-      isFollowing: true,
-      isHiddenMember: hidden,
-      // A hidden join is absent from the count, so it must not appear to move it.
-      userCount: hidden ? channel.userCount() : (channel.userCount() ?? 0) + 1,
-    });
+    // The endpoint answers with the channel as the member now sees it, flags
+    // included. Pushing it is what makes the composer appear at once: the
+    // optimistic attributes this used to set left `canPostMessage` as it was
+    // before the join, and the channel read as closed until a reload.
+    if (!adoptChannelPayload(payload)) {
+      channel.pushAttributes({
+        isFollowing: true,
+        isHiddenMember: hidden,
+        canPostMessage: channel.isOpen(),
+        // A hidden join is absent from the count, so it must not appear to move it.
+        userCount: hidden
+          ? channel.userCount()
+          : (channel.userCount() ?? 0) + 1,
+      });
+    }
 
     state.rememberChannel(channel);
 
@@ -194,6 +250,67 @@ async function joinChannel(
       { type: "error" },
       e?.response?.errors?.[0]?.detail ??
         app.translator.trans("ramon-chat.forum.channel.join_failed"),
+    );
+  } finally {
+    inFlight.delete(id);
+    m.redraw();
+  }
+}
+
+/**
+ * Answers an open invitation from the channel's own controls.
+ *
+ * Accepting lands the member in the channel they are already looking at, so
+ * nothing navigates; the composer simply appears. Declining on a public channel
+ * leaves the reader where they are, with the invitation gone from the record.
+ */
+async function answerInvitation(
+  channel: Channel,
+  state: ChatState,
+  accept: boolean,
+): Promise<void> {
+  const id = String(channel.id());
+
+  if (inFlight.has(id)) return;
+
+  if (
+    !accept &&
+    !confirm(
+      app.translator.trans(
+        "ramon-chat.forum.channel.decline_invite_confirm",
+        {},
+        true,
+      ),
+    )
+  ) {
+    return;
+  }
+
+  inFlight.add(id);
+  m.redraw();
+
+  try {
+    if (accept) {
+      const joined = await acceptInvitation(Number(channel.id()));
+
+      if (joined) state.rememberChannel(joined);
+
+      app.alerts.show(
+        { type: "success" },
+        app.translator.trans("ramon-chat.forum.channel.invite_accepted"),
+      );
+    } else {
+      await declineInvitation(Number(channel.id()));
+
+      app.alerts.show(
+        { type: "success" },
+        app.translator.trans("ramon-chat.forum.channel.invite_declined"),
+      );
+    }
+  } catch (e: any) {
+    app.alerts.show(
+      { type: "error" },
+      invitationErrorText(e, "ramon-chat.forum.channel.invite_failed"),
     );
   } finally {
     inFlight.delete(id);

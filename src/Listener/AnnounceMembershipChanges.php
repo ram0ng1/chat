@@ -73,6 +73,25 @@ class AnnounceMembershipChanges
         // such, because "X joined the channel" for somebody who was added credits
         // them with a decision that was not theirs, and leaves the room unable to
         // tell an arrival from an invitation.
+        // An accepted invitation: the room hears who asked them in, so an
+        // arrival in a private channel is never a stranger appearing unannounced.
+        if ($event->acceptedInvite) {
+            if ($event->invitedBy !== null) {
+                $this->announce($event->channel, 'user_accepted_invite', [
+                    'username' => $event->user->display_name,
+                    'actor'    => $event->invitedBy->display_name,
+                ]);
+
+                return;
+            }
+
+            $this->announce($event->channel, 'user_joined', [
+                'username' => $event->user->display_name,
+            ]);
+
+            return;
+        }
+
         if ($this->addedBySomeoneElse($event)) {
             $this->announce($event->channel, 'user_added', [
                 'username' => $event->user->display_name,

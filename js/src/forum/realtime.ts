@@ -3,6 +3,7 @@ import app from "flarum/forum/app";
 import chatState from "./state/chat";
 import { playNotificationSound } from "./utils/sound";
 import type Message from "../common/models/Message";
+import type Channel from "../common/models/Channel";
 import { NotificationLevel } from "../common/models/Channel";
 
 /**
@@ -14,6 +15,7 @@ const EVENT_MESSAGE_PURGED = "ramonChat.messagePurged";
 const EVENT_REACTION = "ramonChat.reaction";
 const EVENT_THREAD = "ramonChat.thread";
 const EVENT_CHANNEL = "ramonChat.channel";
+const EVENT_MEMBERSHIP = "ramonChat.membership";
 const EVENT_TYPING = "ramonChat.typing";
 
 interface UploadPayload {
@@ -105,6 +107,7 @@ function bindTo(channel: any): void {
   on(EVENT_REACTION, (data: any) => onReaction(data));
   on(EVENT_THREAD, (data: any) => onThread(data));
   on(EVENT_CHANNEL, (data: any) => onChannel(data));
+  on(EVENT_MEMBERSHIP, (data: any) => onMembership(data));
   on(EVENT_TYPING, (data: any) => onTyping(data));
 
   bound = true;
@@ -780,6 +783,129 @@ function onChannel(data: ChannelPayload): void {
   }
 
   m.redraw();
+}
+
+interface MembershipPayload {
+  channelId: number;
+  channelName: string | null;
+  isPrivate: boolean;
+  userId: number;
+  username: string;
+  action:
+    "invited" | "joined" | "left" | "invite_declined" | "invite_cancelled";
+  actorId: number | null;
+  actorName: string | null;
+  userCount: number;
+}
+
+/**
+ * Somebody was invited to, joined, or left a channel.
+ *
+ * Two readers of one payload. When it is about this user, it is what keeps a
+ * second tab, or the drawer on another page, in step with the tab that acted:
+ * an accepted invitation puts the channel in every sidebar, a removal takes it
+ * out of every one. When it is about somebody else, only the count on the
+ * channel row moves, and any open members tab is told to re-read its list.
+ *
+ * The payload carries no channel record; where one is needed it is fetched
+ * through the API, which is what decides whether this user may have it.
+ */
+function onMembership(data: MembershipPayload): void {
+  const me = app.session.user?.id();
+  const mine = me !== undefined && String(data.userId) === String(me);
+  const channel = chatState.channel(data.channelId);
+
+  if (data.action === "joined") {
+    if (mine) {
+      if (channel?.isFollowing()) {
+        refreshCapabilities(data.channelId);
+      } else {
+        adoptChannel(data.channelId);
+      }
+    } else if (channel) {
+      channel.pushAttributes({ userCount: data.userCount });
+    }
+  } else if (data.action === "left") {
+    if (mine) {
+      if (channel) {
+        channel.pushAttributes({
+          isFollowing: false,
+          canPostMessage: false,
+          unreadCount: 0,
+          unreadMentionsCount: 0,
+        });
+      }
+
+      const wasOpen = chatState.activeChannelId === data.channelId;
+
+      chatState.forgetChannel(data.channelId);
+
+      // Standing in a channel one has just been removed from: step out of it
+      // rather than leave a conversation on screen that will refuse every
+      // further read.
+      if (
+        wasOpen &&
+        (m.route.get() ?? "").includes(`/chat/c/${data.channelId}`)
+      ) {
+        m.route.set(app.route("chat.index"));
+      }
+    } else if (channel) {
+      channel.pushAttributes({ userCount: data.userCount });
+    }
+  } else if (data.action === "invited") {
+    if (mine && channel) {
+      channel.pushAttributes({
+        isInvited: true,
+        invitedById: data.actorId,
+        invitedByName: data.actorName,
+      });
+    }
+  } else if (mine && channel) {
+    // Declined or withdrawn: the record stops saying an invitation is open.
+    channel.pushAttributes({
+      isInvited: false,
+      invitedById: null,
+      invitedByName: null,
+    });
+  }
+
+  chatState.notifyMembershipChange(data.channelId);
+
+  m.redraw();
+}
+
+/**
+ * Fetches a channel this user has just become a member of and lists it.
+ *
+ * Shares the in-flight guard with `refreshCapabilities`: both are a read of the
+ * same record, and a join answered on two tabs at once must not fetch twice.
+ */
+function adoptChannel(channelId: number): void {
+  if (refetching.has(channelId)) return;
+
+  refetching.add(channelId);
+
+  app.store
+    .find<Channel>(
+      "chat-channels",
+      String(channelId),
+      {},
+      {
+        errorHandler: ignoreNoLongerVisible,
+      },
+    )
+    .then((channel) => {
+      if (channel && !Array.isArray(channel)) {
+        chatState.rememberChannel(channel);
+      }
+    })
+    .catch(() => {
+      // Not ours to see after all; the sidebar stays as it is.
+    })
+    .then(() => {
+      refetching.delete(channelId);
+      m.redraw();
+    });
 }
 
 /**

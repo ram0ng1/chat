@@ -981,6 +981,24 @@ body.ChatFullPage {
       }
     }
 
+    // An open invitation carries two answers. Wrapped in their own row so they
+    // break together below the sentence on a narrow drawer instead of the
+    // sentence being squeezed between them.
+    &--invited {
+      flex-wrap: wrap;
+      border-color: var(--primary-color);
+    }
+
+    &-actions {
+      .chat-flex-row(@chat-space-xs);
+      margin-left: auto;
+      flex-shrink: 0;
+
+      .Button {
+        margin-left: 0;
+      }
+    }
+
     // Slow mode is the one variant that ends by itself. Solid border and full
     // text colour so it reads as a state the channel is in rather than as the
     // dead-end the dashed ones announce, and the seconds change under the reader
@@ -1905,6 +1923,34 @@ body.ChatFullPage {
   min-height: 0;
   padding: 12px;
 
+  // In the drawer the list wears the panel shell: header fixed at the top,
+  // rows scrolling under it, like the pinned list and search.
+  &--embedded {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 0;
+
+    .ChatThreadsList-rows,
+    .ChatBrowse-empty {
+      .chat-scroll-y();
+      flex: 1;
+      min-height: 0;
+      padding: 12px;
+    }
+  }
+
+  // The channel a scoped list belongs to, after the title.
+  &-scope {
+    margin-left: 6px;
+    font-weight: 500;
+    color: var(--avocado-muted-label);
+
+    &::before {
+      content: "\00b7 ";
+    }
+  }
+
   &-row {
     .chat-flex-row(10px);
     width: 100%;
@@ -2319,10 +2365,15 @@ body.ChatFullPage {
   // meta or below it depended on how many characters the counts happened to
   // have, so two cards in the same row put their join buttons at different
   // heights. The meta wraps internally instead.
+  // Counts on the left, controls on the right. The row may wrap, and when it
+  // does the whole control group drops to a second line, still right-aligned:
+  // a card with edit, inspect and join beside its counts was squeezing the
+  // counts instead, breaking "4 messages" over two lines.
   &-footer {
     .chat-flex-row(@chat-space-sm);
     justify-content: space-between;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
+    row-gap: @chat-space-sm;
     margin-top: auto;
     padding-top: @chat-space-sm;
     border-top: 1px solid var(--avocado-border-soft);
@@ -2330,24 +2381,17 @@ body.ChatFullPage {
 
   &-meta {
     .chat-flex-row(@chat-space-md);
-    flex: 1;
+    flex: 1 1 auto;
     min-width: 0;
-    flex-wrap: wrap;
-    // Row gap and column gap are not the same thing here: 14px between two
-    // counts on a line reads as one group, 14px between the lines makes a
-    // wrapped meta twice the height of an unwrapped one and drags the footer
-    // up on that card alone.
-    row-gap: @chat-space-xs;
-    // Two lines' worth whether it uses them or not, so the footer is the same
-    // height on every card and the join buttons across a row line up. The meta
-    // carries exactly two counts, so two lines is also its maximum.
-    min-height: 2.7em;
-    align-content: center;
+    min-height: 32px;
     font-size: @chat-font-meta;
     color: var(--avocado-muted-label);
 
+    // A count never breaks inside itself; the row breaks between the counts
+    // and the controls instead.
     > span {
       .chat-flex-row(5px);
+      white-space: nowrap;
     }
 
     i {
@@ -2376,6 +2420,12 @@ body.ChatFullPage {
       color: var(--primary-color);
     }
 
+    // The other badge that is about the reader: asked in, not yet answered.
+    &--invited {
+      background: var(--chat-row-selected-bg);
+      color: var(--primary-color);
+    }
+
     &--frozen {
       background: var(--avocado-border-chip);
     }
@@ -2393,17 +2443,19 @@ body.ChatFullPage {
   // that restyles `.Button` leaves a transparent square with no resting shape
   // and no hover — invisible until the pointer happened to land on it.
   &-iconButton {
-    .chat-icon-circle(32px; transparent);
-    border: 0;
+    .chat-icon-circle(32px; var(--avocado-surface-1));
+    border: 1px solid var(--avocado-border-soft);
     font-size: 12px;
     color: var(--avocado-muted-icon);
     cursor: pointer;
     transition:
       background var(--avocado-t-fast),
+      border-color var(--avocado-t-fast),
       color var(--avocado-t-fast);
 
     &:hover {
       background: var(--chat-row-hover-bg);
+      border-color: var(--avocado-border-chip);
       color: var(--avocado-text-dark);
     }
 
@@ -2566,6 +2618,22 @@ body.ChatFullPage {
       // `--error-color`, not `--alert-error-color`. The latter is #fff — the
       // text colour for content sitting *on* a red alert background, not a red.
       color: var(--error-color, #d83e3e);
+    }
+  }
+
+  // Pending invitations, under the member list. Set apart by a rule rather
+  // than a box: it is the same list continued, for people who are not in it yet.
+  &-invited {
+    margin-top: @chat-space-md;
+    padding-top: @chat-space-md;
+    border-top: 1px solid var(--avocado-border-soft);
+  }
+
+  &-member--invited {
+    color: var(--avocado-muted-label);
+
+    .Avatar {
+      opacity: 0.7;
     }
   }
 
@@ -3447,19 +3515,30 @@ body.ChatFullPage {
     padding: @chat-space-lg;
   }
 
-  &-search {
-    .chat-flex-row(@chat-space-sm);
-    padding: 0 @chat-space-md;
-    border: 1px solid transparent;
-    border-radius: @chat-radius-pill;
-    background: var(--chat-row-hover-bg);
+  &-intro {
+    margin: 0 0 @chat-space-md;
+    font-size: @chat-font-label;
+    color: var(--avocado-muted-label);
+  }
+
+  // A token field: the chips and the input share one box, so the people
+  // chosen and the name being typed read as one list.
+  &-field {
+    .chat-flex-row(6px);
+    flex-wrap: wrap;
+    min-height: 44px;
+    padding: 4px @chat-space-md;
+    border: 1px solid var(--avocado-border-subtle);
+    border-radius: @chat-radius-md;
+    background: var(--avocado-surface-1);
+    cursor: text;
     transition:
       border-color var(--avocado-t-fast),
-      background var(--avocado-t-fast);
+      box-shadow var(--avocado-t-fast);
 
     &:focus-within {
       border-color: var(--primary-color);
-      background: var(--avocado-surface-1);
+      box-shadow: 0 0 0 3px var(--chat-row-selected-bg);
     }
 
     &-icon {
@@ -3467,37 +3546,25 @@ body.ChatFullPage {
       font-size: 12px;
       color: var(--avocado-muted-icon);
     }
-
-    &-input {
-      flex: 1;
-      min-width: 0;
-      height: 38px;
-      border: 0;
-      background: none;
-      font-size: @chat-font-label;
-      color: var(--avocado-text-dark);
-
-      &:focus {
-        outline: none;
-      }
-
-      &::-webkit-search-cancel-button {
-        display: none;
-      }
-    }
   }
 
-  // Who is about to be added. Survives the query changing, which is the whole
-  // reason the selection is not just "the highlighted rows".
-  &-chips {
-    .chat-flex-row(@chat-space-xs);
-    flex-wrap: wrap;
-    margin-top: @chat-space-md;
+  &-input {
+    flex: 1 1 140px;
+    min-width: 0;
+    height: 32px;
+    border: 0;
+    background: none;
+    font-size: @chat-font-label;
+    color: var(--avocado-text-dark);
+
+    &:focus {
+      outline: none;
+    }
   }
 
   &-chip {
     .chat-flex-row(6px);
-    padding: 3px 10px 3px 3px;
+    padding: 3px 8px 3px 3px;
     border: 0;
     border-radius: @chat-radius-pill;
     background: var(--chat-row-selected-bg);
@@ -3517,8 +3584,8 @@ body.ChatFullPage {
     }
 
     .Avatar {
-      width: 22px;
-      height: 22px;
+      width: 20px;
+      height: 20px;
       flex-shrink: 0;
     }
 
@@ -3529,27 +3596,39 @@ body.ChatFullPage {
   }
 
   &-hint {
-    margin: @chat-space-lg 0 0;
-    padding: @chat-space-lg;
-    border-radius: @chat-radius-md;
-    background: var(--chat-row-hover-bg);
+    margin: @chat-space-md 0 0;
+    padding: @chat-space-md;
     text-align: center;
     font-size: @chat-font-label;
     color: var(--avocado-muted-label);
   }
 
+  &-heading {
+    padding: @chat-space-sm @chat-space-sm @chat-space-xs;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--avocado-muted-label);
+  }
+
   // Bounded so the dialog does not grow past the viewport on a long result
-  // list; the selection above stays visible while this scrolls.
+  // list; the field above stays visible while this scrolls.
   &-results {
     .chat-scroll-y();
-    max-height: 300px;
+    max-height: 320px;
     margin-top: @chat-space-md;
+
+    &--empty {
+      padding: @chat-space-lg;
+      text-align: center;
+    }
   }
 
   &-result {
     .chat-flex-row(@chat-space-sm);
     width: 100%;
-    padding: @chat-space-sm;
+    padding: 6px @chat-space-sm;
     border: 0;
     border-radius: @chat-radius-sm;
     background: none;
@@ -3558,8 +3637,13 @@ body.ChatFullPage {
     color: var(--avocado-text-dark);
     transition: background var(--avocado-t-fast);
 
-    &:hover:not(:disabled) {
+    &:hover:not(:disabled),
+    &--highlighted:not(:disabled) {
       background: var(--chat-row-hover-bg);
+    }
+
+    &--selected:not(:disabled) {
+      background: var(--chat-row-selected-bg);
     }
 
     &:focus-visible {
@@ -3567,55 +3651,76 @@ body.ChatFullPage {
       outline-offset: -2px;
     }
 
-    &:disabled {
-      opacity: 0.5;
+    &--taken {
       cursor: default;
+      color: var(--avocado-muted-label);
     }
 
-    .Avatar {
-      width: 28px;
-      height: 28px;
+    &-avatar {
+      position: relative;
       flex-shrink: 0;
+
+      .Avatar {
+        width: 30px;
+        height: 30px;
+      }
+
+      &--online .Avatar {
+        .chat-online-ring(2px);
+      }
+    }
+
+    &-text {
+      .chat-flex-row(6px);
+      flex: 1;
+      min-width: 0;
     }
 
     &-name {
       .chat-truncate();
-      flex: 1;
       font-size: @chat-font-label;
       font-weight: 600;
     }
 
-    // The tick doubles as the affordance: a plus when the row can be picked, a
-    // check once it has been.
-    &-mark {
-      .chat-icon-circle(24px);
+    &-handle {
+      .chat-truncate();
+      font-size: @chat-font-meta;
+      color: var(--avocado-muted-label);
+    }
+
+    &-status {
+      flex-shrink: 0;
+      padding: 1px 8px;
+      border-radius: @chat-radius-pill;
+      background: var(--control-bg);
       font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: var(--control-color);
+    }
+
+    &-mark {
+      .chat-icon-circle(24px; var(--chat-row-hover-bg));
+      flex-shrink: 0;
+      font-size: 10px;
       color: var(--avocado-muted-icon);
     }
 
-    &--selected {
-      background: var(--chat-row-selected-bg);
-    }
-
     &--selected &-mark {
-      background: var(--button-primary-bg, var(--primary-color));
-      color: var(--button-primary-color, #fff);
+      background: var(--primary-color);
+      color: var(--body-bg);
     }
   }
 
   &-footer {
     .chat-flex-row(@chat-space-sm);
     justify-content: flex-end;
-    margin: 0;
-    padding: @chat-space-md @chat-space-lg;
-    border-top: 1px solid var(--avocado-border-soft);
 
-    &-warning {
-      margin-right: auto;
+    &-count {
+      flex: 1;
+      text-align: left;
       font-size: @chat-font-meta;
-      // `--error-color`, not `--alert-error-color`: the latter is #fff, which
-      // rendered this warning white on the dialog's white footer.
-      color: var(--error-color, #d83e3e);
+      color: var(--avocado-muted-label);
     }
   }
 }
@@ -4020,11 +4125,14 @@ body.ChatFullPage {
 .ChatDrawer-body {
   position: relative;
 
-  // The embedded search joins them: it is the third pane that covers the
-  // conversation in this slot, and it wears the same panel header, so it is
-  // listed here rather than given a rule of its own that could drift.
+  // The embedded search and the channel's thread list join them: the third
+  // and fourth panes that cover the conversation in this slot, wearing the
+  // same panel header, so they are listed here rather than given rules of
+  // their own that could drift. Without this the thread list took a column
+  // beside the conversation and split the drawer in two.
   .ChatThreadPanel,
-  .ChatSearch--embedded {
+  .ChatSearch--embedded,
+  .ChatThreadsList--embedded {
     position: absolute;
     inset: 0;
     width: auto;
@@ -4773,5 +4881,32 @@ body.ChatFullPage {
     text-align: center;
     font-size: @chat-font-meta;
     color: var(--avocado-muted-label);
+  }
+}
+
+// ── Invitation answers on a notification row ─────────────────────────────────
+// Drawn in the excerpt slot of the "X invited you" notification, in the bell
+// and in the realtime toast alike. Buttons rather than links because the row is
+// itself a link, and an answer must not also follow it.
+.ChatInviteActions {
+  .chat-flex-row(@chat-space-xs);
+  flex-wrap: wrap;
+  margin-top: @chat-space-xs;
+
+  .Button--compact {
+    padding: 2px 10px;
+    font-size: @chat-font-meta;
+    line-height: 20px;
+  }
+
+  &-hint {
+    .chat-flex-row(4px);
+    margin-right: @chat-space-xs;
+    font-size: @chat-font-meta;
+    color: var(--avocado-muted-label);
+
+    i {
+      font-size: 10px;
+    }
   }
 }

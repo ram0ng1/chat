@@ -846,6 +846,52 @@ export default class ChatState {
   }
 
   /**
+   * Takes a channel off the sidebar, and off the screen if it was open.
+   *
+   * For a membership that ended: leaving, being removed, or a private channel
+   * the reader can no longer see. The store record is left alone; a public
+   * channel is still readable and the next fetch says what it may still do.
+   */
+  forgetChannel(channelId: number): void {
+    this.channels = this.channels.filter(
+      (channel) => Number(channel.id()) !== channelId,
+    );
+
+    if (this.activeChannelId === channelId) {
+      this.closeOverlays();
+      this.setActiveChannel(null);
+    }
+  }
+
+  /**
+   * Who wants to know when a channel's membership changes.
+   *
+   * The members tab is the one surface drawn from a list the realtime payload
+   * cannot carry, so it re-reads the list when told. Listeners rather than a
+   * counter on the state: a modal that is not open should cost nothing.
+   */
+  private membershipListeners = new Set<(channelId: number) => void>();
+
+  /** Returns the function that unsubscribes. */
+  onMembershipChange(listener: (channelId: number) => void): () => void {
+    this.membershipListeners.add(listener);
+
+    return () => {
+      this.membershipListeners.delete(listener);
+    };
+  }
+
+  notifyMembershipChange(channelId: number): void {
+    this.membershipListeners.forEach((listener) => {
+      try {
+        listener(channelId);
+      } catch {
+        // One listener failing must not stop the others from being told.
+      }
+    });
+  }
+
+  /**
    * Warms everything opening a channel would ask for, without waiting for it.
    *
    * The boot payload only helps a page that was loaded from the server; arriving
@@ -1192,6 +1238,7 @@ export default class ChatState {
   closeOverlays(): void {
     this.showPinned = false;
     this.showSearch = false;
+    this.showThreads = false;
     this.activeThreadId = null;
   }
 
@@ -1331,6 +1378,7 @@ export default class ChatState {
     if (this.showPinned) {
       this.activeThreadId = null;
       this.showSearch = false;
+      this.showThreads = false;
     }
   }
 
@@ -1341,6 +1389,25 @@ export default class ChatState {
     if (this.showSearch) {
       this.activeThreadId = null;
       this.showPinned = false;
+      this.showThreads = false;
+    }
+  }
+
+  /**
+   * The channel's thread list, in the drawer's overlay slot.
+   *
+   * Drawer-only for the same reason search is: the page has `chat.threads`
+   * as a route, and routing from the drawer closes it.
+   */
+  showThreads = false;
+
+  toggleThreads(): void {
+    this.showThreads = !this.showThreads;
+
+    if (this.showThreads) {
+      this.activeThreadId = null;
+      this.showPinned = false;
+      this.showSearch = false;
     }
   }
 
