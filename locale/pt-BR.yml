@@ -286,6 +286,8 @@ ramon-chat:
       new_messages: Novas mensagens
       today: Hoje
       yesterday: Ontem
+      # Formato Day.js do separador de data entre dias. Segue o idioma do fórum.
+      date_format: LL
       jump_to_latest: Ir para a mais recente
 
     new_channel:

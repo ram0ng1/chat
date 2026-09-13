@@ -312,6 +312,8 @@ ramon-chat:
       new_messages: New messages
       today: Today
       yesterday: Yesterday
+      # Day.js format for the date separator between days. Follows the forum locale.
+      date_format: LL
       jump_to_latest: Jump to latest
 
     new_channel:

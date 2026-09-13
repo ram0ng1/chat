@@ -398,11 +398,15 @@ export default class ChannelView extends Component<ChannelViewAttrs> {
       );
     }
 
-    return date.toLocaleDateString(undefined, {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    });
+    // Through Day.js rather than toLocaleDateString: the browser's locale is
+    // not the forum's, so a reader with an English forum on a Portuguese
+    // machine saw "27 de agosto" between English messages. Core exposes the
+    // dayjs instance the language pack has set the locale on, and the format
+    // token is a translation so a pack can reorder it.
+    return app.translator.formatDateTime(
+      dayjs(date),
+      "ramon-chat.forum.stream.date_format",
+    );
   }
 
   protected typingIndicator(): Mithril.Children {
