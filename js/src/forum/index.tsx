@@ -515,6 +515,43 @@ function canUseChat(): boolean {
 let polling = false;
 
 /**
+ * Set once the server has answered a background poll with 401.
+ *
+ * The session has ended underneath the page: it expired, or the account signed
+ * out in another tab. Nothing here can bring it back, and a poller that keeps
+ * asking would get the same answer every tick for the rest of the page's life,
+ * each one raising core's "permission denied" alert and a console trace. The
+ * next thing the reader does on the page will tell them to sign in again.
+ */
+let sessionLost = false;
+
+/**
+ * Error handler for the requests the poller makes on its own initiative.
+ *
+ * A `.catch()` alone does not quiet them: `Application.requestErrorCatch`
+ * shows its alert first and rejects afterwards, so the hook it checks before
+ * doing so is the only place to intercept. A 401 ends polling for good; 403 and
+ * 404 mean the channel or thread is no longer the reader's to see, which the
+ * websocket or the next navigation will settle, and neither is worth an alert
+ * from a request nobody asked for. Anything else is a real failure and is
+ * handed back to the default handler.
+ */
+const backgroundErrorHandler = (error: { status?: number }): false | void => {
+  if (error?.status === 401) {
+    if (!sessionLost) {
+      sessionLost = true;
+      console.warn("[ramon-chat] session ended; live updates stopped");
+    }
+
+    return;
+  }
+
+  if (error?.status === 403 || error?.status === 404) return;
+
+  return false;
+};
+
+/**
  * Refreshes the channel list and the open channel's tail on an interval.
  *
  * Runs unconditionally, at a rate set by how much the websocket has proven it can
@@ -559,6 +596,7 @@ let lastChannelPoll = 0;
 
 function poll(): void {
   if (document.hidden) return;
+  if (sessionLost) return;
   if (!chatState.channelsLoaded) return;
 
   const now = Date.now();
@@ -573,7 +611,7 @@ function poll(): void {
     // list is cached for the session precisely so navigation does not re-fetch
     // it, and the poller is the backstop that keeps it current when the
     // websocket is not delivering. A cached read here would poll for nothing.
-    chatState.loadChannels(true).catch(() => {});
+    chatState.loadChannels(true, backgroundErrorHandler).catch(() => {});
   }
 
   const activeId = chatState.activeChannelId;
@@ -588,14 +626,19 @@ function poll(): void {
   const newest = stream.messages[stream.messages.length - 1];
 
   app.store
-    .find<Message[]>("chat-messages", {
-      filter: {
-        channel: activeId,
-        ...(newest ? { greaterThan: Number(newest.id()) } : {}),
+    .find<Message[]>(
+      "chat-messages",
+      {
+        filter: {
+          channel: activeId,
+          ...(newest ? { greaterThan: Number(newest.id()) } : {}),
+        },
+        sort: "id",
+        page: { limit: 50 },
       },
-      sort: "id",
-      page: { limit: 50 },
-    })
+      undefined,
+      { errorHandler: backgroundErrorHandler },
+    )
     .then((results) => {
       for (const message of (Array.isArray(results)
         ? results
@@ -624,14 +667,19 @@ function poll(): void {
   const newestReply = threadStream.messages[threadStream.messages.length - 1];
 
   app.store
-    .find<Message[]>("chat-messages", {
-      filter: {
-        thread: threadId,
-        ...(newestReply ? { greaterThan: Number(newestReply.id()) } : {}),
+    .find<Message[]>(
+      "chat-messages",
+      {
+        filter: {
+          thread: threadId,
+          ...(newestReply ? { greaterThan: Number(newestReply.id()) } : {}),
+        },
+        sort: "id",
+        page: { limit: 50 },
       },
-      sort: "id",
-      page: { limit: 50 },
-    })
+      undefined,
+      { errorHandler: backgroundErrorHandler },
+    )
     .then((results) => {
       for (const message of (Array.isArray(results)
         ? results
@@ -687,11 +735,16 @@ function pollChanges(
   if (since === null) return;
 
   app.store
-    .find<Message[]>("chat-messages", {
-      filter: { ...filter, updatedSince: since },
-      sort: "id",
-      page: { limit: 50 },
-    })
+    .find<Message[]>(
+      "chat-messages",
+      {
+        filter: { ...filter, updatedSince: since },
+        sort: "id",
+        page: { limit: 50 },
+      },
+      undefined,
+      { errorHandler: backgroundErrorHandler },
+    )
     .then((results) => {
       const advanced = newestChange(
         (Array.isArray(results) ? results : []) as Message[],

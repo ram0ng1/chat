@@ -13,6 +13,7 @@ import {
   emojiMapReady,
   type EmojiSuggestion,
 } from "../utils/emoji";
+import iconLabel from "../utils/iconLabel";
 
 export interface EmojiPickerAttrs extends ComponentAttrs {
   /** Current value: a shortcode or a Unicode emoji. */
@@ -80,10 +81,12 @@ export default class EmojiPicker extends Component<EmojiPickerAttrs> {
             <Button
               className="Button Button--icon Button--link EmojiPicker-clear"
               icon="fas fa-times"
-              title={app.translator.trans(
-                "ramon-chat.forum.emoji_picker.clear",
-                {},
-                true,
+              {...iconLabel(
+                app.translator.trans(
+                  "ramon-chat.forum.emoji_picker.clear",
+                  {},
+                  true,
+                ),
               )}
               disabled={disabled}
               onclick={() => this.choose(null)}

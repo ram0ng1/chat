@@ -19,6 +19,7 @@ import ThreadPanel from "./ThreadPanel";
 import ThreadsList from "./ThreadsList";
 import { chatTitle, chatIcon } from "../utils/branding";
 import { isNarrowViewport } from "../utils/surface";
+import iconLabel from "../utils/iconLabel";
 
 /**
  * The floating chat panel, pinned bottom-right over whatever page is open.
@@ -94,6 +95,13 @@ export default class ChatDrawer extends Component<ComponentAttrs> {
             <Button
               className="Button Button--icon Button--flat"
               icon="fas fa-chevron-left"
+              {...iconLabel(
+                app.translator.trans(
+                  "ramon-chat.forum.sidebar.back_to_channels",
+                  {},
+                  true,
+                ),
+              )}
               onclick={() => {
                 // Whatever was covering the conversation belongs to the channel
                 // being left; carrying it back would show one channel's results
@@ -170,10 +178,12 @@ export default class ChatDrawer extends Component<ComponentAttrs> {
             <Button
               className="Button Button--icon Button--flat"
               icon="fas fa-expand"
-              title={app.translator.trans(
-                "ramon-chat.forum.drawer.full_screen",
-                {},
-                true,
+              {...iconLabel(
+                app.translator.trans(
+                  "ramon-chat.forum.drawer.full_screen",
+                  {},
+                  true,
+                ),
               )}
               onclick={() => {
                 this.goFullScreen();
@@ -186,12 +196,14 @@ export default class ChatDrawer extends Component<ComponentAttrs> {
                   ? "fas fa-chevron-up"
                   : "fas fa-chevron-down"
               }
-              title={app.translator.trans(
-                chatState.drawerCollapsed
-                  ? "ramon-chat.forum.drawer.expand"
-                  : "ramon-chat.forum.drawer.collapse",
-                {},
-                true,
+              {...iconLabel(
+                app.translator.trans(
+                  chatState.drawerCollapsed
+                    ? "ramon-chat.forum.drawer.expand"
+                    : "ramon-chat.forum.drawer.collapse",
+                  {},
+                  true,
+                ),
               )}
               onclick={() => {
                 this.toggleCollapsed();
@@ -200,10 +212,8 @@ export default class ChatDrawer extends Component<ComponentAttrs> {
             <Button
               className="Button Button--icon Button--flat"
               icon="fas fa-times"
-              title={app.translator.trans(
-                "ramon-chat.forum.drawer.close",
-                {},
-                true,
+              {...iconLabel(
+                app.translator.trans("ramon-chat.forum.drawer.close", {}, true),
               )}
               onclick={() => {
                 this.close();

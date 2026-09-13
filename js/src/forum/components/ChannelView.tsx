@@ -16,6 +16,7 @@ import { channelIcon } from "../utils/channelIcon";
 import { channelActions, openChannelInfo } from "../utils/channelActions";
 import { jumpToMessage } from "../utils/jumpToMessage";
 import { messagePreview } from "../../common/utils/preview";
+import iconLabel from "../utils/iconLabel";
 
 export interface ChannelViewAttrs extends ComponentAttrs {
   channel: Channel;
@@ -266,6 +267,13 @@ export default class ChannelView extends Component<ChannelViewAttrs> {
           <Button
             className="Button Button--icon Button--flat"
             icon="fas fa-chevron-left"
+            {...iconLabel(
+              app.translator.trans(
+                "ramon-chat.forum.sidebar.back_to_channels",
+                {},
+                true,
+              ),
+            )}
             onclick={onBack}
           />
         ) : null}
@@ -303,7 +311,7 @@ export default class ChannelView extends Component<ChannelViewAttrs> {
                 "ChatChannel-headerAction--active": action.active,
               })}
               icon={action.icon}
-              title={action.label}
+              {...iconLabel(action.label)}
               loading={action.loading}
               onclick={action.onclick}
             />

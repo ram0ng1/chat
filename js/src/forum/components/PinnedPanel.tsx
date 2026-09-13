@@ -9,6 +9,7 @@ import type Message from "../../common/models/Message";
 import type ChatState from "../state/ChatState";
 import ChatMessage from "./ChatMessage";
 import { MessageStreamSkeleton } from "./Skeletons";
+import iconLabel from "../utils/iconLabel";
 
 export interface PinnedPanelAttrs extends ComponentAttrs {
   channel: Channel;
@@ -66,10 +67,12 @@ export default class PinnedPanel extends Component<PinnedPanelAttrs> {
           <Button
             className="Button Button--icon Button--flat"
             icon="fas fa-xmark"
-            title={app.translator.trans(
-              "ramon-chat.forum.channel.close_pinned",
-              {},
-              true,
+            {...iconLabel(
+              app.translator.trans(
+                "ramon-chat.forum.channel.close_pinned",
+                {},
+                true,
+              ),
             )}
             onclick={onClose}
           />

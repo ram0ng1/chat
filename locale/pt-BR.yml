@@ -262,6 +262,7 @@ ramon-chat:
       too_long_body: "Encurte sua mensagem em {over} caracteres. Este canal aceita até {max}."
       too_long_dismiss: Ok
       attach: Anexar um arquivo
+      remove_upload: Remover anexo
       sticker: Inserir um sticker
       sticker_search: Buscar stickers
       sticker_none: Nenhum sticker encontrado.
@@ -471,6 +472,7 @@ ramon-chat:
     search:
       title: Buscar no chat
       placeholder: Buscar em todos os canais
+      clear: Limpar a busca
       in_channel: "em {channel}"
       prompt: Digite para buscar mensagens.
       empty: Nenhuma mensagem corresponde.

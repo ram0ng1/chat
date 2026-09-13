@@ -22,6 +22,7 @@ import FlagMessageModal from "./FlagMessageModal";
 import ImageLightbox from "./ImageLightbox";
 import { messagePreview } from "../../common/utils/preview";
 import { refreshMessageCapabilities } from "../realtime";
+import iconLabel from "../utils/iconLabel";
 
 export interface ChatMessageAttrs extends ComponentAttrs {
   message: Message;
@@ -252,7 +253,9 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
       <Button
         className="Button Button--flat Button--icon ChatMessage-purge"
         icon="fas fa-eraser"
-        title={app.translator.trans("ramon-chat.forum.message.purge", {}, true)}
+        {...iconLabel(
+          app.translator.trans("ramon-chat.forum.message.purge", {}, true),
+        )}
         onclick={() => this.purge(message)}
       />
     );
@@ -655,12 +658,14 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
           })}
           // Filled while liked, outlined otherwise — the same read as flarum/likes.
           icon={liked ? "fas fa-thumbs-up" : "far fa-thumbs-up"}
-          title={app.translator.trans(
-            liked
-              ? "ramon-chat.forum.message.unlike"
-              : "ramon-chat.forum.message.like",
-            {},
-            true,
+          {...iconLabel(
+            app.translator.trans(
+              liked
+                ? "ramon-chat.forum.message.unlike"
+                : "ramon-chat.forum.message.like",
+              {},
+              true,
+            ),
           )}
           onclick={() => this.react(message, LIKE_REACTION)}
         />,
@@ -672,10 +677,12 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
         <Button
           className="ChatMessage-action"
           icon="fas fa-comments"
-          title={app.translator.trans(
-            "ramon-chat.forum.message.reply_in_thread",
-            {},
-            true,
+          {...iconLabel(
+            app.translator.trans(
+              "ramon-chat.forum.message.reply_in_thread",
+              {},
+              true,
+            ),
           )}
           onclick={() => this.attrs.onOpenThread?.(message)}
         />,
@@ -687,10 +694,8 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
         <Button
           className="ChatMessage-action"
           icon="fas fa-reply"
-          title={app.translator.trans(
-            "ramon-chat.forum.message.reply",
-            {},
-            true,
+          {...iconLabel(
+            app.translator.trans("ramon-chat.forum.message.reply", {}, true),
           )}
           onclick={() => this.attrs.onReply?.(message)}
         />,
@@ -702,10 +707,8 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
         <Button
           className="ChatMessage-action"
           icon="fas fa-pencil"
-          title={app.translator.trans(
-            "ramon-chat.forum.message.edit",
-            {},
-            true,
+          {...iconLabel(
+            app.translator.trans("ramon-chat.forum.message.edit", {}, true),
           )}
           onclick={() => this.attrs.onEdit?.(message)}
         />,
@@ -717,12 +720,14 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
         <Button
           className="ChatMessage-action"
           icon={message.isBookmarked() ? "fas fa-bookmark" : "far fa-bookmark"}
-          title={app.translator.trans(
-            message.isBookmarked()
-              ? "ramon-chat.forum.message.remove_bookmark"
-              : "ramon-chat.forum.message.bookmark",
-            {},
-            true,
+          {...iconLabel(
+            app.translator.trans(
+              message.isBookmarked()
+                ? "ramon-chat.forum.message.remove_bookmark"
+                : "ramon-chat.forum.message.bookmark",
+              {},
+              true,
+            ),
           )}
           onclick={() => this.bookmark(message)}
         />,
@@ -736,10 +741,8 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
       <Button
         className="ChatMessage-action"
         icon="fas fa-list-check"
-        title={app.translator.trans(
-          "ramon-chat.forum.message.select",
-          {},
-          true,
+        {...iconLabel(
+          app.translator.trans("ramon-chat.forum.message.select", {}, true),
         )}
         onclick={() => {
           const state = this.attrs.state;
@@ -765,12 +768,14 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
           // again undoes that — and the accent is invisible to anyone who cannot
           // separate it from the resting colour.
           icon={pinned ? "fas fa-thumbtack-slash" : "fas fa-thumbtack"}
-          title={app.translator.trans(
-            pinned
-              ? "ramon-chat.forum.message.unpin"
-              : "ramon-chat.forum.message.pin",
-            {},
-            true,
+          {...iconLabel(
+            app.translator.trans(
+              pinned
+                ? "ramon-chat.forum.message.unpin"
+                : "ramon-chat.forum.message.pin",
+              {},
+              true,
+            ),
           )}
           onclick={() => this.pin(message)}
         />,
@@ -789,12 +794,14 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
             "ChatMessage-action--active": reported,
           })}
           icon="fas fa-flag"
-          title={app.translator.trans(
-            reported
-              ? "ramon-chat.forum.message.flagged"
-              : "ramon-chat.forum.message.flag",
-            {},
-            true,
+          {...iconLabel(
+            app.translator.trans(
+              reported
+                ? "ramon-chat.forum.message.flagged"
+                : "ramon-chat.forum.message.flag",
+              {},
+              true,
+            ),
           )}
           onclick={() => app.modal.show(FlagMessageModal, { message })}
         />,
@@ -806,10 +813,8 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
         <Button
           className="ChatMessage-action"
           icon="fas fa-trash"
-          title={app.translator.trans(
-            "ramon-chat.forum.message.delete",
-            {},
-            true,
+          {...iconLabel(
+            app.translator.trans("ramon-chat.forum.message.delete", {}, true),
           )}
           onclick={() => this.delete(message)}
         />,

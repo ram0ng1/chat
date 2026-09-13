@@ -10,6 +10,7 @@ import type ChatState from "../state/ChatState";
 import { MessageStreamSkeleton } from "./Skeletons";
 import { messagePreview } from "../../common/utils/preview";
 import { authorAvatar, authorName } from "../utils/bot";
+import iconLabel from "../utils/iconLabel";
 
 export interface BookmarksListAttrs extends ComponentAttrs {
   state: ChatState;
@@ -95,10 +96,8 @@ export default class BookmarksList extends Component<BookmarksListAttrs> {
           className="Button Button--icon Button--flat ChatBookmarks-remove"
           icon="fas fa-bookmark"
           loading={this.working === id}
-          title={app.translator.trans(
-            "ramon-chat.forum.bookmarks.remove",
-            {},
-            true,
+          {...iconLabel(
+            app.translator.trans("ramon-chat.forum.bookmarks.remove", {}, true),
           )}
           onclick={() => this.remove(message)}
         />

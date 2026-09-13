@@ -9,6 +9,7 @@ import type Mithril from "mithril";
 import type Thread from "../../common/models/Thread";
 import type ChatState from "../state/ChatState";
 import { ThreadsSkeleton } from "./Skeletons";
+import iconLabel from "../utils/iconLabel";
 
 export interface ThreadsListAttrs extends ComponentAttrs {
   state: ChatState;
@@ -100,10 +101,8 @@ export default class ThreadsList extends Component<ThreadsListAttrs> {
           <Button
             className="Button Button--icon Button--flat"
             icon="fas fa-xmark"
-            title={app.translator.trans(
-              "ramon-chat.forum.search.close",
-              {},
-              true,
+            {...iconLabel(
+              app.translator.trans("ramon-chat.forum.search.close", {}, true),
             )}
             onclick={this.attrs.onClose}
           />

@@ -12,6 +12,7 @@ import type ChatState from "../state/ChatState";
 import { SearchResultsSkeleton } from "./Skeletons";
 import { messagePreview } from "../../common/utils/preview";
 import { authorLink } from "../utils/bot";
+import iconLabel from "../utils/iconLabel";
 
 export interface ChatSearchAttrs extends ComponentAttrs {
   state: ChatState;
@@ -79,10 +80,8 @@ export default class ChatSearch extends Component<ChatSearchAttrs> {
             <Button
               className="Button Button--icon Button--flat"
               icon="fas fa-xmark"
-              title={app.translator.trans(
-                "ramon-chat.forum.search.close",
-                {},
-                true,
+              {...iconLabel(
+                app.translator.trans("ramon-chat.forum.search.close", {}, true),
               )}
               onclick={this.attrs.onClose}
             />
@@ -122,6 +121,9 @@ export default class ChatSearch extends Component<ChatSearchAttrs> {
             <Button
               className="Button Button--icon Button--flat ChatSearch-clear"
               icon="fas fa-xmark"
+              {...iconLabel(
+                app.translator.trans("ramon-chat.forum.search.clear", {}, true),
+              )}
               onclick={() => this.clear()}
             />
           ) : null}
