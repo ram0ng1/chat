@@ -19,6 +19,7 @@ import { MembersSkeleton } from "./Skeletons";
 import { channelIcon } from "../utils/channelIcon";
 import { sendKeyPreference, type SendKey } from "../utils/shortcuts";
 import AddMembersModal from "./AddMembersModal";
+import iconLabel from "../utils/iconLabel";
 
 export interface ChannelInfoModalAttrs extends IInternalModalAttrs {
   channel: Channel;
@@ -462,10 +463,12 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
                 className="Button Button--icon Button--flat ChatChannelInfo-member-remove"
                 icon="fas fa-user-xmark"
                 disabled={this.working}
-                title={app.translator.trans(
-                  "ramon-chat.forum.info.cancel_invite",
-                  { username: username(user) },
-                  true,
+                {...iconLabel(
+                  app.translator.trans(
+                    "ramon-chat.forum.info.cancel_invite",
+                    { username: username(user) },
+                    true,
+                  ),
                 )}
                 onclick={() => this.cancelInvite(user)}
               />
@@ -577,12 +580,14 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
           className="Button Button--icon Button--flat ChatChannelInfo-member-role"
           icon={moderator ? "fas fa-user-slash" : "fas fa-user-shield"}
           disabled={this.working}
-          title={app.translator.trans(
-            moderator
-              ? "ramon-chat.forum.info.demote_moderator"
-              : "ramon-chat.forum.info.promote_moderator",
-            { username: username(user) },
-            true,
+          {...iconLabel(
+            app.translator.trans(
+              moderator
+                ? "ramon-chat.forum.info.demote_moderator"
+                : "ramon-chat.forum.info.promote_moderator",
+              { username: username(user) },
+              true,
+            ),
           )}
           onclick={() => this.setModerator(user, !moderator)}
         />,
@@ -595,10 +600,12 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
           className="Button Button--icon Button--flat ChatChannelInfo-member-remove"
           icon="fas fa-user-minus"
           disabled={this.working}
-          title={app.translator.trans(
-            "ramon-chat.forum.info.remove_member",
-            { username: username(user) },
-            true,
+          {...iconLabel(
+            app.translator.trans(
+              "ramon-chat.forum.info.remove_member",
+              { username: username(user) },
+              true,
+            ),
           )}
           onclick={() => this.remove(user)}
         />,

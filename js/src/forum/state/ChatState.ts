@@ -755,8 +755,14 @@ export default class ChatState {
    * `force` exists for the cases where that is not true: signing in or out
    * changes whose channels these are, and the browse page can join one behind
    * the list's back.
+   *
+   * `errorHandler` is for the poller, which refetches on nobody's request and
+   * must not raise core's alert when the answer is that the session has ended.
    */
-  async loadChannels(force = false): Promise<Channel[]> {
+  async loadChannels(
+    force = false,
+    errorHandler?: (error: { status?: number }) => false | void,
+  ): Promise<Channel[]> {
     // Join a request already in flight rather than issuing a second one.
     if (this.channelsRequest) return this.channelsRequest;
 
@@ -775,11 +781,16 @@ export default class ChatState {
 
     this.channelsRequest = (async () => {
       try {
-        const results = (await app.store.find("chat-channels", {
-          filter: { following: true },
-          sort: "-lastMessageAt",
-          page: { limit: 50 },
-        })) as unknown as Channel[];
+        const results = (await app.store.find(
+          "chat-channels",
+          {
+            filter: { following: true },
+            sort: "-lastMessageAt",
+            page: { limit: 50 },
+          },
+          undefined,
+          errorHandler ? { errorHandler } : {},
+        )) as unknown as Channel[];
 
         this.channels = Array.isArray(results) ? results : [];
         this.channelsLoaded = true;

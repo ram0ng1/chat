@@ -9,6 +9,7 @@ import type Message from "../../common/models/Message";
 import type Upload from "../../common/models/Upload";
 import { safeFileUrl } from "../utils/url";
 import { authorName } from "../utils/bot";
+import iconLabel from "../utils/iconLabel";
 
 export interface ImageLightboxAttrs extends ComponentAttrs {
   /** Every image in the message, so the viewer can move between them. */
@@ -101,10 +102,12 @@ export default class ImageLightbox extends Component<ImageLightboxAttrs> {
             <Button
               className="Button Button--icon Button--flat"
               icon="fas fa-arrow-up-right-from-square"
-              title={app.translator.trans(
-                "ramon-chat.forum.lightbox.open_original",
-                {},
-                true,
+              {...iconLabel(
+                app.translator.trans(
+                  "ramon-chat.forum.lightbox.open_original",
+                  {},
+                  true,
+                ),
               )}
               onclick={() =>
                 window.open(
@@ -118,10 +121,12 @@ export default class ImageLightbox extends Component<ImageLightboxAttrs> {
             <Button
               className="Button Button--icon Button--flat"
               icon="fas fa-xmark"
-              title={app.translator.trans(
-                "ramon-chat.forum.lightbox.close",
-                {},
-                true,
+              {...iconLabel(
+                app.translator.trans(
+                  "ramon-chat.forum.lightbox.close",
+                  {},
+                  true,
+                ),
               )}
               onclick={onClose}
             />
@@ -132,10 +137,12 @@ export default class ImageLightbox extends Component<ImageLightboxAttrs> {
           <Button
             className="Button Button--icon Button--flat ChatLightbox-nav ChatLightbox-nav--prev"
             icon="fas fa-chevron-left"
-            title={app.translator.trans(
-              "ramon-chat.forum.lightbox.previous",
-              {},
-              true,
+            {...iconLabel(
+              app.translator.trans(
+                "ramon-chat.forum.lightbox.previous",
+                {},
+                true,
+              ),
             )}
             onclick={(e: Event) => {
               e.stopPropagation();
@@ -155,10 +162,8 @@ export default class ImageLightbox extends Component<ImageLightboxAttrs> {
           <Button
             className="Button Button--icon Button--flat ChatLightbox-nav ChatLightbox-nav--next"
             icon="fas fa-chevron-right"
-            title={app.translator.trans(
-              "ramon-chat.forum.lightbox.next",
-              {},
-              true,
+            {...iconLabel(
+              app.translator.trans("ramon-chat.forum.lightbox.next", {}, true),
             )}
             onclick={(e: Event) => {
               e.stopPropagation();

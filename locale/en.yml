@@ -288,6 +288,7 @@ ramon-chat:
       too_long_body: "Shorten your message by {over} characters. This channel accepts up to {max}."
       too_long_dismiss: Ok
       attach: Attach a file
+      remove_upload: Remove attachment
       sticker: Insert a sticker
       sticker_search: Search stickers
       sticker_none: No stickers found.
@@ -497,6 +498,7 @@ ramon-chat:
     search:
       title: Search chat
       placeholder: Search all channels
+      clear: Clear search
       in_channel: "in {channel}"
       prompt: Type to search messages.
       empty: No messages match.

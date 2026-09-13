@@ -38,6 +38,7 @@ import {
   searchCustomEmoji,
   customEmojiImage,
 } from "../utils/flamoji";
+import iconLabel from "../utils/iconLabel";
 
 export interface ChatComposerAttrs extends ComponentAttrs {
   channel: Channel;
@@ -310,10 +311,12 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
                   <Button
                     className="ChatComposer-tool"
                     icon="fas fa-paperclip"
-                    title={app.translator.trans(
-                      "ramon-chat.forum.composer.attach",
-                      {},
-                      true,
+                    {...iconLabel(
+                      app.translator.trans(
+                        "ramon-chat.forum.composer.attach",
+                        {},
+                        true,
+                      ),
                     )}
                     disabled={this.uploading || this.sending}
                     onclick={() => this.pickFiles()}
@@ -685,10 +688,12 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
         <Button
           className="ChatComposer-tool"
           icon="fas fa-times"
-          title={app.translator.trans(
-            "ramon-chat.forum.composer.cancel_edit",
-            {},
-            true,
+          {...iconLabel(
+            app.translator.trans(
+              "ramon-chat.forum.composer.cancel_edit",
+              {},
+              true,
+            ),
           )}
           onclick={() => this.cancelContext()}
         />
@@ -710,6 +715,13 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
             <Button
               className="ChatComposer-tool"
               icon="fas fa-times"
+              {...iconLabel(
+                app.translator.trans(
+                  "ramon-chat.forum.composer.remove_upload",
+                  {},
+                  true,
+                ),
+              )}
               onclick={() => this.removeUpload(Number(upload.id()))}
             />
           </div>

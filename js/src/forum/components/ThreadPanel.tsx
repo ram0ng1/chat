@@ -11,6 +11,7 @@ import type ChatState from "../state/ChatState";
 import ChatMessage from "./ChatMessage";
 import ChatComposer from "./ChatComposer";
 import { MessageStreamSkeleton } from "./Skeletons";
+import iconLabel from "../utils/iconLabel";
 
 export interface ThreadPanelAttrs extends ComponentAttrs {
   channel: Channel;
@@ -92,10 +93,8 @@ export default class ThreadPanel extends Component<ThreadPanelAttrs> {
           <Button
             className="Button Button--icon Button--flat"
             icon="fas fa-xmark"
-            title={app.translator.trans(
-              "ramon-chat.forum.thread.close",
-              {},
-              true,
+            {...iconLabel(
+              app.translator.trans("ramon-chat.forum.thread.close", {}, true),
             )}
             onclick={onClose}
           />
