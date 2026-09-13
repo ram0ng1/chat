@@ -339,7 +339,10 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
       <time
         className="ChatMessage-editedMark"
         datetime={at.toISOString()}
-        title={at.toLocaleString()}
+        title={app.translator.formatDateTime(
+          dayjs(at),
+          "core.lib.datetime_formats.fullTime",
+        )}
       >
         (
         {app.translator.trans("ramon-chat.forum.message.edited_at", {
