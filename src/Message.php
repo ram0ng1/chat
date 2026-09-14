@@ -15,11 +15,13 @@ use Flarum\Database\ScopeVisibilityTrait;
 use Flarum\Formatter\Formattable;
 use Flarum\Formatter\HasFormattedContent;
 use Flarum\Foundation\EventGeneratorTrait;
+use Flarum\Post\Post;
 use Flarum\User\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Query\Expression;
+use Ramon\Chat\Formatter\ResolvesMentionedPosts;
 
 /**
  * @property int $id
@@ -50,12 +52,14 @@ use Illuminate\Database\Query\Expression;
  * @property-read Collection<int, Upload> $uploads
  * @property-read Collection<int, MessageMention> $mentions
  * @property-read Collection<int, MessageRevision> $revisions
+ * @property-read Collection<int, Post> $mentionsPosts
  */
 class Message extends AbstractModel implements Formattable
 {
     use EventGeneratorTrait;
     use ScopeVisibilityTrait;
     use HasFormattedContent;
+    use ResolvesMentionedPosts;
 
     public const TYPE_TEXT = 'text';
 

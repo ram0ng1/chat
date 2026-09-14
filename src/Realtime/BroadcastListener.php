@@ -10,6 +10,7 @@
 namespace Ramon\Chat\Realtime;
 
 use Flarum\User\User;
+use Psr\Log\LoggerInterface;
 use Ramon\Chat\Channel;
 use Ramon\Chat\Event\ChannelStatusChanged;
 use Ramon\Chat\Event\ChannelWasEdited;
@@ -63,7 +64,8 @@ class BroadcastListener
     public const EVENT_MEMBERSHIP = 'ramonChat.membership';
 
     public function __construct(
-        protected ChatBroadcaster $broadcaster
+        protected ChatBroadcaster $broadcaster,
+        protected LoggerInterface $log
     ) {
     }
 
@@ -304,6 +306,26 @@ class BroadcastListener
      *
      * @return array<string, mixed>
      */
+    /**
+     * Rendered content, or escaped plain text when a formatter callback threw.
+     *
+     * The broadcast runs inside the send request, after the row is stored, so
+     * an exception here reached the sender as a 500 for a message that had in
+     * fact been saved, and nobody else received it live at all.
+     */
+    protected function contentHtml(Message $message): string
+    {
+        try {
+            return $message->formatContent();
+        } catch (\Throwable $e) {
+            $this->log->error('[ramon/chat] formatContent failed while broadcasting message '.$message->id.': '.$e->getMessage(), [
+                'exception' => $e,
+            ]);
+
+            return $message->fallbackContentHtml();
+        }
+    }
+
     protected function messagePayload(Message $message): array
     {
         $deleted = $message->isDeleted();
@@ -325,7 +347,7 @@ class BroadcastListener
             // fetched from the API read correctly. Anyone in the channel at the
             // moment it was posted saw the broken form.
             'systemData'  => $message->system_data,
-            'contentHtml' => $deleted || $message->isSystem() ? null : $message->formatContent(),
+            'contentHtml' => $deleted || $message->isSystem() ? null : $this->contentHtml($message),
             'createdAt'   => $message->created_at?->toIso8601String(),
             'editedAt'    => $message->edited_at?->toIso8601String(),
             'isDeleted'   => $deleted,

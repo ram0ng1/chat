@@ -13,8 +13,11 @@ use Carbon\Carbon;
 use Flarum\Database\AbstractModel;
 use Flarum\Formatter\Formattable;
 use Flarum\Formatter\HasFormattedContent;
+use Flarum\Post\Post;
 use Flarum\User\User;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Ramon\Chat\Formatter\ResolvesMentionedPosts;
 
 /**
  * One prior state of a message's content, written immediately before an edit.
@@ -27,10 +30,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property Carbon|null $created_at
  * @property-read Message|null $message
  * @property-read User|null $editedBy
+ * @property-read Collection<int, Post> $mentionsPosts
  */
 class MessageRevision extends AbstractModel implements Formattable
 {
     use HasFormattedContent;
+    use ResolvesMentionedPosts;
 
     protected $table = 'chat_message_revisions';
 

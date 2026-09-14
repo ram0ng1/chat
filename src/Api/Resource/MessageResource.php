@@ -23,6 +23,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Arr;
 use Laminas\Diactoros\Response\EmptyResponse;
 use Laminas\Diactoros\Response\JsonResponse;
+use Psr\Log\LoggerInterface;
 use Ramon\Chat\Bookmark;
 use Ramon\Chat\Channel;
 use Ramon\Chat\Event\MessagePinToggled;
@@ -49,7 +50,8 @@ class MessageResource extends AbstractDatabaseResource
         protected Translator $translator,
         protected Events $events,
         protected MessageDispatcher $dispatcher,
-        protected MentionResolver $mentions
+        protected MentionResolver $mentions,
+        protected LoggerInterface $log
     ) {
     }
 
@@ -408,7 +410,7 @@ class MessageResource extends AbstractDatabaseResource
 
                     return $revisions->map(fn (MessageRevision $revision) => [
                         'id'        => (int) $revision->id,
-                        'content'   => $revision->content,
+                        'content'   => $this->revisionContent($revision),
                         'createdAt' => $revision->created_at?->toIso8601String(),
                         'editedBy'  => $revision->editedBy === null ? null : [
                             'id'          => (int) $revision->editedBy->id,
@@ -477,7 +479,19 @@ class MessageResource extends AbstractDatabaseResource
                         return null;
                     }
 
-                    return $m->formatContent($context->request);
+                    // The content passes through every extension's formatter
+                    // callbacks, most of them written with forum posts in mind.
+                    // One that throws must not take the whole channel page
+                    // down: degrade this message to plain text and keep going.
+                    try {
+                        return $m->formatContent($context->request);
+                    } catch (\Throwable $e) {
+                        $this->log->error('[ramon/chat] formatContent failed for message '.$m->id.': '.$e->getMessage(), [
+                            'exception' => $e,
+                        ]);
+
+                        return $m->fallbackContentHtml();
+                    }
                 }),
 
             Schema\Str::make('type'),
@@ -642,6 +656,29 @@ class MessageResource extends AbstractDatabaseResource
         }
 
         return ! ($actor->can('ramon-chat.moderate') || $actor->id === $message->user_id);
+    }
+
+    /**
+     * The revision's source text, or its plain text when unparsing threw. Same
+     * boundary as `contentHtml`: a revision is one extension callback away from
+     * making the history endpoint 500.
+     */
+    protected function revisionContent(MessageRevision $revision): ?string
+    {
+        // Through getAttribute() rather than `->content`: same getter, but the
+        // explicit call keeps the unparse pipeline (and its callbacks) visible
+        // as something that can throw.
+        try {
+            $content = $revision->getAttribute('content');
+
+            return is_string($content) ? $content : null;
+        } catch (\Throwable $e) {
+            $this->log->error('[ramon/chat] unparse failed for revision '.$revision->id.': '.$e->getMessage(), [
+                'exception' => $e,
+            ]);
+
+            return strip_tags($revision->fallbackContentHtml());
+        }
     }
 
     protected function visibleContent(Message $message, User $actor): ?string
