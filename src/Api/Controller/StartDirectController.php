@@ -15,7 +15,6 @@ use Flarum\Http\RequestUtil;
 use Flarum\Locale\Translator;
 use Flarum\User\User;
 use Illuminate\Contracts\Events\Dispatcher as Events;
-use Illuminate\Database\ConnectionInterface;
 use Illuminate\Support\Arr;
 use Laminas\Diactoros\Response\JsonResponse;
 use Psr\Http\Message\ResponseInterface;
@@ -40,7 +39,6 @@ class StartDirectController implements RequestHandlerInterface
     protected const MAX_PARTICIPANTS = 20;
 
     public function __construct(
-        protected ConnectionInterface $db,
         protected Events $events,
         protected Translator $translator,
         protected MembershipManager $memberships,
@@ -77,7 +75,10 @@ class StartDirectController implements RequestHandlerInterface
             ]);
         }
 
-        $users = User::query()->whereIn('id', $userIds)->get();
+        // Scoped to what the actor may see: an id the actor cannot view (hidden by
+        // another extension's user visibility rules) must not be reachable by
+        // guessing it, and is reported exactly like one that does not exist.
+        $users = User::query()->whereVisibleTo($actor)->whereIn('id', $userIds)->get();
 
         if ($users->count() !== count($userIds)) {
             throw new ValidationException([
@@ -94,7 +95,7 @@ class StartDirectController implements RequestHandlerInterface
         $created = false;
 
         if ($channel === null) {
-            $channel = $this->db->transaction(function () use ($actor, $users, $participantIds) {
+            $channel = Channel::query()->getConnection()->transaction(function () use ($actor, $users) {
                 $channel = Channel::build(Channel::TYPE_DIRECT, creator: $actor);
                 $channel->save();
 
@@ -200,7 +201,6 @@ class StartDirectController implements RequestHandlerInterface
     protected function findExisting(array $participantIds): ?Channel
     {
         $count = count($participantIds);
-        $prefix = $this->db->getTablePrefix();
 
         $candidateIds = ChannelUser::query()
             ->select('channel_id')
@@ -222,10 +222,15 @@ class StartDirectController implements RequestHandlerInterface
             // …and nobody else still present. Counting only active rows means a
             // channel someone walked out of is not a candidate, and a superset
             // that happens to contain everyone requested is excluded too.
-            ->whereRaw(
-                '(SELECT COUNT(*) FROM '.$prefix.'chat_channel_user cu '.
-                'WHERE cu.channel_id = '.$prefix.'chat_channels.id AND cu.left_at IS NULL) = ?',
-                [$count]
+            // Built through the query builder so the grammar applies the table
+            // prefix and quoting itself.
+            ->where(
+                fn ($sub) => $sub->from('chat_channel_user')
+                    ->selectRaw('COUNT(*)')
+                    ->whereColumn('chat_channel_user.channel_id', 'chat_channels.id')
+                    ->whereNull('chat_channel_user.left_at'),
+                '=',
+                $count
             )
             ->first();
     }

@@ -193,25 +193,7 @@ return [
         ]),
 
     (new Extend\ApiResource(UserResource::class))
-        ->fields(fn () => [
-            // Only ever exposed to the user themselves — unread state is private.
-            // Each counts through the channels the actor can currently see; see
-            // UnreadTracker::visibleMemberships() for why a stored counter is
-            // not enough on its own.
-            Schema\Integer::make('chatUnreadChannelsCount')
-                ->visible(fn (User $user, Context $context) => $context->getActor()->is($user))
-                ->get(fn (User $user) => resolve(UnreadTracker::class)->totalUnreadFor($user)),
-
-            // The message count, not the channel count: the drawer header shows
-            // "how much am I behind", which is a number of messages.
-            Schema\Integer::make('chatUnreadMessagesCount')
-                ->visible(fn (User $user, Context $context) => $context->getActor()->is($user))
-                ->get(fn (User $user) => resolve(UnreadTracker::class)->totalUnreadMessagesFor($user)),
-
-            Schema\Integer::make('chatUnreadMentionsCount')
-                ->visible(fn (User $user, Context $context) => $context->getActor()->is($user))
-                ->get(fn (User $user) => resolve(UnreadTracker::class)->totalUnreadMentionsFor($user)),
-        ]),
+        ->fields(Api\UserResourceFields::class),
 
     // ── Settings ─────────────────────────────────────────────────────────────
     (new Extend\Settings())
