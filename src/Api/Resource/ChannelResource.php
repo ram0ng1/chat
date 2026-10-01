@@ -17,6 +17,7 @@ use Flarum\Api\Schema;
 use Flarum\Api\Sort\SortColumn;
 use Flarum\Foundation\ValidationException;
 use Flarum\Locale\Translator;
+use Flarum\Settings\SettingsRepositoryInterface;
 use Flarum\User\User;
 use Illuminate\Contracts\Events\Dispatcher as Events;
 use Illuminate\Database\Eloquent\Builder;
@@ -54,7 +55,9 @@ class ChannelResource extends AbstractDatabaseResource
         protected MembershipManager $memberships,
         protected ChannelArchiver $archiver,
         protected ChannelOwnership $ownership,
-        protected InvitationManager $invitations
+        protected InvitationManager $invitations,
+        protected SettingsRepositoryInterface $settings,
+        protected SlowMode $slowMode
     ) {
     }
 
@@ -90,8 +93,7 @@ class ChannelResource extends AbstractDatabaseResource
             // Set explicitly rather than left to the column defaults: the response
             // is serialised from this in-memory model, so anything unset comes back
             // as null and the client reads a tri-state where it expects a boolean.
-            $channel->threading_enabled = (bool) resolve(\Flarum\Settings\SettingsRepositoryInterface::class)
-                ->get('ramon-chat.threading_default', false);
+            $channel->threading_enabled = (bool) $this->settings->get('ramon-chat.threading_default', false);
             $channel->is_private = false;
             $channel->post_permission = Channel::POST_ALL;
             $channel->auto_join = false;
@@ -736,7 +738,7 @@ class ChannelResource extends AbstractDatabaseResource
             // send that is then refused.
             Schema\Integer::make('slowModeRemaining')
                 ->get(fn (Channel $c, Context $context) => $c->exists
-                    ? resolve(SlowMode::class)->remainingFor($c, $context->getActor())
+                    ? $this->slowMode->remainingFor($c, $context->getActor())
                     : 0),
 
             // Same gate as every other field on the form, deliberately: whoever may

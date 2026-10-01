@@ -165,7 +165,8 @@ class ChatData extends Type
     {
         // The same disks PruneChatCommand writes to; Upload holds only the path
         // and which of the two disks it is on, not a handle to its own storage.
-        $filesystem = resolve(Factory::class);
+        // The factory is the one the gdpr base type already receives by injection.
+        $filesystem = $this->factory;
 
         Upload::query()
             ->where('user_id', $this->user->id)

@@ -1,6 +1,18 @@
 parameters:
 	ignoreErrors:
 		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Flarum\\User\\User\>\:\:whereVisibleTo\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Api/Controller/StartDirectController.php
+
+		-
+			message: '#^Method Ramon\\Chat\\Api\\Controller\\StartDirectController\:\:findExisting\(\) should return Ramon\\Chat\\Channel\|null but returns stdClass\|null\.$#'
+			identifier: return.type
+			count: 1
+			path: src/Api/Controller/StartDirectController.php
+
+		-
 			message: '#^Call to method addType\(\) on an unknown class Flarum\\Gdpr\\Extend\\UserData\.$#'
 			identifier: class.notFound
 			count: 1
@@ -89,30 +101,6 @@ parameters:
 			identifier: method.notFound
 			count: 1
 			path: src/Api/Controller/MoveMessagesController.php
-
-		-
-			message: '#^Anonymous function has an unused use \$participantIds\.$#'
-			identifier: closure.unusedUse
-			count: 1
-			path: src/Api/Controller/StartDirectController.php
-
-		-
-			message: '#^Call to an undefined method Illuminate\\Database\\ConnectionInterface\:\:getTablePrefix\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: src/Api/Controller/StartDirectController.php
-
-		-
-			message: '#^Method Ramon\\Chat\\Api\\Controller\\StartDirectController\:\:findExisting\(\) should return Ramon\\Chat\\Channel\|null but returns stdClass\|null\.$#'
-			identifier: return.type
-			count: 1
-			path: src/Api/Controller/StartDirectController.php
-
-		-
-			message: '#^Parameter \#2 \$user of method Ramon\\Chat\\Service\\MembershipManager\:\:join\(\) expects Flarum\\User\\User, stdClass given\.$#'
-			identifier: argument.type
-			count: 1
-			path: src/Api/Controller/StartDirectController.php
 
 		-
 			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Ramon\\Chat\\Message\>\:\:whereVisibleTo\(\)\.$#'
