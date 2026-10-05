@@ -1,3 +1,5 @@
+import type ChatState from "../state/ChatState";
+
 /**
  * Quanto tempo a linha fica destacada depois do salto. Espelha
  * `@chat-jump-highlight` no LESS, que governa a animação em si — os dois
@@ -80,4 +82,31 @@ function highlight(node: HTMLElement): void {
       timers.delete(node);
     }, HIGHLIGHT_MS),
   );
+}
+
+/**
+ * Salta para uma mensagem do canal, carregando antes o trecho do histórico que
+ * a separa da janela quando ela é mais antiga do que o que já está na tela.
+ *
+ * O scroller é relido depois do carregamento porque o redraw pode tê-lo
+ * recriado. Devolve `false` só quando a mensagem não pode estar no stream do
+ * canal — resposta de tópico, apagada, ou além do limite de páginas.
+ */
+export async function revealAndJump(
+  state: ChatState,
+  channelId: number,
+  id: number | string,
+  from?: HTMLElement | null,
+): Promise<boolean> {
+  if (jumpToMessage(id, from)) return true;
+
+  const scrollerSelector = from?.closest(".ChatThreadPanel-stream")
+    ? ".ChatThreadPanel-stream"
+    : ".ChatChannel-stream";
+
+  if (!(await state.revealMessage(channelId, Number(id)))) return false;
+
+  m.redraw.sync();
+
+  return jumpToMessage(id, document.querySelector<HTMLElement>(scrollerSelector));
 }

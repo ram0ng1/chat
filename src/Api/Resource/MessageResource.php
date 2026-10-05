@@ -113,7 +113,9 @@ class MessageResource extends AbstractDatabaseResource
                 // row per member otherwise.
                 ->eagerLoad(['user.groups', 'reactions', 'uploads', 'mentions', 'thread', 'flags', 'channel'])
                 ->eagerLoadWhere('bookmarks', fn ($query, Context $context) => $query->where('user_id', $context->getActor()->id))
-                ->paginate(50),
+                // Max 100 so jumping to an old message (a pin, a quoted reply) can
+                // fill the gap above the loaded window in a few requests.
+                ->paginate(50, 100),
 
             // Creation goes through MessageDispatcher rather than Create's own
             // field-deserialisation path: mentions, threads, uploads, counters and

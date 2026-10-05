@@ -52,6 +52,14 @@ interface TypingEntry {
 
 const PAGE_SIZE = 50;
 
+/**
+ * Page size and cap for filling the gap down to a message that is older than
+ * the loaded window. 100 is the endpoint's maximum; twenty pages is two
+ * thousand messages, past which a jump gives up rather than pin the browser.
+ */
+const GAP_PAGE_SIZE = 100;
+const GAP_MAX_PAGES = 20;
+
 /** How many recently viewed channels the local snapshot keeps a tail for. */
 const SNAPSHOT_CHANNELS = 3;
 
@@ -1125,6 +1133,74 @@ export default class ChatState {
       stream.loading = false;
       m.redraw();
     }
+  }
+
+  /**
+   * Makes sure a message is in the channel's loaded window, so it can be scrolled
+   * to.
+   *
+   * The window only ever grows upwards from the newest message, so anything
+   * older than it — a pin, a quoted reply — was unreachable: the pinned strip
+   * drew its jump disabled and a quote said "not loaded". This pages the gap
+   * between the oldest loaded row and the target in one run, keeping the window
+   * contiguous. Resolves to whether the message is now there; a thread reply or
+   * a deleted row never is, since the channel stream does not carry them.
+   */
+  async revealMessage(channelId: number, messageId: number): Promise<boolean> {
+    const stream = this.stream(channelId);
+    const has = () =>
+      stream.messages.some((message) => Number(message.id()) === messageId);
+
+    if (has()) return true;
+
+    if (!stream.loadedInitial) await this.loadChannel(channelId);
+
+    for (let waited = 0; stream.loading && waited < 100; waited++) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+
+    if (has()) return true;
+    if (stream.loading) return false;
+
+    stream.loading = true;
+
+    try {
+      for (let i = 0; i < GAP_MAX_PAGES && !has(); i++) {
+        const oldest = stream.messages[0];
+
+        if (oldest && Number(oldest.id()) < messageId) break;
+
+        const results = (await app.store.find("chat-messages", {
+          filter: {
+            channel: channelId,
+            greaterThan: messageId - 1,
+            ...(oldest ? { lessThan: Number(oldest.id()) } : {}),
+          },
+          sort: "-id",
+          page: { limit: GAP_PAGE_SIZE },
+        })) as unknown as Message[];
+
+        const page = (Array.isArray(results) ? results : []).slice().reverse();
+        const known = new Set(stream.messages.map((msg) => msg.id()));
+
+        stream.messages = [
+          ...page.filter((msg) => !known.has(msg.id())),
+          ...stream.messages,
+        ];
+        this.sortStream(stream);
+
+        if (page.length < GAP_PAGE_SIZE) break;
+      }
+
+      this.scheduleSnapshot();
+    } catch {
+      return false;
+    } finally {
+      stream.loading = false;
+      m.redraw();
+    }
+
+    return has();
   }
 
   /**

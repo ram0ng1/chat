@@ -14,7 +14,7 @@ import ChatSelectionBar from "./ChatSelectionBar";
 import { MessageStreamSkeleton } from "./Skeletons";
 import { channelIcon } from "../utils/channelIcon";
 import { channelActions, openChannelInfo } from "../utils/channelActions";
-import { jumpToMessage } from "../utils/jumpToMessage";
+import { revealAndJump } from "../utils/jumpToMessage";
 import { messagePreview } from "../../common/utils/preview";
 import iconLabel from "../utils/iconLabel";
 
@@ -170,9 +170,10 @@ export default class ChannelView extends Component<ChannelViewAttrs> {
    *
    * Shown in the drawer as well as the full-screen page: the drawer has no room for
    * the pinned panel, and a pin nobody can see is pointless. Clicking it jumps to
-   * the message when it is in the loaded window, which is the behaviour the strip
-   * implies; when it is not loaded the strip stays a label rather than pretending
-   * to navigate somewhere.
+   * the message, first loading the history between it and the window when it is
+   * older than what is on screen — a pin far up a busy channel used to be a dead
+   * label. A pin the channel stream cannot carry (a thread reply) opens the
+   * pinned panel instead.
    */
   protected pinnedBar(): Mithril.Children {
     const { channel, state } = this.attrs;
@@ -181,10 +182,6 @@ export default class ChannelView extends Component<ChannelViewAttrs> {
     if (!pinned) return null;
 
     const text = messagePreview(pinned);
-    const reachable = state
-      .stream(Number(channel.id()))
-      .messages.some((message) => message.id() === pinned.id());
-
     const count = state.pinnedCount(Number(channel.id()));
 
     return (
@@ -198,7 +195,6 @@ export default class ChannelView extends Component<ChannelViewAttrs> {
             true,
           )}
           onclick={() => this.jumpToPinned(pinned)}
-          disabled={!reachable}
         >
           <i
             className="ChatChannel-pinnedBar-icon fas fa-thumbtack"
@@ -245,7 +241,14 @@ export default class ChannelView extends Component<ChannelViewAttrs> {
   }
 
   protected jumpToPinned(pinned: Message): void {
-    jumpToMessage(pinned.id()!, this.scroller);
+    const channelId = Number(this.attrs.channel.id());
+
+    revealAndJump(this.attrs.state, channelId, pinned.id()!, this.scroller).then(
+      (found) => {
+        if (!found) this.attrs.state.togglePinned();
+        m.redraw();
+      },
+    );
   }
 
   /**

@@ -16,7 +16,7 @@ import { customEmoji, customEmojiImage } from "../utils/flamoji";
 import { isOnline } from "../utils/presence";
 import { authorAvatar, authorLink } from "../utils/bot";
 import { safeFileUrl } from "../utils/url";
-import { jumpToMessage } from "../utils/jumpToMessage";
+import { jumpToMessage, revealAndJump } from "../utils/jumpToMessage";
 import { verifiedBadge } from "../utils/integrations";
 import FlagMessageModal from "./FlagMessageModal";
 import ImageLightbox from "./ImageLightbox";
@@ -473,12 +473,25 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
 
           if ((e.target as HTMLElement | null)?.closest("a")) return;
 
-          if (!jumpToMessage(target.id()!, e.currentTarget as HTMLElement)) {
+          const from = e.currentTarget as HTMLElement;
+          const inThread = !!from.closest(".ChatThreadPanel-stream");
+          const jumped = inThread
+            ? Promise.resolve(jumpToMessage(target.id()!, from))
+            : revealAndJump(
+                this.attrs.state,
+                Number(message.channelId()),
+                target.id()!,
+                from,
+              );
+
+          jumped.then((found) => {
+            if (found) return;
+
             app.alerts.show(
               { type: "error" },
               app.translator.trans("ramon-chat.forum.message.reply_not_loaded"),
             );
-          }
+          });
         }}
       >
         <i className="fas fa-reply" aria-hidden="true" />
