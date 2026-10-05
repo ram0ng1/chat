@@ -280,6 +280,8 @@ return [
         // by session cookie from the browser, by token from anything else.
         ->get('/chat/uploads/{id:\d+}/file', 'chat.uploads.file', Api\Controller\ServeUploadController::class)
         ->post('/chat/typing', 'chat.typing', Api\Controller\TypingController::class)
+        // Prova a ida e volta do websocket logo após a inscrição; ver RealtimePingController.
+        ->post('/chat/realtime/ping', 'chat.realtime.ping', Api\Controller\RealtimePingController::class)
         ->post('/chat/drafts', 'chat.drafts.store', Api\Controller\DraftController::class)
         ->get('/chat/drafts', 'chat.drafts.index', Api\Controller\ListDraftsController::class)
         ->post('/chat/direct', 'chat.direct.start', Api\Controller\StartDirectController::class)

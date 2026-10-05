@@ -44,8 +44,10 @@ import FlaggedMessagesList from "./components/FlaggedMessagesList";
 import {
   bindRealtime,
   setPollingFallback,
+  setConnectionHandlers,
   realtimeBound,
   realtimeDelivered,
+  realtimeLive,
 } from "./realtime";
 import { bindShortcuts } from "./utils/shortcuts";
 import { shouldUseChatDrawer } from "./utils/surface";
@@ -86,13 +88,15 @@ export {
   FlagMessageModal,
   FlaggedMessagesList,
   // Exported for diagnosis: in the console,
-  //   flarum.reg.get('ramon-chat', 'forum/index').realtimeBound()
+  //   flarum.extensions['ramon-chat'].realtimeBound()
   // tells you whether the chat is on the websocket or on the polling fallback.
   realtimeBound,
   // And whether anything has ever arrived over it. `realtimeBound() === true`
   // with `realtimeDelivered() === false` after some traffic is the signature of a
   // forum whose PHP process cannot reach the websocket daemon.
   realtimeDelivered,
+  // Connected and proven: the state in which the poller stands down.
+  realtimeLive,
 };
 
 /**
@@ -120,13 +124,14 @@ const POLL_INTERVAL = 3000;
 const POLL_INTERVAL_UNPROVEN = 15000;
 
 /**
- * Polling interval once the socket has actually delivered something.
+ * Polling interval once the socket is connected and has proven it delivers.
  *
- * At that point pushes demonstrably work end to end and this is a backstop for a
- * daemon that dies mid-session, so it is deliberately slow enough to be
- * negligible: one conditional request a minute per open chat tab.
+ * Effectively off. A dropped connection is no longer something this has to
+ * notice on its own — the socket's state change restarts the poller at once and
+ * a reconnect catches up immediately — so what is left is a deep backstop for an
+ * event lost while everything looked healthy.
  */
-const POLL_INTERVAL_PROVEN = 60000;
+const POLL_INTERVAL_PROVEN = 300000;
 
 /**
  * Floor between two refreshes of the channel list, whatever the poll rate is.
@@ -360,6 +365,13 @@ app.initializers.add("ramon-chat", () => {
       // client subscribes fine while the server cannot reach the daemon, so
       // nothing is ever pushed and nothing ever notices.
       setPollingFallback(startPolling);
+      setConnectionHandlers({
+        reconnect: () => {
+          lastChannelPoll = 0;
+          poll();
+        },
+        change: () => reschedulePolling(),
+      });
       bindRealtime();
       startPolling();
 
@@ -371,11 +383,13 @@ app.initializers.add("ramon-chat", () => {
       document.addEventListener("visibilitychange", () => {
         if (document.hidden) {
           chatState.flushSnapshot();
-        } else {
+        } else if (!realtimeLive()) {
           poll();
         }
       });
-      window.addEventListener("online", () => poll());
+      window.addEventListener("online", () => {
+        if (!realtimeLive()) poll();
+      });
       window.addEventListener("pagehide", () => chatState.flushSnapshot());
 
       // ── Drawer ────────────────────────────────────────────────────────────
@@ -570,15 +584,29 @@ function startPolling(): void {
   if (polling) return;
 
   polling = true;
+  schedulePoll();
+}
 
-  const schedule = () => {
-    window.setTimeout(() => {
-      poll();
-      schedule();
-    }, pollInterval());
-  };
+let pollTimer: number | null = null;
 
-  schedule();
+function schedulePoll(): void {
+  pollTimer = window.setTimeout(() => {
+    poll();
+    schedulePoll();
+  }, pollInterval());
+}
+
+/**
+ * Restarts the countdown at the current rate. Called when the socket drops or
+ * comes back, so a disconnected client does not sit out a five-minute timeout
+ * scheduled while it was live.
+ */
+function reschedulePolling(): void {
+  if (!polling) return;
+
+  if (pollTimer !== null) window.clearTimeout(pollTimer);
+
+  schedulePoll();
 }
 
 /**
@@ -588,7 +616,9 @@ function startPolling(): void {
 function pollInterval(): number {
   if (!realtimeBound()) return POLL_INTERVAL;
 
-  return realtimeDelivered() ? POLL_INTERVAL_PROVEN : POLL_INTERVAL_UNPROVEN;
+  if (realtimeLive()) return POLL_INTERVAL_PROVEN;
+
+  return realtimeDelivered() ? POLL_INTERVAL : POLL_INTERVAL_UNPROVEN;
 }
 
 /** When the channel list was last refreshed; see CHANNEL_POLL_INTERVAL. */
@@ -600,7 +630,7 @@ function poll(): void {
   if (!chatState.channelsLoaded) return;
 
   const now = Date.now();
-  const channelFloor = realtimeDelivered()
+  const channelFloor = realtimeLive()
     ? CHANNEL_POLL_INTERVAL_PROVEN
     : CHANNEL_POLL_INTERVAL;
 

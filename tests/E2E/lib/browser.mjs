@@ -32,6 +32,12 @@ export async function launchBrowser({ label = "browser", width = 1360, height = 
       "--disable-gpu",
       "--no-first-run",
       "--no-default-browser-check",
+      // A headless window left idle is otherwise treated as occluded: the page
+      // reports `document.hidden`, animation frames stop and Mithril never
+      // redraws, so a live push looks like it never arrived.
+      "--disable-backgrounding-occluded-windows",
+      "--disable-renderer-backgrounding",
+      "--disable-background-timer-throttling",
       "--remote-debugging-port=" + port,
       "--user-data-dir=" + profile,
       "--window-size=" + width + "," + height,
@@ -111,8 +117,24 @@ export async function launchBrowser({ label = "browser", width = 1360, height = 
   await call("Page.enable");
   await call("Runtime.enable");
   await call("Network.enable");
+  // Keeps the page focused and visible however long it sits idle; see the
+  // backgrounding flags above for what goes wrong otherwise.
+  await call("Emulation.setFocusEmulationEnabled", { enabled: true }).catch(() => {});
 
   const consoleErrors = [];
+  const requests = [];
+
+  listeners.push((frame) => {
+    if (frame.sessionId !== sessionId) return;
+
+    if (frame.method === "Network.requestWillBeSent") {
+      requests.push({
+        url: frame.params.request.url,
+        method: frame.params.request.method,
+        at: Date.now(),
+      });
+    }
+  });
 
   listeners.push((frame) => {
     if (frame.sessionId !== sessionId) return;
@@ -130,6 +152,8 @@ export async function launchBrowser({ label = "browser", width = 1360, height = 
 
   const browser = {
     consoleErrors,
+    /** Every request the page has sent, in order: `{ url, method, at }`. */
+    requests,
 
     /**
      * Signs the page in as the holder of a remember token. The cookie is set for

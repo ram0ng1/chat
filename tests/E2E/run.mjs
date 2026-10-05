@@ -17,6 +17,7 @@ const suites = [
   "join-composer.mjs",
   "invite-modal.mjs",
   "membership-live.mjs",
+  "realtime-live.mjs",
   "admin-page.mjs",
 ].filter((name) =>
   name.includes(filter),

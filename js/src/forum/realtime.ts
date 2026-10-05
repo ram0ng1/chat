@@ -17,6 +17,7 @@ const EVENT_THREAD = "ramonChat.thread";
 const EVENT_CHANNEL = "ramonChat.channel";
 const EVENT_MEMBERSHIP = "ramonChat.membership";
 const EVENT_TYPING = "ramonChat.typing";
+const EVENT_PONG = "ramonChat.pong";
 
 interface UploadPayload {
   id: number;
@@ -97,7 +98,13 @@ function bindTo(channel: any): void {
   // silent hole in the proof.
   const on = (event: string, handler: (data: any) => void) =>
     channel.bind(event, (data: any) => {
-      delivered = true;
+      if (!delivered) {
+        delivered = true;
+        // The countdown in flight was set at the unproven rate; restart it at
+        // the live one rather than let it fire a poll nobody needs.
+        onConnectionChange();
+      }
+
       handler(data);
     });
 
@@ -109,8 +116,101 @@ function bindTo(channel: any): void {
   on(EVENT_CHANNEL, (data: any) => onChannel(data));
   on(EVENT_MEMBERSHIP, (data: any) => onMembership(data));
   on(EVENT_TYPING, (data: any) => onTyping(data));
+  // Carries nothing: arriving at all is the proof `on()` records.
+  on(EVENT_PONG, () => m.redraw());
 
   bound = true;
+
+  // A private channel is only usable once its auth round-trip has succeeded, and
+  // a pong triggered before that would be dropped by the daemon. Pusher fires
+  // this again after every resubscription, which covers reconnects too.
+  channel.bind("pusher:subscription_succeeded", () => requestProof());
+
+  if (channel.subscribed) requestProof();
+
+  watchConnection();
+}
+
+/**
+ * Asks the server to push a pong to this user's own channel.
+ *
+ * Without it the socket is only proven by the first chat event that happens to
+ * arrive, and on a quiet forum that can be never — the client sat on the 15s
+ * poller indefinitely while its websocket was perfectly healthy. One request at
+ * startup and after each reconnect settles it in well under a second.
+ */
+function requestProof(): void {
+  if (delivered) return;
+
+  app
+    .request({
+      method: "POST",
+      url: app.forum.attribute("apiUrl") + "/chat/realtime/ping",
+      errorHandler: () => {},
+    })
+    .catch(() => {});
+}
+
+/** The Pusher connection state, mirrored so the poller can read it cheaply. */
+let connected = false;
+let watching = false;
+let everConnected = false;
+
+/** Set by index.tsx; runs when a dropped socket comes back. */
+let onReconnect: () => void = () => {};
+/** Set by index.tsx; runs whenever the connection state flips. */
+let onConnectionChange: () => void = () => {};
+
+export function setConnectionHandlers(handlers: {
+  reconnect: () => void;
+  change: () => void;
+}): void {
+  onReconnect = handlers.reconnect;
+  onConnectionChange = handlers.change;
+}
+
+/**
+ * Follows the socket's state, so a drop puts the poller back to work at once
+ * and a reconnect catches up on whatever was pushed while it was gone.
+ */
+function watchConnection(): void {
+  if (watching) return;
+
+  const connection = (app as any).websocket?.connection;
+
+  if (!connection?.bind) return;
+
+  watching = true;
+  connected = connection.state === "connected";
+  everConnected = connected;
+
+  connection.bind(
+    "state_change",
+    (states: { previous: string; current: string }) => {
+      const now = states.current === "connected";
+
+      if (now === connected) return;
+
+      connected = now;
+      onConnectionChange();
+
+      if (!now) return;
+
+      if (everConnected) onReconnect();
+
+      everConnected = true;
+    },
+  );
+}
+
+/**
+ * Whether the socket is connected and has proven it delivers end to end.
+ *
+ * The one state in which polling is pure waste: everything the poller would
+ * fetch is already being pushed.
+ */
+export function realtimeLive(): boolean {
+  return bound && delivered && (connected || !watching);
 }
 
 /**
