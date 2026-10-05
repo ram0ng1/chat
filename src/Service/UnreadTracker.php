@@ -11,7 +11,6 @@ namespace Ramon\Chat\Service;
 
 use Carbon\Carbon;
 use Flarum\User\User;
-use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Ramon\Chat\Channel;
 use Ramon\Chat\ChannelUser;
@@ -29,11 +28,6 @@ use Ramon\Chat\ThreadUser;
  */
 class UnreadTracker
 {
-    public function __construct(
-        protected ConnectionInterface $db
-    ) {
-    }
-
     /**
      * Increments unread counters for every member except the sender, and bumps
      * the mention counter for members this message actually mentions.
@@ -187,9 +181,9 @@ class UnreadTracker
             ->all();
 
         if ($groupIds !== []) {
-            $groupMemberIds = $this->db->table('group_user')
-                ->whereIn('group_id', $groupIds)
-                ->pluck('user_id')
+            $groupMemberIds = User::query()
+                ->whereHas('groups', fn ($query) => $query->whereIn('groups.id', $groupIds))
+                ->pluck('id')
                 ->all();
 
             $userIds = array_merge($userIds, $groupMemberIds);

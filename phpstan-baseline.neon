@@ -367,12 +367,6 @@ parameters:
 			path: src/Mention/MentionResolver.php
 
 		-
-			message: '#^Call to an undefined method Illuminate\\Database\\ConnectionInterface\:\:getTablePrefix\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: src/Message.php
-
-		-
 			message: '#^Property Ramon\\Chat\\Message\:\:\$number \(int\|null\) does not accept Illuminate\\Database\\Query\\Expression\<float\|int\|string\>\.$#'
 			identifier: assign.propertyType
 			count: 1

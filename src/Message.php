@@ -111,22 +111,19 @@ class Message extends AbstractModel implements Formattable
         // (channel_id, number) unique index.
         static::creating(function (self $message) {
             if ($message->number === null && $message->channel_id !== null) {
-                $db = static::getConnectionResolver()->connection();
-                $prefix = $db->getTablePrefix();
+                $query = static::getConnectionResolver()->connection()->table('chat_messages', 'cm');
 
-                // Raw, and it has to be. The SQL is embedded in an Expression so
-                // that the whole subquery lands inside the INSERT — and an
-                // Expression carries no bindings, so `toSql()` would emit a bare
-                // `?` with nothing to fill it. The two interpolations are
-                // therefore inlined deliberately, and neither can carry input:
-                // the channel id is cast to int, and the prefix comes from the
-                // connection's own config, never from a request.
+                // The SQL is embedded in an Expression so that the whole subquery
+                // lands inside the INSERT — and an Expression carries no bindings,
+                // so `toSql()` would emit a bare `?` with nothing to fill it. The
+                // channel id therefore goes in as an Expression of its own (cast
+                // to int, so it cannot carry input), and the MAX column is wrapped
+                // by the grammar, which applies the table prefix and quoting the
+                // same way it does to the aliased FROM above.
                 $message->number = new Expression('('.
-                    $db->table('chat_messages', 'cm')
-                        // nosemgrep: github.semgrep.flarum-v2-raw-sql-concat
-                        ->whereRaw($prefix.'cm.channel_id = '.(int) $message->channel_id)
-                        // nosemgrep: github.semgrep.flarum-v2-raw-sql-concat
-                        ->selectRaw('COALESCE(MAX('.$prefix.'cm.number), 0) + 1')
+                    $query
+                        ->where('cm.channel_id', '=', new Expression((string) (int) $message->channel_id))
+                        ->selectRaw('COALESCE(MAX('.$query->getGrammar()->wrap('cm.number').'), 0) + 1')
                         ->toSql()
                     .')');
             }
