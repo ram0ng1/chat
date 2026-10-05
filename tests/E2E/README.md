@@ -12,7 +12,9 @@ Edge for the browser suite. PHP 8.4+ is needed once, to mint tokens.
 
 ```powershell
 # From the forum root. Creates chat_e2e_a, chat_e2e_b and chat_e2e_c (ordinary
-# members) if absent and writes tests/E2E/.tokens.json, which is git-ignored.
+# members), chat_e2e_mod (Moderators), chat_e2e_susp (suspended) and
+# chat_e2e_unconf (unconfirmed email) if absent and writes
+# tests/E2E/.tokens.json, which is git-ignored.
 php workbench/chat/tests/E2E/mint-tokens.php
 ```
 
@@ -44,6 +46,7 @@ also writes `tests/E2E/screenshots/*.png`. Both directories are git-ignored.
 | `pinned-jump.mjs` | In a headless Edge: a pin buried under 160 newer messages is out of the first page, yet clicking the pinned strip loads the history down to it, centres and highlights it; from a fresh page a quote of it does the same, with no "not loaded" alert. |
 | `transitions.mjs` | In a headless Edge: the drawer grows out of the header button, the full-screen page out of the drawer and the drawer back out of the page (the Avocado composer's morph), the page settles with no transform left behind, and with reduced motion nothing animates. |
 | `admin-page.mjs` | In a headless Edge, as the administrator: the settings page draws its titled cards aligned with the save bar, the webhooks card carries its switch, the permission grid explains its two chat blocks and lists the inspect row, and the webhook route refuses deliveries while the switch is off. |
+| `permissions.mjs` | API only, every permission level (guest, member, moderator, admin, suspended, unconfirmed) against every chat capability, derived from `src/Access`: listing and reading public, private and direct channels, creating, posting, editing and deleting own and others' messages, pin, move, purge, restore, react, flag and the moderation queue, uploads and private attachment downloads, direct conversations (granting `startDirect` for one request and restoring it), invitations, typing, drafts, webhooks, bot avatar, channel picture, transcript, realtime ping and unseen inspection. Then isolation between two members: A probing B's direct conversation, private channel, messages, drafts, bookmarks, uploads, counters, flags and websocket channel by id, mass-assignment of ownership fields, and guest variants. Every response is swept at the end for markers planted in B's private content, so a leak through `included`, search or a push is caught too. Direct channels no token can delete are removed by `lib/purge-channels.php`. |
 
 Every channel the suites create is deleted at the end, even when a check fails.
 

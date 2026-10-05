@@ -21,6 +21,7 @@ const suites = [
   "pinned-jump.mjs",
   "transitions.mjs",
   "admin-page.mjs",
+  "permissions.mjs",
 ].filter((name) =>
   name.includes(filter),
 );
