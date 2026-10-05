@@ -129,10 +129,22 @@ export async function launchBrowser({ label = "browser", width = 1360, height = 
 
     if (frame.method === "Network.requestWillBeSent") {
       requests.push({
+        id: frame.params.requestId,
         url: frame.params.request.url,
         method: frame.params.request.method,
         at: Date.now(),
+        done: null,
+        initiator: (frame.params.initiator?.stack?.callFrames ?? [])
+          .slice(0, 6)
+          .map((f) => f.functionName + ":" + f.columnNumber)
+          .join(" < "),
       });
+    }
+
+    if (frame.method === "Network.loadingFinished" || frame.method === "Network.loadingFailed") {
+      const request = requests.findLast((r) => r.id === frame.params.requestId);
+
+      if (request) request.done = Date.now();
     }
   });
 
@@ -152,7 +164,7 @@ export async function launchBrowser({ label = "browser", width = 1360, height = 
 
   const browser = {
     consoleErrors,
-    /** Every request the page has sent, in order: `{ url, method, at }`. */
+    /** Every request the page has sent, in order: `{ url, method, at, done }`. */
     requests,
 
     /**
@@ -236,6 +248,27 @@ export async function launchBrowser({ label = "browser", width = 1360, height = 
           JSON.stringify(selector) +
           "); if (!el) return false; el.click(); return true; })()",
       );
+    },
+
+    /**
+     * Clicks like a person: moves the mouse onto the element, presses, holds for
+     * `holdMs` and releases. Pointer handlers (hover, press) fire as they would
+     * for a real click. Returns the time the button was released.
+     */
+    async mouseClick(selector, holdMs = 90) {
+      const box = await browser.evaluate(
+        "(() => { const r = document.querySelector(" + JSON.stringify(selector) +
+          ")?.getBoundingClientRect(); return r ? { x: r.x + r.width / 2, y: r.y + r.height / 2 } : null; })()",
+      );
+
+      if (!box) return null;
+
+      await call("Input.dispatchMouseEvent", { type: "mouseMoved", x: box.x, y: box.y });
+      await call("Input.dispatchMouseEvent", { type: "mousePressed", x: box.x, y: box.y, button: "left", clickCount: 1 });
+      await sleep(holdMs);
+      await call("Input.dispatchMouseEvent", { type: "mouseReleased", x: box.x, y: box.y, button: "left", clickCount: 1 });
+
+      return Date.now();
     },
 
     /** Clicks the element matched by a JS expression that returns it. */

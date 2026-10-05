@@ -126,9 +126,12 @@ try {
   );
   await t.check("B sees the departure announced without a reload", Boolean(sawLeave));
 
-  const count = await watcher.evaluate(
-    "(() => { const s = app.store.getById('chat-channels', " + JSON.stringify(String(channelId)) + "); return s ? s.userCount() : null; })()",
-  );
+  // The departure line and the membership push are two broadcasts; the line can
+  // land a few milliseconds before the count does.
+  const countExpr =
+    "(() => { const s = app.store.getById('chat-channels', " + JSON.stringify(String(channelId)) + "); return s ? s.userCount() : null; })()";
+  await watcher.waitFor(countExpr + " === 1", 3000, 25);
+  const count = await watcher.evaluate(countExpr);
   await t.check("B's copy of the channel carries the settled member count", count === 1, String(count) + " (before: " + countBefore.trim() + ")");
 
   await watcher.screenshot("live-01-watcher");

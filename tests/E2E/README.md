@@ -45,3 +45,15 @@ also writes `tests/E2E/screenshots/*.png`. Both directories are git-ignored.
 | `admin-page.mjs` | In a headless Edge, as the administrator: the settings page draws its titled cards aligned with the save bar, the webhooks card carries its switch, the permission grid explains its two chat blocks and lists the inspect row, and the webhook route refuses deliveries while the switch is off. |
 
 Every channel the suites create is deleted at the end, even when a check fails.
+
+## Measuring
+
+Not suites — they print numbers so a change can be measured before and after.
+
+| Script | What it measures |
+| --- | --- |
+| `node tests/E2E/seed-channel.mjs [n]` | Creates a channel with B and C as members and `n` messages (some quoting), prints its id. `--delete <id>` removes it. |
+| `php tests/E2E/query-count.php <channelId> [v]` | Run from the forum root. SQL queries, DB time and total time per hot request, in process; repeated SQL is listed, which is how an N+1 shows. `v` lists every query. |
+| `node tests/E2E/bench.mjs [runs]` | Median and p90 HTTP time of the hot endpoints. |
+| `node tests/E2E/bench-open.mjs <a> <b>` | In Edge: full page load to the first message, and in-app channel switches. |
+| `node tests/E2E/bench-drawer.mjs` | In Edge, with a real mouse press: forum index → drawer list → channel, with each request's start and finish. `STACKS=1` adds the JS call site of every request. |

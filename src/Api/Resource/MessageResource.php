@@ -70,6 +70,23 @@ class MessageResource extends AbstractDatabaseResource
         $query->whereVisibleTo($context->getActor());
     }
 
+    /**
+     * Conta a coleção só quando o cliente lê o total: a listagem de fixadas, que
+     * decide se a faixa oferece a lista completa. Em qualquer outra página o
+     * COUNT(*) varria o histórico inteiro do canal a cada abertura e a cada
+     * página, e ninguém o lia.
+     */
+    public function count(object $query, OriginalContext $context): ?int
+    {
+        $filter = $context->queryParam('filter');
+
+        if (! is_array($filter) || ! array_key_exists('pinned', $filter)) {
+            return null;
+        }
+
+        return parent::count($query, $context);
+    }
+
     public function endpoints(): array
     {
         return [

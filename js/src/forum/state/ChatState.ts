@@ -124,6 +124,9 @@ export default class ChatState {
   /** Channels whose pinned preview came from the local snapshot. */
   private pinnedStale = new Set<number>();
 
+  /** Pin previews being fetched, so a prefetch and the view share one request. */
+  private pinnedInFlight = new Map<number, Promise<void>>();
+
   /** Pending debounced snapshot write, if any. */
   private snapshotTimer: number | null = null;
 
@@ -1361,6 +1364,20 @@ export default class ChatState {
       return;
     }
 
+    const inFlight = this.pinnedInFlight.get(channelId);
+
+    if (inFlight) return inFlight;
+
+    const request = this.fetchPinnedPreview(channelId).finally(() =>
+      this.pinnedInFlight.delete(channelId),
+    );
+
+    this.pinnedInFlight.set(channelId, request);
+
+    return request;
+  }
+
+  private async fetchPinnedPreview(channelId: number): Promise<void> {
     try {
       const results = (await app.store.find("chat-messages", {
         filter: {

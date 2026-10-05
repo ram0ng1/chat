@@ -85,8 +85,13 @@ try {
   );
   await t.check(
     "it is highlighted",
-    await browser.evaluate("!!document.querySelector('.ChatMessage--flash[data-id=\"" + pinnedId + "\"]')"),
+    Boolean(await browser.waitFor("!!document.querySelector('.ChatMessage--flash[data-id=\"" + pinnedId + "\"]')", 1500, 25)),
   );
+  if (process.env.TIMELINE) {
+    for (const r of browser.requests.filter((r) => r.at >= clickedAt - 50)) {
+      console.log("   +" + (r.at - clickedAt) + " -> " + (r.done ? "+" + (r.done - clickedAt) : "?") + " " + r.url.replace(/^https?:\/\/[^/]+/, "").slice(0, 90));
+    }
+  }
   await browser.screenshot("pinned-01-jumped");
 
   // ── The quote, from a fresh page ────────────────────────────────────────────

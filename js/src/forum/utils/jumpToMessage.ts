@@ -49,9 +49,12 @@ export function jumpToMessage(
     scrollerRect.top -
     (scroller.clientHeight - nodeRect.height) / 2;
 
+  // Suave só em saltos curtos. Atravessar centenas de linhas animando levava
+  // segundos até a mensagem aparecer; um salto longo vai direto, como no Discord.
   scroller.scrollTo({
     top: Math.max(0, scroller.scrollTop + centred),
-    behavior: "smooth",
+    behavior:
+      Math.abs(centred) > scroller.clientHeight * 2 ? "auto" : "smooth",
   });
 
   highlight(node);
