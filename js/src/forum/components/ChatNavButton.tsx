@@ -6,6 +6,7 @@ import classList from "flarum/common/utils/classList";
 import type Mithril from "mithril";
 
 import ChatDrawer from "./ChatDrawer";
+import { rememberOrigin } from "../utils/morph";
 import chatState from "../state/chat";
 import { chatTitle, chatIcon } from "../utils/branding";
 import { shouldUseChatDrawer } from "../utils/surface";
@@ -53,7 +54,7 @@ export default class ChatNavButton<
         })}
         title={label}
         aria-label={this.ariaLabel(mentions, unread > 0, label)}
-        onclick={() => this.open()}
+        onclick={(e: MouseEvent) => this.open(e.currentTarget as HTMLElement)}
         // The boot payload only reaches a page the server rendered; opening the
         // chat from the header is a client-side navigation with nothing preloaded,
         // and the channel list is the round trip everything else waits behind.
@@ -115,8 +116,11 @@ export default class ChatNavButton<
    * `Page`, whose `oninit` calls `app.drawer.hide()`. Doing it again here would
    * start the hide animation twice.
    */
-  open(): void {
+  open(from?: HTMLElement): void {
     if (shouldUseChatDrawer()) {
+      // The drawer grows out of the button that opened it.
+      if (!chatState.drawerOpen) rememberOrigin(from, "drawer");
+
       ChatDrawer.open();
 
       return;

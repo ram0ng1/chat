@@ -271,6 +271,13 @@ export async function launchBrowser({ label = "browser", width = 1360, height = 
       return Date.now();
     },
 
+    /** Turns `prefers-reduced-motion: reduce` on or off for the page. */
+    async emulateReducedMotion(on) {
+      await call("Emulation.setEmulatedMedia", {
+        features: [{ name: "prefers-reduced-motion", value: on ? "reduce" : "no-preference" }],
+      });
+    },
+
     /** Clicks the element matched by a JS expression that returns it. */
     async clickWhere(expression) {
       return browser.evaluate(

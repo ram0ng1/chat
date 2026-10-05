@@ -19,6 +19,7 @@ const suites = [
   "membership-live.mjs",
   "realtime-live.mjs",
   "pinned-jump.mjs",
+  "transitions.mjs",
   "admin-page.mjs",
 ].filter((name) =>
   name.includes(filter),

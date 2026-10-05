@@ -20,6 +20,7 @@ import ThreadsList from "./ThreadsList";
 import { chatTitle, chatIcon } from "../utils/branding";
 import { isNarrowViewport } from "../utils/surface";
 import iconLabel from "../utils/iconLabel";
+import { morphIn, rememberOrigin } from "../utils/morph";
 
 /**
  * The floating chat panel, pinned bottom-right over whatever page is open.
@@ -52,10 +53,36 @@ export default class ChatDrawer extends Component<ComponentAttrs> {
    * in `view()` rather than by a media query, so without this a rotation left the
    * old shape on screen until some other event happened to redraw.
    */
+  /** Whether the drawer's box was on screen at the last render. */
+  private shown = false;
+
   oncreate(vnode: Mithril.VnodeDOM<ComponentAttrs, this>): void {
     super.oncreate(vnode);
 
     window.addEventListener("resize", this.onResize);
+    this.morphWhenShown(vnode.dom);
+  }
+
+  onupdate(vnode: Mithril.VnodeDOM<ComponentAttrs, this>): void {
+    super.onupdate(vnode);
+
+    this.morphWhenShown(vnode.dom);
+  }
+
+  /**
+   * The moment the drawer appears it grows out of whatever opened it — the
+   * header button, or the full-screen page it is coming back from. See
+   * utils/morph; without a recent origin this does nothing.
+   */
+  protected morphWhenShown(dom: Element | null): void {
+    const box =
+      dom instanceof HTMLElement && dom.classList.contains("ChatDrawer")
+        ? dom
+        : null;
+
+    if (box && !this.shown) morphIn(box, "drawer");
+
+    this.shown = box !== null;
   }
 
   onremove(vnode: Mithril.VnodeDOM<ComponentAttrs, this>): void {
@@ -505,6 +532,8 @@ export default class ChatDrawer extends Component<ComponentAttrs> {
    */
   protected goFullScreen(): void {
     const id = chatState.activeChannelId;
+
+    rememberOrigin(document.querySelector(".ChatDrawer"), "page");
 
     chatState.suspendDrawer();
 
