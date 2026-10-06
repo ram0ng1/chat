@@ -9,9 +9,15 @@
 
 namespace Ramon\Chat\Service;
 
+use Carbon\Carbon;
 use Illuminate\Contracts\Filesystem\Factory;
+use Illuminate\Contracts\Queue\Queue;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 use Psr\Log\LoggerInterface;
 use Ramon\Chat\Channel;
+use Ramon\Chat\Storage\Job\PrivatizeRemoteUploads;
+use Ramon\Chat\Storage\UploadStorage;
 use Ramon\Chat\Upload;
 
 /**
@@ -28,6 +34,11 @@ use Ramon\Chat\Upload;
  * anyone at all, could fetch the file with no session. The same goes for a direct
  * conversation, which is private by construction.
  *
+ * When fof/upload is the configured storage, public files live in its bucket
+ * instead of on `chat` (see Storage\UploadStorage). Private files never do: a
+ * bucket is public by design. So making a file private also means bringing its
+ * bytes home, which privatize() does.
+ *
  * Privacy is one-way. A channel that is made public later keeps its existing
  * attachments on the private disk; they are still served, just through the
  * controller. Moving them back out would republish files people posted under a
@@ -40,7 +51,9 @@ class UploadPrivacy
 
     public function __construct(
         protected Factory $filesystem,
-        protected LoggerInterface $log
+        protected LoggerInterface $log,
+        protected UploadStorage $storage,
+        protected Queue $queue
     ) {
     }
 
@@ -86,10 +99,29 @@ class UploadPrivacy
      * if the row flips and the move fails, the URL 404s, which is a broken image
      * and not a leak; the other order leaves a public file behind a private URL.
      *
+     * A file on fof/upload goes the other way round. Its public URL lives in the
+     * bucket, outside anything this code can take down quickly, so the row flips
+     * first: from that moment Upload::url() hands out the controller route and
+     * no new copy of the bucket URL leaves the forum. Then the bytes are pulled
+     * onto the private disk and the remote copy is deleted. A row that is
+     * already private but still remote is one of those moves left unfinished,
+     * and is finished here.
+     *
      * @throws \RuntimeException when the file cannot be moved.
      */
     public function privatize(Upload $upload): void
     {
+        if ($upload->isRemote()) {
+            if (! $upload->is_private) {
+                $upload->is_private = true;
+                $upload->save();
+            }
+
+            $this->pullRemote($upload);
+
+            return;
+        }
+
         if ($upload->is_private) {
             return;
         }
@@ -132,6 +164,21 @@ class UploadPrivacy
     {
         $moved = 0;
 
+        // Files on fof/upload are flagged here, in this request, so none of them
+        // is handed out by its bucket URL again; the bytes follow in a job,
+        // because each is a download and an upload and a busy room's history
+        // does not fit in one request. Flagged first, so the local pass below
+        // does not see them.
+        $remote = Upload::query()
+            ->where('storage', Upload::STORAGE_FOF)
+            ->where('is_private', false)
+            ->whereHas('message', fn ($query) => $query->where('channel_id', $channel->id))
+            ->update(['is_private' => true, 'updated_at' => Carbon::now()]);
+
+        if ($remote > 0) {
+            $this->queueRemote((int) $channel->id);
+        }
+
         Upload::query()
             ->where('is_private', false)
             ->whereHas('message', fn ($query) => $query->where('channel_id', $channel->id))
@@ -140,6 +187,95 @@ class UploadPrivacy
             });
 
         return $moved;
+    }
+
+    /**
+     * The job's half of privatizeChannel(): every file in the channel that is
+     * flagged private but whose bytes are still on fof/upload. Safe to run again;
+     * a file already pulled back is local and no longer matches.
+     *
+     * @return array{0: int, 1: int} How many were moved, and how many were found.
+     */
+    public function pullRemoteInChannel(int $channelId): array
+    {
+        $moved = 0;
+        $found = 0;
+
+        Upload::query()
+            ->where('storage', Upload::STORAGE_FOF)
+            ->where('is_private', true)
+            ->whereHas('message', fn ($query) => $query->where('channel_id', $channelId))
+            ->chunkById(100, function (Collection $uploads) use (&$moved, &$found) {
+                $found += $uploads->count();
+                $moved += $this->privatizeEach($uploads);
+            });
+
+        return [$moved, $found];
+    }
+
+    /**
+     * Pushed, not run: on Flarum's default sync queue that is the same thing,
+     * and on a real queue it takes the downloads off the request. A failure to
+     * push is logged rather than thrown — the rows are already flagged, so
+     * nothing is handed out publicly, and a channel edit must not fail on it.
+     */
+    protected function queueRemote(int $channelId): void
+    {
+        try {
+            $this->queue->push(new PrivatizeRemoteUploads($channelId));
+        } catch (\Throwable $e) {
+            $this->log->error('[ramon-chat] could not move a channel\'s remote uploads to the private disk', [
+                'channel' => $channelId,
+                'error'   => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Copies a remote file onto the private disk under a fresh local path, then
+     * deletes the remote copy, then points the row at the local one.
+     *
+     * If the remote copy will not go, the local copy is removed again and the
+     * row is left as it was — private, still remote — so the next attempt starts
+     * from the same place. Recording the move anyway would leave a public copy
+     * in the bucket that no row points at and nothing would ever clean up.
+     */
+    protected function pullRemote(Upload $upload): void
+    {
+        $remote = $this->storage->for($upload);
+        $stream = $remote->readStream($upload);
+
+        if (! is_resource($stream)) {
+            throw new \RuntimeException("Could not read upload {$upload->id} from fof/upload.");
+        }
+
+        $extension = strtolower(pathinfo(str_replace('\\', '/', $upload->path), PATHINFO_EXTENSION));
+        $path = sprintf('%s/%s.%s', Carbon::now()->format('Y/m'), Str::random(28), $extension ?: 'bin');
+        $to = $this->filesystem->disk(self::PRIVATE_DISK);
+
+        try {
+            $written = $to->writeStream($path, $stream);
+        } finally {
+            fclose($stream);
+        }
+
+        if (! $written) {
+            throw new \RuntimeException("Could not write {$path} to the private chat disk.");
+        }
+
+        try {
+            $remote->delete($upload);
+        } catch (\Throwable $e) {
+            $to->delete($path);
+
+            throw $e;
+        }
+
+        $upload->path = $path;
+        $upload->storage = Upload::STORAGE_LOCAL;
+        $upload->storage_adapter = null;
+        $upload->remote_url = null;
+        $upload->save();
     }
 
     /**

@@ -12,11 +12,10 @@ namespace Ramon\Chat\Console;
 use Carbon\Carbon;
 use Flarum\Console\AbstractCommand;
 use Flarum\Settings\SettingsRepositoryInterface;
-use Illuminate\Contracts\Filesystem\Factory;
 use Symfony\Component\Console\Input\InputOption;
 use Ramon\Chat\Channel;
 use Ramon\Chat\Message;
-use Ramon\Chat\Service\UploadPrivacy;
+use Ramon\Chat\Storage\UploadStorage;
 use Ramon\Chat\Upload;
 
 /**
@@ -43,7 +42,7 @@ class PruneChatCommand extends AbstractCommand
 
     public function __construct(
         protected SettingsRepositoryInterface $settings,
-        protected Factory $filesystem
+        protected UploadStorage $storage
     ) {
         parent::__construct();
     }
@@ -143,17 +142,18 @@ class PruneChatCommand extends AbstractCommand
         $deleted = 0;
 
         Upload::query()
-            ->whereNull('message_id')
+            // `where(..., null)` is Laravel's IS NULL, spelled through Eloquent's
+            // own `where` so the rows stay typed as models; `whereNull` is reached
+            // through the base query builder and comes back typed as stdClass.
+            ->where('message_id', null)
             ->where('created_at', '<', $cutoff)
             ->chunkById(500, function ($uploads) use (&$deleted, $dryRun) {
                 if (! $dryRun) {
                     foreach ($uploads as $upload) {
-                        try {
-                            $this->filesystem->disk(UploadPrivacy::diskFor((bool) $upload->is_private))->delete($upload->path);
-                        } catch (\Throwable $e) {
-                            // A missing file is not a reason to abort the sweep;
-                            // the row still needs removing either way.
-                            $this->error('Could not delete '.$upload->path.': '.$e->getMessage());
+                        // A file that will not go is not a reason to abort the
+                        // sweep; the row still needs removing either way.
+                        if (! $this->storage->delete($upload)) {
+                            $this->error('Could not delete '.$upload->path.'; see the log.');
                         }
                     }
 
@@ -174,10 +174,8 @@ class PruneChatCommand extends AbstractCommand
         Upload::query()
             ->whereIn('message_id', $messageIds)
             ->each(function (Upload $upload) {
-                try {
-                    $this->filesystem->disk($upload->diskName())->delete($upload->path);
-                } catch (\Throwable $e) {
-                    $this->error('Could not delete '.$upload->path.': '.$e->getMessage());
+                if (! $this->storage->delete($upload)) {
+                    $this->error('Could not delete '.$upload->path.'; see the log.');
                 }
             });
     }

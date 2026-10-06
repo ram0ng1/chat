@@ -23,6 +23,12 @@ interface Section {
   warning?: string;
 }
 
+/** Where public attachments are stored: "local" or "fof-upload". */
+export const STORAGE_SETTING = "ramon-chat.upload_storage";
+
+/** The fof/upload adapter key; empty follows fof/upload's own mime mapping. */
+export const ADAPTER_SETTING = "ramon-chat.fof_upload_adapter";
+
 const SECTIONS: readonly Section[] = [
   {
     key: "channels",
@@ -53,7 +59,14 @@ const SECTIONS: readonly Section[] = [
   {
     key: "uploads",
     icon: "fas fa-paperclip",
-    keys: ["ramon-chat.allow_uploads", "ramon-chat.max_upload_size"],
+    // The last two are registered only while fof/upload is enabled; a key that
+    // was never registered is simply not drawn.
+    keys: [
+      "ramon-chat.allow_uploads",
+      "ramon-chat.max_upload_size",
+      STORAGE_SETTING,
+      ADAPTER_SETTING,
+    ],
     columns: 2,
   },
   {
@@ -151,6 +164,7 @@ export default class ChatSettingsPage extends ExtensionPage {
     byKey: Map<string, Parameters<this["buildSettingComponent"]>[0]>,
   ): Mithril.Children {
     const fields = section.keys
+      .filter((key) => this.fieldShown(key))
       .map((key) => byKey.get(key))
       .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
       .map((entry) => this.buildSettingComponent(entry));
@@ -176,7 +190,43 @@ export default class ChatSettingsPage extends ExtensionPage {
             {app.translator.trans(section.warning)}
           </p>
         ) : null}
+
+        {section.key === "uploads" && this.storesOnFofLocal() ? (
+          <p className="ChatAdmin-warning">
+            <i className="fas fa-triangle-exclamation" aria-hidden="true" />
+            {app.translator.trans(
+              "ramon-chat.admin.settings.fof_upload_local_warning",
+            )}
+          </p>
+        ) : null}
       </>,
+    );
+  }
+
+  /**
+   * The adapter only matters once fof/upload is the chosen storage, so it is
+   * folded away otherwise. Read live from the form, like the webhooks switch,
+   * so it appears the moment the storage is switched rather than after saving.
+   */
+  protected fieldShown(key: string): boolean {
+    if (key !== ADAPTER_SETTING) return true;
+
+    return this.setting(STORAGE_SETTING)() === "fof-upload";
+  }
+
+  /**
+   * fof/upload's `local` adapter writes into the forum's own public directory,
+   * so it saves nothing unless fof/upload's CDN URL puts a CDN in front of it.
+   * Following fof/upload's mime mapping often lands there too: its default
+   * rule for images names the local adapter. Said where the choice is made,
+   * because nothing else would tell.
+   */
+  protected storesOnFofLocal(): boolean {
+    const adapter = this.setting(ADAPTER_SETTING)() ?? "";
+
+    return (
+      this.setting(STORAGE_SETTING)() === "fof-upload" &&
+      (adapter === "local" || adapter === "")
     );
   }
 

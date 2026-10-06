@@ -9,21 +9,22 @@
 
 namespace Ramon\Chat\Api\Controller;
 
-use Carbon\Carbon;
 use Flarum\Foundation\ValidationException;
 use Flarum\Http\RequestUtil;
 use Flarum\Locale\Translator;
 use Flarum\Settings\SettingsRepositoryInterface;
-use Illuminate\Contracts\Filesystem\Factory;
+use GuzzleHttp\Psr7\StreamWrapper;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Str;
 use Laminas\Diactoros\Response\JsonResponse;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Message\UploadedFileInterface;
 use Psr\Http\Server\RequestHandlerInterface;
+use Psr\Log\LoggerInterface;
 use Ramon\Chat\Channel;
 use Ramon\Chat\Service\UploadPrivacy;
+use Ramon\Chat\Storage\StorageFailed;
+use Ramon\Chat\Storage\UploadStorage;
 use Ramon\Chat\Upload;
 
 /**
@@ -61,8 +62,9 @@ class UploadController implements RequestHandlerInterface
 
     public function __construct(
         protected SettingsRepositoryInterface $settings,
-        protected Factory $filesystem,
-        protected Translator $translator
+        protected UploadStorage $storage,
+        protected Translator $translator,
+        protected LoggerInterface $log
     ) {
     }
 
@@ -130,15 +132,10 @@ class UploadController implements RequestHandlerInterface
 
         $extension = self::ALLOWED[$mime];
 
-        // Random basename: the client filename is kept only as a display label,
-        // never as a path component, so traversal and collisions are impossible.
-        $path = sprintf('%s/%s.%s', Carbon::now()->format('Y/m'), Str::random(28), $extension);
-
-        $this->filesystem->disk(UploadPrivacy::diskFor($private))->put($path, $file->getStream()->getContents());
-
         $width = null;
         $height = null;
 
+        // Read from the temp file before the store consumes the stream.
         if (str_starts_with($mime, 'image/') && is_string($tmp)) {
             $size = @getimagesize($tmp);
 
@@ -149,14 +146,28 @@ class UploadController implements RequestHandlerInterface
 
         $upload = new Upload();
         $upload->user_id = $actor->id;
-        $upload->path = $path;
         $upload->is_private = $private;
-        $upload->file_name = $this->safeFileName($file->getClientFilename() ?? 'file.'.$extension);
         $upload->mime_type = $mime;
         $upload->size = (int) $file->getSize();
+        $upload->file_name = $this->safeFileName($file->getClientFilename() ?? 'file.'.$extension);
         $upload->width = $width;
         $upload->height = $height;
-        $upload->save();
+
+        // The store names the path. A private file always lands on the chat's
+        // private disk; a public one goes through fof/upload when the admin chose
+        // it. Either way the basename is random and the client filename is kept
+        // only as a display label, never as a path component.
+        $this->put($upload, $file, $extension);
+
+        try {
+            $upload->save();
+        } catch (\Throwable $e) {
+            // Without a row nothing would ever find these bytes again: no prune,
+            // no delete, and on a bucket no way to tell them from anything else.
+            $this->storage->delete($upload);
+
+            throw $e;
+        }
 
         return new JsonResponse([
             'data' => [
@@ -174,6 +185,39 @@ class UploadController implements RequestHandlerInterface
                 ],
             ],
         ], 201);
+    }
+
+    /**
+     * Writes the bytes through the chosen store, or refuses the upload.
+     *
+     * No fallback to the local disk when fof/upload fails: an admin who sent
+     * public files to a bucket did so for a reason (bandwidth, disk, a CDN), and
+     * quietly filling the webroot instead would hide the outage until the disk
+     * was full. The member sees a plain "could not be stored"; the reason, which
+     * may name a bucket, goes to the log.
+     */
+    protected function put(Upload $upload, UploadedFileInterface $file, string $extension): void
+    {
+        $stream = $file->getStream();
+        $stream->rewind();
+        $resource = StreamWrapper::getResource($stream);
+
+        try {
+            $this->storage->forNew((bool) $upload->is_private)->put($upload, $resource, $extension);
+        } catch (StorageFailed $e) {
+            $this->log->error('[ramon-chat] could not store an upload', [
+                'user'  => $upload->user_id,
+                'error' => $e->getMessage(),
+            ]);
+
+            throw new ValidationException([
+                'file' => $this->translator->trans('ramon-chat.api.upload_storage_failed'),
+            ]);
+        } finally {
+            if (is_resource($resource)) {
+                fclose($resource);
+            }
+        }
     }
 
     /**

@@ -14,6 +14,7 @@ use Flarum\Api\Endpoint;
 use Flarum\Api\Resource\AbstractDatabaseResource;
 use Flarum\Api\Schema;
 use Illuminate\Database\Eloquent\Builder;
+use Ramon\Chat\Storage\UploadStorage;
 use Ramon\Chat\Upload;
 use Tobyz\JsonApiServer\Context as OriginalContext;
 
@@ -26,6 +27,11 @@ use Tobyz\JsonApiServer\Context as OriginalContext;
  */
 class UploadResource extends AbstractDatabaseResource
 {
+    public function __construct(
+        protected UploadStorage $storage
+    ) {
+    }
+
     public function type(): string
     {
         return 'chat-uploads';
@@ -63,6 +69,23 @@ class UploadResource extends AbstractDatabaseResource
                 ->visible(fn (Upload $upload, Context $context) => $upload->message_id === null
                     && $upload->user_id === $context->getActor()->id),
         ];
+    }
+
+    /**
+     * Discarding a pending attachment removes its file as well as its row.
+     *
+     * The default delete took the row alone and left the bytes behind, on a disk
+     * nothing would sweep again — the prune command finds orphans by their row.
+     * On the public disk or in a bucket that is a file still readable by URL
+     * after the member removed it.
+     *
+     * @param  Upload  $model
+     */
+    public function delete(object $model, OriginalContext $context): void
+    {
+        $this->storage->delete($model);
+
+        $model->delete();
     }
 
     public function fields(): array

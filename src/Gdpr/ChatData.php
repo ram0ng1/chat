@@ -10,13 +10,13 @@
 namespace Ramon\Chat\Gdpr;
 
 use Flarum\Gdpr\Data\Type;
-use Illuminate\Contracts\Filesystem\Factory;
 use Illuminate\Support\Arr;
 use Ramon\Chat\ChannelInvite;
 use Ramon\Chat\ChannelUser;
 use Ramon\Chat\Draft;
 use Ramon\Chat\Message;
 use Ramon\Chat\MessageReaction;
+use Ramon\Chat\Storage\UploadStorage;
 use Ramon\Chat\Upload;
 
 /**
@@ -163,22 +163,19 @@ class ChatData extends Type
 
     protected function deleteUploads(): void
     {
-        // The same disks PruneChatCommand writes to; Upload holds only the path
-        // and which of the two disks it is on, not a handle to its own storage.
-        // The factory is the one the gdpr base type already receives by injection.
-        $filesystem = $this->factory;
+        // Resolved here rather than injected: the gdpr base type owns the
+        // constructor. The resolver knows whether a file is on the chat's disks
+        // or on fof/upload, which the row alone cannot reach.
+        $storage = resolve(UploadStorage::class);
 
         Upload::query()
             ->where('user_id', $this->user->id)
-            ->each(function (Upload $upload) use ($filesystem) {
-                // Best effort on the stored file. A missing or unreadable file must
-                // not stop the erasure — removing the row is what matters legally,
-                // and an exception here would abort the whole request.
-                try {
-                    $filesystem->disk($upload->diskName())->delete($upload->path);
-                } catch (\Throwable $e) {
-                    // Deliberately swallowed; see above.
-                }
+            ->each(function (Upload $upload) use ($storage) {
+                // Best effort on the stored file, logged by the resolver when it
+                // fails. A missing or unreadable file must not stop the erasure:
+                // removing the row is what matters legally, and an exception here
+                // would abort the whole request.
+                $storage->delete($upload);
 
                 $upload->delete();
             });

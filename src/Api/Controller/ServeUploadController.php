@@ -13,13 +13,14 @@ use Flarum\Http\Exception\RouteNotFoundException;
 use Flarum\Http\RequestUtil;
 use GuzzleHttp\Psr7\LimitStream;
 use GuzzleHttp\Psr7\Utils;
-use Illuminate\Contracts\Filesystem\Factory;
 use Illuminate\Support\Arr;
 use Laminas\Diactoros\Response;
 use Laminas\Diactoros\Response\EmptyResponse;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
+use Ramon\Chat\Storage\StorageFailed;
+use Ramon\Chat\Storage\UploadStorage;
 use Ramon\Chat\Upload;
 
 /**
@@ -55,7 +56,7 @@ class ServeUploadController implements RequestHandlerInterface
     protected const MAX_AGE = 3600;
 
     public function __construct(
-        protected Factory $filesystem
+        protected UploadStorage $storage
     ) {
     }
 
@@ -71,14 +72,29 @@ class ServeUploadController implements RequestHandlerInterface
             throw new RouteNotFoundException();
         }
 
-        $disk = $this->filesystem->disk($upload->diskName());
-
-        if (! $disk->exists($upload->path)) {
+        // A public file on fof/upload has its own public address and is never
+        // linked here. Proxying it would only spend this server's bandwidth on
+        // what the bucket was configured to carry.
+        if ($upload->isRemote() && ! $upload->is_private) {
             throw new RouteNotFoundException();
         }
 
-        $size = (int) $disk->size($upload->path);
-        $etag = '"'.hash('sha256', $upload->id.':'.$size.':'.$upload->updated_at->getTimestamp()).'"';
+        try {
+            $store = $this->storage->for($upload);
+        } catch (StorageFailed $e) {
+            throw new RouteNotFoundException();
+        }
+
+        // Null for a file on fof/upload, whose size the bucket would have to be
+        // asked for. Those are only ever served here while being moved to the
+        // private disk (see Upload), and are sent whole, without ranges.
+        $size = $store->size($upload);
+
+        if ($size === null && ! $upload->isRemote()) {
+            throw new RouteNotFoundException();
+        }
+
+        $etag = '"'.hash('sha256', $upload->id.':'.($size ?? $upload->size).':'.$upload->updated_at->getTimestamp()).'"';
 
         $headers = [
             'Content-Type'           => $upload->mime_type ?: 'application/octet-stream',
@@ -86,8 +102,11 @@ class ServeUploadController implements RequestHandlerInterface
             'X-Content-Type-Options' => 'nosniff',
             'Cache-Control'          => 'private, max-age='.self::MAX_AGE,
             'ETag'                   => $etag,
-            'Accept-Ranges'          => 'bytes',
         ];
+
+        if ($size !== null) {
+            $headers['Accept-Ranges'] = 'bytes';
+        }
 
         // A PDF can carry scripts; a sandboxed document cannot reach the forum's
         // origin, cookies or DOM even when it is opened in place.
@@ -99,13 +118,18 @@ class ServeUploadController implements RequestHandlerInterface
             return new EmptyResponse(304, Arr::only($headers, ['ETag', 'Cache-Control']));
         }
 
-        $stream = $disk->readStream($upload->path);
+        $stream = $store->readStream($upload);
 
         if (! is_resource($stream)) {
             throw new RouteNotFoundException();
         }
 
         $body = Utils::streamFor($stream);
+
+        if ($size === null) {
+            return new Response($body, 200, $headers);
+        }
+
         $range = $this->range($request->getHeaderLine('Range'), $size);
 
         if ($range === false) {

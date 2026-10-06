@@ -15,20 +15,31 @@ use Flarum\Database\ScopeVisibilityTrait;
 use Flarum\Http\UrlGenerator;
 use Flarum\User\User;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Ramon\Chat\Service\UploadPrivacy;
 
 /**
  * A file attached to a chat message.
  *
- * `is_private` says which disk holds the file — see Service\UploadPrivacy. It
- * is the one thing every reader of `path` has to consult first, because the
- * same relative path exists on exactly one of the two disks.
+ * Two columns say where the file is, and they answer different questions.
+ * `storage` is where the bytes are: `local`, the chat's own disks, or `fof`,
+ * whatever fof/upload is configured with (see Storage\UploadStorage).
+ * `is_private` is how the file is served: straight off its public location, or
+ * only through ServeUploadController after a visibility check — see
+ * Service\UploadPrivacy for the rule.
+ *
+ * A local file's `is_private` also picks which of the two local disks holds it.
+ * A file on fof/upload is public by construction, so `fof` with `is_private`
+ * set is only ever transient: the moment between flagging a file private and
+ * pulling its bytes back onto the private disk, during which it is served
+ * through the controller and its public URL is no longer handed out.
  *
  * @property int $id
  * @property int|null $message_id
  * @property int|null $user_id
  * @property string $path
  * @property bool $is_private
+ * @property string $storage
+ * @property string|null $storage_adapter
+ * @property string|null $remote_url
  * @property string $file_name
  * @property string|null $mime_type
  * @property int $size
@@ -42,6 +53,9 @@ use Ramon\Chat\Service\UploadPrivacy;
 class Upload extends AbstractModel
 {
     use ScopeVisibilityTrait;
+
+    public const STORAGE_LOCAL = 'local';
+    public const STORAGE_FOF = 'fof';
 
     protected $table = 'chat_uploads';
 
@@ -82,17 +96,19 @@ class Upload extends AbstractModel
     }
 
     /**
-     * The name of the filesystem disk holding this file.
+     * Whether the bytes are somewhere other than the chat's own disks.
      */
-    public function diskName(): string
+    public function isRemote(): bool
     {
-        return UploadPrivacy::diskFor((bool) $this->is_private);
+        return $this->storage === self::STORAGE_FOF;
     }
 
     /**
-     * A public file is addressed directly, so the web server serves it. A private
-     * one is addressed by id through ServeUploadController, which is the only
-     * thing that can reach its disk — and which checks who is asking.
+     * A public file is addressed directly, so the web server or the bucket
+     * serves it. A private one is addressed by id through ServeUploadController,
+     * which is the only thing that can reach its disk — and which checks who is
+     * asking. Privacy is read first, so a remote file on its way to the private
+     * disk is never handed out by its public URL.
      */
     public function url(): string
     {
@@ -100,6 +116,10 @@ class Upload extends AbstractModel
 
         if ($this->is_private) {
             return $url->to('api')->route('chat.uploads.file', ['id' => $this->id]);
+        }
+
+        if ($this->isRemote() && $this->remote_url) {
+            return $this->remote_url;
         }
 
         return $url->to('forum')->path('assets/chat/'.$this->path);

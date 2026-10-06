@@ -1,12 +1,16 @@
 import app from "flarum/admin/app";
 import { extend } from "flarum/common/extend";
 import PermissionGrid from "flarum/admin/components/PermissionGrid";
+import isExtensionEnabled from "flarum/admin/utils/isExtensionEnabled";
 import type { PermissionConfig } from "flarum/admin/components/PermissionGrid";
 import type Mithril from "mithril";
 
 import Channel from "../common/models/Channel";
 import Webhook from "../common/models/Webhook";
-import ChatSettingsPage from "./components/ChatSettingsPage";
+import ChatSettingsPage, {
+  ADAPTER_SETTING,
+  STORAGE_SETTING,
+} from "./components/ChatSettingsPage";
 import WebhooksPanel from "./components/WebhooksPanel";
 import BotSettings from "./components/BotSettings";
 
@@ -346,6 +350,59 @@ app.initializers.add("ramon-chat", () => {
       "moderate",
       93,
     );
+
+  // ── Attachment storage through fof/upload ─────────────────────────────────
+  // Only offered while fof/upload is enabled: without it the backend stores on
+  // the local disk whatever the setting says, and a choice that changes
+  // nothing is a choice that misleads. The adapter list comes from the admin
+  // payload (Content\FofUploadAdapters), which lists the adapters fof/upload
+  // reports as usable, Imgur excluded.
+  if (isExtensionEnabled("fof-upload")) {
+    const adapters = Array.isArray(app.data.ramonChatFofUploadAdapters)
+      ? (app.data.ramonChatFofUploadAdapters as string[])
+      : [];
+
+    const adapterOptions: Record<string, string> = {
+      "": text("settings.fof_upload_adapter_mapping"),
+    };
+
+    for (const key of adapters) {
+      adapterOptions[key] = adapterLabel(key);
+    }
+
+    app.registry
+      .for("ramon-chat")
+      .registerSetting({
+        setting: STORAGE_SETTING,
+        type: "select",
+        options: {
+          local: text("settings.upload_storage_local"),
+          "fof-upload": text("settings.upload_storage_fof"),
+        },
+        default: "local",
+        label: trans("settings.upload_storage"),
+        help: trans("settings.upload_storage_help"),
+      })
+      .registerSetting({
+        setting: ADAPTER_SETTING,
+        type: "select",
+        options: adapterOptions,
+        default: "",
+        label: trans("settings.fof_upload_adapter"),
+        help: trans("settings.fof_upload_adapter_help"),
+      });
+  }
+
+  /**
+   * fof/upload's own name for an adapter, falling back to the key when it has
+   * none (a third-party adapter with no translation).
+   */
+  function adapterLabel(key: string): string {
+    const translationKey = `fof-upload.admin.upload_methods.${key}`;
+    const label = app.translator.trans(translationKey, {}, true) as string;
+
+    return label && label !== translationKey ? label : key;
+  }
 
   // ── How the grid is organised ─────────────────────────────────────────────
   // Core sorts every extension's rows into Read / Create / Participate /
