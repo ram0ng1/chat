@@ -14,8 +14,8 @@ use Ramon\Chat\Channel;
 use Ramon\Chat\ChannelTransfer;
 
 /**
- * Quem iniciou confirmou o código: a transferência agora espera a resposta de
- * quem vai receber o canal.
+ * The initiator confirmed the code: the transfer now waits for the answer of
+ * whoever is going to receive the channel.
  */
 class OwnershipTransferRequested
 {

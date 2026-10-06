@@ -18,18 +18,19 @@ use Ramon\Chat\Tests\integration\FlushesCache;
 use Ramon\Chat\Tests\integration\ResetsVisibilityScopers;
 
 /**
- * Convites para um canal, de ponta a ponta.
+ * Channel invites, end to end.
  *
- * Ser adicionado a um canal virou uma pergunta. Estes testes fixam as três
- * respostas e o que cada uma deixa para trás: convidar cria um convite e uma
- * notificação, e nada mais; aceitar cria a associação, narra a chegada e tira
- * a notificação do sino; recusar avisa o dono e quem convidou, e deixa o canal
- * privado tão invisível quanto antes. Quem gerencia pode retirar o convite, e
- * um convite nunca contorna a permissão de uma categoria restrita.
+ * Being added to a channel became a question. These tests pin down the three
+ * answers and what each leaves behind: inviting creates an invite and a
+ * notification, and nothing else; accepting creates the membership, narrates
+ * the arrival and clears the notification from the bell; declining notifies
+ * the owner and the inviter, and leaves the private channel as invisible as
+ * before. Whoever manages can withdraw the invite, and an invite never
+ * bypasses a restricted category's permission.
  *
- * Em processos separados pela razão que ChannelAccessMatrixTest documenta: a
- * classe habilita o flarum-tags, e o registro estático de scopers sobrevive
- * entre boots dentro de um mesmo processo.
+ * Run in separate processes for the reason ChannelAccessMatrixTest documents:
+ * the class enables flarum-tags, and the static registry of scopers survives
+ * between boots within the same process.
  */
 #[RunTestsInSeparateProcesses]
 class ChannelInviteTest extends TestCase

@@ -1,9 +1,9 @@
 /**
- * Espelho de Ramon\Chat\Rank\RankPalette, para a prévia do editor de cargos.
+ * Mirror of Ramon\Chat\Rank\RankPalette, for the rank editor's preview.
  *
- * O servidor já manda as cores derivadas de cada cargo salvo; isto só existe
- * para que a prévia acompanhe a cor enquanto ela é escolhida, antes de salvar.
- * Mudou lá, muda aqui.
+ * The server already sends the derived colours of every saved rank; this only
+ * exists so the preview follows the colour while it is being picked, before
+ * saving. Changed there, change here.
  */
 export declare const LIGHT_SURFACE = "#ffffff";
 export declare const DARK_SURFACE = "#222226";

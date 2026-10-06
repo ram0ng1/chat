@@ -21,14 +21,15 @@ use Ramon\Chat\Tests\integration\FlushesCache;
 use Ramon\Chat\Tests\integration\ResetsVisibilityScopers;
 
 /**
- * Passar um canal para outro membro, de ponta a ponta, e o aviso de promoção
- * a moderador.
+ * Passing a channel to another member, end to end, and the moderator
+ * promotion notice.
  *
- * O dono escolhe um membro e recebe um código por e-mail; só o hash do código
- * fica no banco. Digitado o código, o membro recebe o pedido e aceita ou
- * recusa. Aceito, o membro vira dono e o dono anterior vira moderador do
- * canal, numa transação. Erros de código contam e travam no quinto, o código
- * expira, e sair do canal encerra o pedido.
+ * The owner picks a member and receives a code by email; only the code's hash
+ * is kept in the database. Once the code is typed, the member receives the
+ * request and accepts or declines. If accepted, the member becomes owner and
+ * the previous owner becomes a moderator of the channel, in one transaction.
+ * Code mistakes count and lock on the fifth, the code expires, and leaving the
+ * channel ends the request.
  */
 class OwnershipTransferTest extends TestCase
 {

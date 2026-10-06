@@ -20,15 +20,15 @@ use Ramon\Chat\Service\ChannelOwnership;
 use Ramon\Chat\Tests\unit\QueryTestCase;
 
 /**
- * O que o criador de um canal pode fazer com ele: o modo de
- * `ramon-chat.channel_ownership` primeiro, depois as permissões da seção
- * "Canais dos membros".
+ * What a channel's creator can do with it: the `ramon-chat.channel_ownership`
+ * mode first, then the permissions of the "Members' channels" section.
  *
- * No modo "administradores" o criador não tem nada além do que qualquer membro
- * tem, seja qual for a grade. No modo "membros", `manageOwnChannels` faz dele o
- * responsável pelo canal que criou — e só por esse — e `editOwnChannels` dá só
- * as configurações. Fora disso a policy se abstém (`null`), para que o fallback
- * do Gate continue decidindo por administradores e detentores do `moderate`.
+ * In "administrators" mode the creator has nothing beyond what any member has,
+ * whatever the grid says. In "members" mode, `manageOwnChannels` makes them
+ * responsible for the channel they created (and only that one) and
+ * `editOwnChannels` gives only the settings. Otherwise the policy abstains
+ * (`null`), so the Gate fallback keeps deciding by administrators and holders
+ * of `moderate`.
  */
 class ChannelPolicyTest extends QueryTestCase
 {

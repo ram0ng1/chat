@@ -19,12 +19,12 @@ use Ramon\Chat\Tests\integration\FlushesCache;
 use Ramon\Chat\Tests\integration\ResetsVisibilityScopers;
 
 /**
- * Quando o dono sai, o moderador mais antigo assume.
+ * When the owner leaves, the longest-serving moderator takes over.
  *
- * Mais antigo no papel (`moderator_since`), depois na entrada no canal, e só
- * entre quem pode ser dono de canais. Sem nenhum, o canal fica sem dono, e um
- * administrador ainda pode entregá-lo. A transferência pendente do dono que
- * saiu é cancelada. No modo "administradores" nada muda.
+ * Longest in the role (`moderator_since`), then by channel join date, and only
+ * among those who can own channels. With none, the channel is left without an
+ * owner, and an administrator can still hand it over. The departed owner's
+ * pending transfer is cancelled. In "administrators" mode nothing changes.
  */
 class OwnershipSuccessionTest extends TestCase
 {

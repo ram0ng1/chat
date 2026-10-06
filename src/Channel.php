@@ -13,6 +13,7 @@ use Carbon\Carbon;
 use Flarum\Database\AbstractModel;
 use Flarum\Database\ScopeVisibilityTrait;
 use Flarum\Extension\ExtensionManager;
+use Flarum\Foundation\Config;
 use Flarum\Foundation\EventGeneratorTrait;
 use Flarum\User\User;
 use Illuminate\Database\Eloquent\Builder;
@@ -83,6 +84,15 @@ class Channel extends AbstractModel
 
     protected $table = 'chat_channels';
 
+    /**
+     * App-wide services the model reads from, handed over by ChatServiceProvider
+     * the same way HasFormattedContent receives its formatter. Neither holds
+     * actor or request state, so sharing them across a worker's requests is safe.
+     */
+    protected static ?ExtensionManager $extensions = null;
+
+    protected static ?Config $config = null;
+
     public $timestamps = true;
 
     /**
@@ -94,7 +104,7 @@ class Channel extends AbstractModel
     protected array $membershipCache = [];
 
     /**
-     * Convites pendentes já consultados nesta instância, por id de usuário.
+     * Pending invites already looked up on this instance, by user id.
      *
      * @var array<int, ChannelInvite|null>
      */
@@ -121,6 +131,12 @@ class Channel extends AbstractModel
         'archived_at'                 => 'datetime',
         'deleted_at'                  => 'datetime',
     ];
+
+    public static function setServices(ExtensionManager $extensions, Config $config): void
+    {
+        static::$extensions = $extensions;
+        static::$config = $config;
+    }
 
     public static function build(
         string $type,
@@ -333,8 +349,8 @@ class Channel extends AbstractModel
     }
 
     /**
-     * Quem foi convidado e ainda não respondeu, para a aba de membros de quem
-     * gerencia o canal.
+     * Who was invited and has not yet answered, for the members tab of whoever
+     * manages the channel.
      */
     public function invitedUsers(): BelongsToMany
     {
@@ -343,11 +359,11 @@ class Channel extends AbstractModel
     }
 
     /**
-     * O convite de quem está pedindo, para os endpoints que o carregam junto.
+     * The invite of whoever is asking, for the endpoints that load it along.
      *
-     * Sem restrição aqui, como `actorMembership()`: só o endpoint sabe quem é
-     * o ator, e é ele quem restringe no eager load. Nada além de
-     * `pendingInviteFor()` deve ler esta relação.
+     * Unconstrained here, like `actorMembership()`: only the endpoint knows who
+     * the actor is, and it is the one that constrains the eager load. Nothing
+     * but `pendingInviteFor()` should read this relation.
      */
     public function actorInvite(): HasOne
     {
@@ -355,12 +371,12 @@ class Channel extends AbstractModel
     }
 
     /**
-     * O convite pendente do usuário, memoizado como `membershipFor()`.
+     * The user's pending invite, memoized like `membershipFor()`.
      *
-     * Um `actorInvite` já carregado responde sem consulta, inclusive quando
-     * veio vazio: a relação só é carregada restrita ao ator da requisição, e
-     * sem essa confiança a lista de canais custaria uma consulta por linha
-     * para descobrir que não há convite algum.
+     * An already loaded `actorInvite` answers without a query, even when it came
+     * back empty: the relation is only loaded constrained to the request's
+     * actor, and without that trust the channel list would cost one query per
+     * row just to find out there is no invite at all.
      */
     public function pendingInviteFor(?User $user): ?ChannelInvite
     {
@@ -415,7 +431,7 @@ class Channel extends AbstractModel
      */
     public function tag(): ?BelongsTo
     {
-        if (! resolve(ExtensionManager::class)->isEnabled('flarum-tags')) {
+        if (! static::$extensions?->isEnabled('flarum-tags')) {
             return null;
         }
 
@@ -509,7 +525,7 @@ class Channel extends AbstractModel
             return null;
         }
 
-        return resolve(\Flarum\Foundation\Config::class)->url()->getPath()
+        return static::$config->url()->getPath()
             .'/assets/'.$this->image_path;
     }
 

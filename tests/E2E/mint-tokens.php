@@ -8,25 +8,25 @@
  */
 
 /*
- * Gera os tokens que o harness E2E usa contra o fórum local.
+ * Generates the tokens the E2E harness uses against the local forum.
  *
- * Sobe a aplicação Flarum do fórum (FLARUM_ROOT, ou três níveis acima deste
- * arquivo), cria os usuários de teste se ainda não existem e cunha um token de
- * desenvolvedor para cada um, mais um token "remember" para o usuário que os
- * testes de navegador vão logar por cookie. Escreve tudo em
- * tests/E2E/.tokens.json, que está no .gitignore.
+ * Boots the forum's Flarum application (FLARUM_ROOT, or three levels above
+ * this file), creates the test users if they don't exist yet and mints a
+ * developer token for each, plus a "remember" token for the user the browser
+ * tests will log in as by cookie. Writes everything to
+ * tests/E2E/.tokens.json, which is in .gitignore.
  *
  *     php tests/E2E/mint-tokens.php
  *
- * Só para um fórum de desenvolvimento. Os usuários criados são contas normais
- * (grupo Membro) chamadas chat_e2e_a, chat_e2e_b e chat_e2e_c; o administrador
- * é o usuário 1.
+ * Development forum only. The users created are normal accounts (Member
+ * group) named chat_e2e_a, chat_e2e_b and chat_e2e_c; the administrator is
+ * user 1.
  *
- * A suíte de permissões precisa de três níveis a mais, criados do mesmo jeito
- * idempotente: chat_e2e_mod (grupo Moderador), chat_e2e_susp (suspenso por um
- * ano, rebaixado a convidado pelo flarum/suspend) e chat_e2e_unconf (e-mail não
- * confirmado, que o core também reduz a convidado). Saem nas chaves `mod`,
- * `susp` e `unconf`.
+ * The permissions suite needs three more levels, created the same idempotent
+ * way: chat_e2e_mod (Moderator group), chat_e2e_susp (suspended for a year,
+ * demoted to guest by flarum/suspend) and chat_e2e_unconf (unconfirmed email,
+ * which the core also reduces to guest). They come out under the keys `mod`,
+ * `susp` and `unconf`.
  */
 
 use Flarum\Foundation\Site;

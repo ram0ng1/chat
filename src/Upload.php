@@ -59,6 +59,17 @@ class Upload extends AbstractModel
 
     protected $table = 'chat_uploads';
 
+    /**
+     * Handed over by ChatServiceProvider; see Channel::$extensions for why a
+     * static is safe here.
+     */
+    protected static ?UrlGenerator $url = null;
+
+    public static function setUrlGenerator(UrlGenerator $url): void
+    {
+        static::$url = $url;
+    }
+
     public $timestamps = true;
 
 
@@ -112,7 +123,7 @@ class Upload extends AbstractModel
      */
     public function url(): string
     {
-        $url = resolve(UrlGenerator::class);
+        $url = static::$url;
 
         if ($this->is_private) {
             return $url->to('api')->route('chat.uploads.file', ['id' => $this->id]);

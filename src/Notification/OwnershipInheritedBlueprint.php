@@ -16,11 +16,11 @@ use Flarum\User\User;
 use Ramon\Chat\Channel;
 
 /**
- * "X saiu de #canal, e agora você é o dono."
+ * "X left #channel, and you are now the owner."
  *
- * Vai para o moderador que herdou o canal. Só ids nos dados; o nome vem do
- * canal, que é o assunto. O id de quem herdou separa uma sucessão da seguinte
- * no NotificationSyncer.
+ * Goes to the moderator who inherited the channel. Only ids in the data; the
+ * name comes from the channel, which is the subject. The heir's id separates
+ * one succession from the next in the NotificationSyncer.
  */
 class OwnershipInheritedBlueprint implements AlertableInterface, BlueprintInterface
 {

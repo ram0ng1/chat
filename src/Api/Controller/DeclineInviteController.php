@@ -22,9 +22,9 @@ use Ramon\Chat\Event\InviteWasDeclined;
 use Ramon\Chat\Service\InvitationManager;
 
 /**
- * O convidado recusa. O convite some, quem convidou e o dono do canal são
- * avisados (Listener\NotifyInvitations), e nada mais muda: a pessoa continua
- * sem ver o canal, exatamente como antes do convite.
+ * The invitee declines. The invite goes away, the inviter and the channel
+ * owner are notified (Listener\NotifyInvitations), and nothing else changes:
+ * the person still cannot see the channel, exactly as before the invite.
  */
 class DeclineInviteController implements RequestHandlerInterface
 {
@@ -39,7 +39,7 @@ class DeclineInviteController implements RequestHandlerInterface
         $actor = RequestUtil::getActor($request);
         $actor->assertRegistered();
 
-        $channelId = (int) Arr::get($request->getQueryParams(), 'id');
+        $channelId = (int) Arr::get((array) $request->getAttribute('routeParameters'), 'id', 0);
 
         $invite = ChannelInvite::query()
             ->where('channel_id', $channelId)

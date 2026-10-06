@@ -28,18 +28,18 @@ use Ramon\Chat\Service\MembershipManager;
 use Throwable;
 
 /**
- * O convidado aceita e entra no canal.
+ * The invitee accepts and joins the channel.
  *
- * Uma rota própria, e não o endpoint `join` do resource, porque um canal
- * privado não é visível para quem ainda não é membro: o endpoint nunca
- * encontraria o modelo. Aqui a autorização é o próprio convite, mais a
- * checagem de que o canal seria acessível ao convidado se não fosse privado
- * (InvitationManager::mayEnter), para que um convite não contorne a permissão
- * da categoria.
+ * A route of its own, not the resource's `join` endpoint, because a private
+ * channel is not visible to someone who is not yet a member: the endpoint
+ * would never find the model. Here the authorization is the invite itself,
+ * plus a check that the channel would be accessible to the invitee were it
+ * not private (InvitationManager::mayEnter), so an invite cannot bypass the
+ * category permission.
  *
- * Responde com o canal já serializado pelo ChannelResource, agora que a
- * associação existe e ele é visível: o cliente o coloca na barra lateral e
- * desenha a caixa de mensagem sem uma segunda requisição.
+ * Responds with the channel already serialized by ChannelResource, now that
+ * the membership exists and it is visible: the client puts it in the sidebar
+ * and draws the message box without a second request.
  */
 class AcceptInviteController implements RequestHandlerInterface
 {
@@ -57,7 +57,7 @@ class AcceptInviteController implements RequestHandlerInterface
         $actor = RequestUtil::getActor($request);
         $actor->assertRegistered();
 
-        $channelId = (int) Arr::get($request->getQueryParams(), 'id');
+        $channelId = (int) Arr::get((array) $request->getAttribute('routeParameters'), 'id', 0);
 
         $invite = ChannelInvite::query()
             ->where('channel_id', $channelId)

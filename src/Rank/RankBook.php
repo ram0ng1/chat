@@ -12,23 +12,23 @@ namespace Ramon\Chat\Rank;
 use Ramon\Chat\ChannelRank;
 
 /**
- * O livro de cargos de um canal: as definições em ordem de prioridade, quem é
- * moderador e quem tem cada cargo criado pelo dono.
+ * A channel's rank book: the definitions in priority order, who is a
+ * moderator, and who holds each owner-created rank.
  *
- * A prioridade é fixa no topo e livre embaixo: dono, moderador e então os
- * cargos do dono na ordem que ele escolheu. Um membro com vários cargos exibe
- * o primeiro. O dono não fica no livro guardado em cache, e sim é somado na
- * leitura (`withOwner`), a partir do `creator_id` do canal já carregado.
+ * Priority is fixed at the top and free below: owner, moderator, then the
+ * owner's ranks in the order they chose. A member with several ranks shows the
+ * first one. The owner is not part of the cached book; it is added at read
+ * time (`withOwner`), from the already-loaded channel's `creator_id`.
  *
- * O espelho em js/src/forum/utils/ranks.tsx segue esta mesma prioridade.
+ * The mirror in js/src/forum/utils/ranks.tsx follows this same priority.
  */
 final class RankBook
 {
     /**
-     * A parte do livro que vai para o cache.
+     * The part of the book that goes into the cache.
      *
      * @param  iterable<ChannelRank>  $ranks
-     * @param  iterable<object{user_id: int|string, is_moderator: int|string|bool, rank_id: int|string|null}>  $members  Membros visíveis e presentes com papel ou cargo.
+     * @param  iterable<object{user_id: int|string, is_moderator: int|string|bool, rank_id: int|string|null}>  $members  Visible, present members with a role or rank.
      * @return array{ranks: list<array<string, mixed>>, moderatorIds: list<int>, assignments: array<int, list<int>>}
      */
     public static function compile(iterable $ranks, iterable $members): array
@@ -99,7 +99,7 @@ final class RankBook
     }
 
     /**
-     * O cargo exibido ao lado do nome do usuário, ou null.
+     * The rank shown next to the user's name, or null.
      *
      * @param  array<string, mixed>  $book
      * @return array<string, mixed>|null

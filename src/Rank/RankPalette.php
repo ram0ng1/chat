@@ -10,15 +10,16 @@
 namespace Ramon\Chat\Rank;
 
 /**
- * As cores que derivam da cor de um cargo, para que qualquer cor escolhida
- * pelo dono continue legível.
+ * The colors derived from a rank's color, so that any color the owner picks
+ * stays readable.
  *
- * A cor escolhida vale como está no fundo do selo; o texto do selo é branco
- * ou quase preto, o que contrastar mais. Como cor do nome (selo desligado),
- * ela é escurecida no tema claro e clareada no escuro, só o necessário para
- * chegar a 4.5:1 contra a superfície da conversa (WCAG AA para texto). Um
- * amarelo-claro vira mostarda no claro; um azul-marinho vira azul-céu no
- * escuro. O espelho em js/src/forum/utils/rankPalette.ts segue este cálculo.
+ * The chosen color is used as is for the badge background; the badge text is
+ * white or near-black, whichever contrasts more. As a name color (badge off),
+ * it is darkened on the light theme and lightened on the dark one, only as
+ * much as needed to reach 4.5:1 against the conversation surface (WCAG AA for
+ * text). A light yellow becomes mustard on light; a navy becomes sky blue on
+ * dark. The mirror in js/src/forum/utils/rankPalette.ts follows this
+ * calculation.
  */
 final class RankPalette
 {
@@ -33,8 +34,8 @@ final class RankPalette
     public const MIN_CONTRAST = 4.5;
 
     /**
-     * Texto do selo, nome no tema claro e nome no tema escuro. Tudo nulo para
-     * uma cor nula, que é a do tema e fica a cargo do CSS.
+     * Badge text, name on the light theme and name on the dark theme. All null
+     * for a null color, which is the theme's own and is left to the CSS.
      *
      * @return array{textColor: string|null, nameLight: string|null, nameDark: string|null}
      */
@@ -59,7 +60,7 @@ final class RankPalette
     }
 
     /**
-     * Luminância relativa, como a WCAG define.
+     * Relative luminance, as WCAG defines it.
      */
     public static function luminance(string $hex): float
     {
@@ -90,8 +91,8 @@ final class RankPalette
     }
 
     /**
-     * A cor mais próxima da dada que se lê sobre a superfície: misturada aos
-     * poucos com preto numa superfície clara, ou com branco numa escura.
+     * The closest color to the given one that reads on the surface: gradually
+     * mixed with black on a light surface, or with white on a dark one.
      */
     public static function readableOn(string $hex, string $surface): string
     {

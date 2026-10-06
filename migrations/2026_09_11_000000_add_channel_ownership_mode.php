@@ -11,26 +11,26 @@ use Flarum\Group\Group;
 use Illuminate\Database\Schema\Builder;
 
 /**
- * Quem cria e administra os canais vira um interruptor
- * (`ramon-chat.channel_ownership`) mais três permissões da seção "Canais dos
- * membros": criar canais, gerenciar os próprios canais e editar os próprios
- * canais.
+ * Who creates and manages channels becomes a switch
+ * (`ramon-chat.channel_ownership`) plus three permissions in the "Member
+ * channels" section: create channels, manage own channels and edit own channels.
  *
- * Duas coisas acontecem aqui, nesta ordem:
+ * Two things happen here, in this order:
  *
- *  1. Um fórum que já concedia `createChannel` a algum grupo além do
- *     administrador é posto no modo "membros". O padrão do interruptor é
- *     "administradores", e aplicá-lo cegamente revogaria, no upgrade, um direito
- *     que o admin concedeu de propósito.
- *  2. As três permissões são semeadas ao grupo Membro. Inertes no modo
- *     "administradores" — a GlobalPolicy nega a criação a quem não é admin, e
- *     ChannelOwnership só lê as outras duas no modo "membros" — de modo que
- *     virar o interruptor é tudo que o admin precisa fazer para os membros
- *     passarem a criar e cuidar dos próprios canais.
+ *  1. A forum that already granted `createChannel` to some group other than
+ *     administrator is put in "members" mode. The switch defaults to
+ *     "administrators", and applying it blindly would revoke, on upgrade, a right
+ *     the admin granted on purpose.
+ *  2. The three permissions are seeded to the Member group. Inert in
+ *     "administrators" mode (the GlobalPolicy denies creation to non-admins, and
+ *     ChannelOwnership only reads the other two in "members" mode), so flipping
+ *     the switch is all the admin needs to do for members to start creating and
+ *     looking after their own channels.
  *
- * O seed só ocorre quando o grupo existe e a linha ainda não: um fórum pode ter
- * apagado o grupo, e `group_permission.group_id` é FK para `groups` — inserir
- * às cegas aborta a ativação inteira da extensão com SQLSTATE[23000].
+ * The seed only runs when the group exists and the row does not yet: a forum may
+ * have deleted the group, and `group_permission.group_id` is an FK to `groups`, so
+ * inserting blindly aborts the whole extension's activation with
+ * SQLSTATE[23000].
  */
 return [
     'up' => function (Builder $schema) {

@@ -87,16 +87,17 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
     protected avatar(message: Message): Mithril.Children;
     protected shortTime(message: Message): Mithril.Children;
     /**
-     * A prévia da mensagem respondida, acima do corpo.
+     * The preview of the replied-to message, above the body.
      *
-     * Clicar nela leva à original — é o que a citação já sugere, e sem isso o
-     * leitor precisa rolar procurando um trecho de 120 caracteres. Quando a
-     * original está fora da janela carregada o clique avisa em vez de não fazer
-     * nada, para o silêncio não parecer um botão quebrado.
+     * Clicking it jumps to the original: that is what the quote already suggests,
+     * and without it the reader has to scroll hunting for a 120-character excerpt.
+     * When the original is outside the loaded window the click says so instead of
+     * doing nothing, so the silence does not look like a broken button.
      *
-     * O elemento é um `button` e não a `div` de antes: só assim chega pelo teclado
-     * e é anunciado como algo acionável. O nome do autor continua sendo um link
-     * para o perfil, então o clique nele é deixado passar em vez de virar salto.
+     * The element is a `button` rather than the former `div`: only then is it
+     * reachable by keyboard and announced as actionable. The author's name is still
+     * a link to the profile, so a click on it is let through instead of becoming a
+     * jump.
      */
     protected replyPreview(message: Message): Mithril.Children;
     protected reactions(message: Message): Mithril.Children;

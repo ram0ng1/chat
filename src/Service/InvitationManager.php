@@ -12,28 +12,27 @@ namespace Ramon\Chat\Service;
 use Flarum\Extension\ExtensionManager;
 use Flarum\User\User;
 use Illuminate\Contracts\Cache\Repository as Cache;
-use Illuminate\Database\ConnectionInterface;
 use Ramon\Chat\Channel;
 use Ramon\Chat\ChannelInvite;
 
 /**
- * Cria e encerra convites para um canal.
+ * Creates and ends invites to a channel.
  *
- * Ser adicionado a um canal virou uma pergunta: quem gerencia convida, e o
- * convidado entra ou recusa. A associação só nasce no aceite, e é o
- * MembershipManager quem a cria; aqui só existe o convite em si.
+ * Being added to a channel became a question: whoever manages it invites, and
+ * the invitee joins or declines. The membership is only born on acceptance,
+ * and MembershipManager is what creates it; here only the invite itself
+ * exists.
  */
 class InvitationManager
 {
     /**
-     * Quanto tempo uma recusa vale: nesse intervalo o mesmo canal não volta a
-     * convidar a mesma pessoa, e um "não" não vira uma fila de notificações.
-     * Administradores ficam de fora, como de todo limite do chat.
+     * How long a decline lasts: within this interval the same channel does not
+     * invite the same person again, and a "no" does not turn into a queue of
+     * notifications. Administrators are exempt, as from every chat limit.
      */
     public const DECLINE_COOLDOWN_SECONDS = 86400;
 
     public function __construct(
-        protected ConnectionInterface $db,
         protected ExtensionManager $extensions,
         protected ChannelOwnership $ownership,
         protected Cache $cache
@@ -41,12 +40,12 @@ class InvitationManager
     }
 
     /**
-     * Se o convidado poderia entrar no canal, deixando de lado o fato de ele
-     * ser privado. O convite responde pela privacidade; o resto continua
-     * valendo: o chat tem que estar liberado para a conta, um canal fechado
-     * não recebe ninguém, e um canal preso a uma categoria restrita continua
-     * exigindo a permissão da categoria. Um convite não pode virar uma porta
-     * lateral para uma permissão do fórum.
+     * Whether the invitee could join the channel, setting aside the fact that
+     * it is private. The invite answers for privacy; the rest still applies:
+     * chat must be enabled for the account, a closed channel takes nobody, and
+     * a channel tied to a restricted category still requires the category's
+     * permission. An invite cannot become a side door around a forum
+     * permission.
      */
     public function mayEnter(User $actor, Channel $channel): bool
     {
@@ -74,15 +73,16 @@ class InvitationManager
     }
 
     /**
-     * Convida quem ainda não é membro nem foi convidado, nem recusou há pouco.
+     * Invites whoever is not yet a member, not already invited, and has not
+     * declined recently.
      *
-     * Um membro oculto conta como membro só para quem pode saber que ele existe
-     * (ChannelOwnership::seesHiddenMembers). Para os demais ele é convidado como
-     * qualquer outro: pular a pessoa revelaria a presença dela pela diferença na
-     * resposta, e o convite ela pode simplesmente recusar.
+     * A hidden member counts as a member only for whoever may know they exist
+     * (ChannelOwnership::seesHiddenMembers). For everyone else they are invited
+     * like anyone else: skipping the person would reveal their presence through
+     * the difference in the response, and they can simply decline the invite.
      *
      * @param  iterable<User>  $users
-     * @return ChannelInvite[] Os convites criados, na ordem recebida.
+     * @return ChannelInvite[] The invites created, in the order received.
      */
     public function invite(Channel $channel, iterable $users, User $inviter): array
     {
@@ -123,8 +123,8 @@ class InvitationManager
     }
 
     /**
-     * Consome o convite do usuário, devolvendo-o para quem vai criar a
-     * associação. Null quando não havia convite.
+     * Consumes the user's invite, handing it back to whoever will create the
+     * membership. Null when there was no invite.
      */
     public function accept(Channel $channel, User $user): ?ChannelInvite
     {
@@ -153,11 +153,11 @@ class InvitationManager
     }
 
     /**
-     * Todos os convites pendentes do canal feitos por um mesmo convidador.
+     * All of the channel's pending invites made by the same inviter.
      *
-     * É o conjunto que a sincronização de notificações precisa: o
-     * NotificationSyncer casa notificações por tipo, assunto e remetente, e
-     * recebe a lista completa de quem ainda deve ter a sua.
+     * It is the set the notification sync needs: the NotificationSyncer
+     * matches notifications by type, subject and sender, and receives the
+     * full list of who should still have theirs.
      *
      * @return User[]
      */
@@ -180,7 +180,7 @@ class InvitationManager
 
     protected function remove(Channel $channel, User $user): ?ChannelInvite
     {
-        return $this->db->transaction(function () use ($channel, $user) {
+        return ChannelInvite::query()->getConnection()->transaction(function () use ($channel, $user) {
             /** @var ChannelInvite|null $invite */
             $invite = ChannelInvite::query()
                 ->where('channel_id', $channel->id)

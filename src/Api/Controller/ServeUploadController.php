@@ -63,7 +63,7 @@ class ServeUploadController implements RequestHandlerInterface
     public function handle(ServerRequestInterface $request): ResponseInterface
     {
         $actor = RequestUtil::getActor($request);
-        $id = (int) Arr::get($request->getQueryParams(), 'id');
+        $id = (int) Arr::get((array) $request->getAttribute('routeParameters'), 'id', 0);
 
         /** @var Upload|null $upload */
         $upload = $id > 0 ? Upload::whereVisibleTo($actor)->find($id) : null;

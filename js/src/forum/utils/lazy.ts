@@ -1,10 +1,10 @@
 /**
- * Carregadores dos chunks preguiçosos do chat.
+ * Loaders for the chat's lazy chunks.
  *
- * Cada `import()` fica sozinho numa linha curta: o autoChunkNameLoader do
- * flarum-webpack-config só nomeia e registra um import dinâmico escrito numa
- * linha só, e um import quebrado pelo formatador vira um chunk anônimo que o
- * Flarum não sabe servir.
+ * Each `import()` sits alone on a short line: flarum-webpack-config's
+ * autoChunkNameLoader only names and registers a dynamic import written on a
+ * single line, and an import broken up by the formatter becomes an anonymous
+ * chunk that Flarum cannot serve.
  */
 
 const importChatUi = () => import("../chatUi");
@@ -12,8 +12,8 @@ const importChatUi = () => import("../chatUi");
 let chatUi: ReturnType<typeof importChatUi> | null = null;
 
 /**
- * Devolve o chunk da interface, pedindo-o uma vez só. Uma falha esquece a
- * promessa, para que a próxima tentativa refaça o pedido.
+ * Returns the interface chunk, requesting it only once. A failure forgets the
+ * promise, so the next attempt retries the request.
  */
 export function loadChatUi(): ReturnType<typeof importChatUi> {
   chatUi ??= importChatUi().catch((error) => {

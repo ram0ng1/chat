@@ -16,10 +16,11 @@ use Ramon\Chat\Event\UserLeftChannel;
 use Ramon\Chat\Service\ChannelRanks;
 
 /**
- * Apaga o livro de cargos guardado de um canal quando muda quem é moderador,
- * quem é dono, ou quem está no canal: só membros presentes exibem cargo.
+ * Drops a channel's cached rank book when who is a moderator, who is the
+ * owner, or who is in the channel changes: only present members show a rank.
  *
- * Registrado antes do realtime, que lê o livro já refeito para avisar a sala.
+ * Registered before realtime, which reads the already rebuilt book to notify
+ * the room.
  */
 class ForgetChannelRanks
 {

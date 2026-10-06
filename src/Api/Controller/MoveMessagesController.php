@@ -14,7 +14,6 @@ use Flarum\Http\RequestUtil;
 use Flarum\User\Exception\PermissionDeniedException;
 use Flarum\Locale\Translator;
 use Illuminate\Contracts\Events\Dispatcher as Events;
-use Illuminate\Database\ConnectionInterface;
 use Illuminate\Support\Arr;
 use Laminas\Diactoros\Response\JsonResponse;
 use Psr\Http\Message\ResponseInterface;
@@ -40,7 +39,6 @@ class MoveMessagesController implements RequestHandlerInterface
     protected const MAX_MESSAGES = 100;
 
     public function __construct(
-        protected ConnectionInterface $db,
         protected Events $events,
         protected Translator $translator
     ) {
@@ -116,7 +114,7 @@ class MoveMessagesController implements RequestHandlerInterface
         $bySource = [];
         $leftThreads = [];
 
-        $moved = $this->db->transaction(function () use ($messages, $target, $actor, &$bySource, &$leftThreads) {
+        $moved = Message::query()->getConnection()->transaction(function () use ($messages, $target, $actor, &$bySource, &$leftThreads) {
             $affected = [];
             $moved = 0;
 
