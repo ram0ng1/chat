@@ -12,8 +12,12 @@
 namespace Ramon\Chat\Content;
 
 use Flarum\Api\Client;
+use Flarum\Frontend\Compiler\VersionerInterface;
 use Flarum\Frontend\Document;
 use Flarum\Http\RequestUtil;
+use Illuminate\Contracts\Filesystem\Cloud;
+use Illuminate\Contracts\Filesystem\Factory as FilesystemFactory;
+use Illuminate\Support\Str;
 use Psr\Http\Message\ServerRequestInterface;
 use Throwable;
 
@@ -92,8 +96,16 @@ class PreloadChat
     /** Mirrors PAGE_SIZE in ChatState. */
     private const MESSAGE_LIMIT = 50;
 
+    /**
+     * The lazy chunk holding the chat UI, as `loadChatUi()` in
+     * js/src/forum/utils/lazy.ts names it: extension id, then chunk path.
+     */
+    private const UI_CHUNK = 'ramon-chat/forum/chatUi.js';
+
     public function __construct(
-        protected Client $api
+        protected Client $api,
+        protected FilesystemFactory $filesystem,
+        protected VersionerInterface $versioner
     ) {
     }
 
@@ -115,6 +127,15 @@ class PreloadChat
         // without the guard must not start leaking channel lists.
         if (! $actor->exists || ! $actor->can('useChat')) {
             return;
+        }
+
+        // Every page this runs for mounts the chat UI, which lives in a lazy
+        // chunk forum.js only asks for once it has booted. Preloading it overlaps
+        // the two downloads instead of chaining them.
+        $uiChunk = $this->uiChunkUrl();
+
+        if ($uiChunk !== null) {
+            $document->preloads[] = ['href' => $uiChunk, 'as' => 'script'];
         }
 
         $channels = $this->fetch($request, '/chat-channels', [
@@ -233,6 +254,36 @@ class PreloadChat
         $first = $channels['data'][0]['id'] ?? null;
 
         return is_numeric($first) && (int) $first > 0 ? (int) $first : null;
+    }
+
+    /**
+     * The chunk URL exactly as ExportRegistry#chunkUrl() builds it on the client,
+     * revision query included. Any difference, even in the query string, and the
+     * browser treats the preload and the real request as two resources and
+     * downloads the chunk twice.
+     *
+     * The manifest is keyed by path, and a Windows host writes those keys with
+     * backslashes. The client looks them up with forward slashes, so the native
+     * spelling is only tried as a fallback, for forums that normalise the
+     * manifest on the client.
+     *
+     * Null when the assets disk cannot produce URLs, in which case the client
+     * cannot build the chunk URL either.
+     */
+    private function uiChunkUrl(): ?string
+    {
+        $assets = $this->filesystem->disk('flarum-assets');
+
+        if (! $assets instanceof Cloud) {
+            return null;
+        }
+
+        $url = $assets->url('js').'/'.self::UI_CHUNK;
+        $key = ltrim(Str::replaceFirst(rtrim($assets->url(''), '/'), '', $url), '/');
+        $revision = $this->versioner->getRevision($key)
+            ?? $this->versioner->getRevision(str_replace('/', DIRECTORY_SEPARATOR, $key));
+
+        return $revision ? $url.'?v='.$revision : $url;
     }
 
     private function threadId(ServerRequestInterface $request): ?int

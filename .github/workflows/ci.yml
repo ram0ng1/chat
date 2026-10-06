@@ -161,6 +161,28 @@ jobs:
         working-directory: js
         run: npm run build
 
+      - name: Prettier
+        working-directory: js
+        run: npm run format-check
+
+      - name: Checar tipos (tsc --noEmit)
+        working-directory: js
+        run: npm run check-typings
+
+      # js/dist-typings é publicado junto com o pacote para que outras extensões
+      # importem `ext:ramon/chat/...` com tipos. O workflow reutilizável do Flarum
+      # commita as typings com um bot; aqui o token é read-only, então o job só
+      # regenera e falha se o que está no commit divergir do código-fonte.
+      - name: Typings commitadas e atualizadas
+        working-directory: js
+        run: |
+          npm run build-typings
+          if [ -n "$(git status --porcelain -- dist-typings)" ]; then
+            git status --short -- dist-typings
+            echo "::error::js/dist-typings está desatualizado. Rode 'npm run build-typings' em js/ e commite o resultado."
+            exit 1
+          fi
+
   phpstan:
     name: PHPStan (nível 6, baseline)
     runs-on: ubuntu-latest

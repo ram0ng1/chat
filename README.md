@@ -70,6 +70,56 @@ With [`fof/upload`](https://github.com/FriendsOfFlarum/upload) installed and ena
 - **Making a channel private** flags its bucket files private at once, so their bucket URL is no longer handed out, then a queued job copies each file to `storage/chat-uploads` and deletes it from the bucket. On a real queue that happens on the worker's next run; failures are logged and retried.
 - **Content Security Policy.** If your forum sends a CSP, add the bucket or CDN host to `img-src` and `media-src`, or images and audio from the chat will be blocked.
 
+## Extending ramon/chat from another extension
+
+The package ships TypeScript declarations for its forum, admin and common code in `js/dist-typings`, so another extension can build on the chat with full types. Depend on it from your `composer.json`, which also makes Flarum boot the chat before your extension:
+
+```json
+"require": {
+    "flarum/core": "^2.0",
+    "ramon/chat": "^0.3"
+}
+```
+
+Then point the `ext:ramon/chat/*` import prefix at the shipped typings in your `js/tsconfig.json`, next to core's mapping, the same way consumers of `flarum/tags` do:
+
+```jsonc
+{
+  "extends": "flarum-tsconfig",
+  "include": ["src/**/*", "../vendor/*/*/js/dist-typings/@types/**/*", "@types/**/*"],
+  "compilerOptions": {
+    "declarationDir": "./dist-typings",
+    "paths": {
+      "flarum/*": ["../vendor/flarum/core/js/dist-typings/*"],
+      "ext:ramon/chat/*": ["../vendor/ramon/chat/js/dist-typings/*"]
+    }
+  }
+}
+```
+
+Import by module path. Each file is registered on its own, so `ext:ramon/chat/common/models/Channel`, `ext:ramon/chat/forum/state/chat` (the shared `ChatState` instance) or `ext:ramon/chat/forum/components/ChatNavButton` resolve at runtime; the bare `ext:ramon/chat/forum` entry point does not.
+
+**The chat UI is loaded lazily.** Since the bundle was split, the page, the drawer panel and everything they render (`ChatPage`, `ChatDrawerPanel`, `ChannelView`, `ChatMessage`, `ChatComposer`, `ChatSidebar`, `ThreadPanel`, the modals and the pickers, among others) live in chunks fetched the first time the chat opens. This is a breaking change for extensions that imported those components directly: a value import of a lazy module resolves to `undefined` when your bundle starts. Extend them by name instead, importing the class only as a type, and the change is applied once the chunk arrives:
+
+```ts
+import { extend } from 'flarum/common/extend';
+import type ChatMessage from 'ext:ramon/chat/forum/components/ChatMessage';
+
+extend('ext:ramon/chat/forum/components/ChatMessage', 'view', function (this: ChatMessage, vdom) {
+  // this.attrs.message is a typed Message
+});
+```
+
+When you need the class itself, load it with a dynamic import, written on one line so that flarum-webpack-config turns it into `flarum.reg.asyncModuleImport()`:
+
+```ts
+const { default: ChatPage } = await import('ext:ramon/chat/forum/components/ChatPage');
+```
+
+Models, `ChatState` and its instance, `ChatNavButton`, `ChatDrawer` and the notification components stay in the main bundle and can be imported normally.
+
+The typings are regenerated with `npm run build-typings` in `js/` and committed with the source; CI fails when they fall out of date.
+
 ## License
 
 [MIT](LICENSE). Suggestions and bug reports go in the [issue tracker](https://github.com/ram0ng1/chat/issues).
