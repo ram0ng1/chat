@@ -124,6 +124,17 @@ class OwnershipSuccessionTest extends TestCase
 
         $this->flushCache();
 
+        $this->app();
+
+        // A fresh install grants `manageOwnChannels` to every member (migration
+        // 2026_09_11_000000), which would make the fixtures' plain members able to
+        // own channels. These tests need them not to, so the grant goes once the
+        // app has seeded the database.
+        $this->database()->table('group_permission')
+            ->where('group_id', Group::MEMBER_ID)
+            ->where('permission', 'ramon-chat.manageOwnChannels')
+            ->delete();
+
         $this->app()->getContainer()->make('events')->listen(ChannelOwnershipTransferred::class, function ($event) {
             $this->dispatched[] = $event;
         });

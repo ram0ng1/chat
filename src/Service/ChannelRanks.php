@@ -128,7 +128,7 @@ class ChannelRanks
             ->whereNull('builtin')
             ->max('position') + 1;
 
-        $this->fill($rank, $attributes, creating: true);
+        $this->applyAttributes($rank, $attributes, creating: true);
         $rank->save();
 
         $this->changed($channel, $actor);
@@ -146,7 +146,7 @@ class ChannelRanks
     {
         $rank = $this->find($channel, $target);
 
-        $this->fill($rank, $attributes, creating: false);
+        $this->applyAttributes($rank, $attributes, creating: false);
 
         if (! $rank->exists || $rank->isDirty()) {
             $rank->save();
@@ -287,7 +287,7 @@ class ChannelRanks
      *
      * @param  array<string, mixed>  $attributes
      */
-    protected function fill(ChannelRank $rank, array $attributes, bool $creating): void
+    protected function applyAttributes(ChannelRank $rank, array $attributes, bool $creating): void
     {
         $errors = [];
         $builtin = $rank->isBuiltin();

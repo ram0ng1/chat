@@ -120,6 +120,15 @@ class OwnershipTransferTest extends TestCase
 
         $container = $this->app()->getContainer();
 
+        // A fresh install grants `manageOwnChannels` to every member (migration
+        // 2026_09_11_000000), which would make the fixtures' plain members able to
+        // own channels. These tests need them not to, so the grant goes once the
+        // app has seeded the database.
+        $this->database()->table('group_permission')
+            ->where('group_id', Group::MEMBER_ID)
+            ->where('permission', 'ramon-chat.manageOwnChannels')
+            ->delete();
+
         // The harness resolves the locale manager before extension extenders
         // run, so the chat's catalogue is loaded by hand, as MentionEmailTest
         // explains.

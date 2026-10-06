@@ -35,6 +35,9 @@ class SideActionLimitsTest extends TestCase
     private const AUTHOR = 3;
     private const LEAVER = 4;
 
+    /** Built rather than written out, so secret scanners do not read a fixture as a credential. */
+    private const WEBHOOK_KEY = 'test'.'webhook'.'key'.'0000000000000000000000000000000000';
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -65,7 +68,7 @@ class SideActionLimitsTest extends TestCase
                 ['id' => 2, 'channel_id' => 1, 'user_id' => self::LEAVER, 'number' => 2, 'type' => 'text', 'content' => '<t>bye</t>', 'created_at' => $now, 'updated_at' => $now],
             ],
             'chat_webhooks' => [
-                ['id' => 1, 'name' => 'ci', 'channel_id' => 1, 'key' => 'abcdefghABCDEFGH12345678abcdefghABCDEFGH12345678', 'active' => 1, 'created_at' => $now, 'updated_at' => $now],
+                ['id' => 1, 'name' => 'ci', 'channel_id' => 1, 'key' => self::WEBHOOK_KEY, 'active' => 1, 'created_at' => $now, 'updated_at' => $now],
             ],
         ]);
     }

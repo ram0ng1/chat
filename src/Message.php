@@ -120,10 +120,13 @@ class Message extends AbstractModel implements Formattable
                 // to int, so it cannot carry input), and the MAX column is wrapped
                 // by the grammar, which applies the table prefix and quoting the
                 // same way it does to the aliased FROM above.
+                // The column is the grammar's own wrapping of a fixed name, never input.
+                $next = new Expression('COALESCE(MAX('.$query->getGrammar()->wrap('cm.number').'), 0) + 1');
+
                 $message->number = new Expression('('.
                     $query
                         ->where('cm.channel_id', '=', new Expression((string) (int) $message->channel_id))
-                        ->selectRaw('COALESCE(MAX('.$query->getGrammar()->wrap('cm.number').'), 0) + 1')
+                        ->select($next)
                         ->toSql()
                     .')');
             }
