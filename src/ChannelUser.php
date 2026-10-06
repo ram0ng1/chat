@@ -22,6 +22,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $user_id
  * @property bool $following
  * @property bool $is_moderator
+ * @property Carbon|null $moderator_since
  * @property int $notification_level
  * @property bool $muted
  * @property int|null $last_read_message_id
@@ -55,6 +56,7 @@ class ChannelUser extends AbstractModel
         'following'             => 'boolean',
         'hidden'                => 'boolean',
         'is_moderator'          => 'boolean',
+        'moderator_since'       => 'datetime',
         'notification_level'    => 'integer',
         'muted'                 => 'boolean',
         'last_read_message_id'  => 'integer',

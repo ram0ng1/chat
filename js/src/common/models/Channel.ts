@@ -12,6 +12,21 @@ export const enum NotificationLevel {
   Always = 2,
 }
 
+/**
+ * A pending ownership handover. Mirrors ChannelResource::transferState().
+ *
+ * `incoming` is true for the member it is offered to; `confirmed` is false
+ * while the owner has yet to enter the code mailed to them.
+ */
+export interface OwnershipTransferState {
+  id: number;
+  fromUserId: number;
+  toUserId: number;
+  confirmed: boolean;
+  incoming: boolean;
+  expiresAt: string;
+}
+
 export default class Channel extends Model {
   // ── Identity ───────────────────────────────────────────────────────────────
   type = Model.attribute<string>("type");
@@ -111,6 +126,15 @@ export default class Channel extends Model {
   canManageMembers = Model.attribute<boolean>("canManageMembers");
   /** May promote members to moderators of this channel — its owner, or chat moderators. */
   canManageModerators = Model.attribute<boolean>("canManageModerators");
+  /** May hand the channel to another member: its owner, or an administrator. */
+  canTransferOwnership = Model.attribute<boolean>("canTransferOwnership");
+  /**
+   * The pending handover, as this reader may see it, or null. Filled only when
+   * participants are loaded, like `moderatorIds`.
+   */
+  ownershipTransfer = Model.attribute<OwnershipTransferState | null>(
+    "ownershipTransfer",
+  );
   creatorId = Model.attribute<number | null>("creatorId");
   /** Members holding the channel's own moderator role; filled when participants are loaded. */
   moderatorIds = Model.attribute<number[]>("moderatorIds");

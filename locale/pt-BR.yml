@@ -47,6 +47,16 @@ ramon-chat:
     not_a_member: Esse usuário não está neste canal.
     invite_not_found: Não há convite pendente para responder aqui.
 
+    # Transferências de propriedade
+    transfer_unavailable: Este canal não pode trocar de dono agora.
+    transfer_target_is_owner: Esse membro já é o dono deste canal.
+    transfer_target_not_allowed: Esse membro não pode ser dono de canais.
+    transfer_rate_limited: Você iniciou transferências demais. Tente mais tarde.
+    transfer_not_found: Não há transferência pendente para responder aqui.
+    transfer_expired: Esta transferência expirou. Comece de novo.
+    transfer_code_locked: Códigos errados demais. Comece a transferência de novo.
+    transfer_code_invalid: "{remaining, plural, one {Código errado. Resta # tentativa.} other {Código errado. Restam # tentativas.}}"
+
     transcript_empty: Nenhuma mensagem selecionada, ou você não pode lê-las.
     transcript_too_many: "{max, plural, one {Você pode citar no máximo # mensagem por vez.} other {Você pode citar no máximo # mensagens por vez.}}"
 
@@ -72,6 +82,12 @@ ramon-chat:
       html:
         intro: "<strong>{author}</strong> mencionou você em <strong>{channel}</strong>."
         action: Abrir o canal
+
+    # O código de confirmação de uma transferência, enviado a quem iniciou.
+    # Vai pelo layout informativo do core, que o escapa.
+    transfer_code:
+      subject: "Confirme a transferência de {channel}"
+      body: "Seu código de confirmação é {code}. Digite-o para passar {channel} para {recipient}. Ele expira em {minutes} minutos. Se não foi você, ignore este e-mail e nada vai mudar."
 
   notifications:
     chat_mention: "{username} mencionou você em {channel}"
@@ -473,6 +489,25 @@ ramon-chat:
       demote_moderator: "Remover {username} da moderação deste canal"
       moderator_promoted: "{username} agora é moderador deste canal."
       moderator_demoted: "{username} não é mais moderador deste canal."
+
+      # Passar o canal para outro membro.
+      transfer_ownership: "Transferir o canal para {username}"
+      transfer_title: Transferir o canal
+      transfer_confirm_start: "Oferecer {channel} a {username}? Um código vai para seu e-mail, e quando aceitarem você vira moderador aqui."
+      transfer_intro: "Digite o código de 6 dígitos enviado ao seu e-mail para oferecer o canal a {username}."
+      transfer_code_label: Código de confirmação
+      transfer_submit: Confirmar
+      transfer_offered: "{username} recebeu o pedido para assumir o canal."
+      transfer_pending_code: "Aguardando seu código para oferecer o canal a {username}."
+      transfer_pending_answer: "Aguardando {username} aceitar este canal."
+      transfer_incoming: "{username} quer passar este canal para você."
+      transfer_enter_code: Digitar código
+      transfer_cancel: Cancelar
+      transfer_cancelled: A transferência foi cancelada.
+      transfer_accepted: Agora você é o dono do canal.
+      transfer_declined: Você recusou a transferência.
+      transfer_failed: Falha ao concluir a transferência.
+
       no_members: Nenhum membro.
       save_failed: Falha ao salvar a alteração.
 
@@ -499,6 +534,10 @@ ramon-chat:
       message_flagged: "{username} denunciou uma mensagem em {channel}"
       channel_invite: "{username} convidou você para {channel}"
       channel_invite_declined: "{username} recusou seu convite para {channel}"
+      moderator_promoted: "{username} fez de você moderador de {channel}"
+      ownership_transfer: "{username} quer passar {channel} para você"
+      ownership_transfer_declined: "{username} recusou assumir {channel}"
+      ownership_inherited: "{username} saiu de {channel}, e agora o dono é você"
       invite_accept: Aceitar
       invite_decline: Recusar
       someone: Alguém
@@ -519,6 +558,11 @@ ramon-chat:
       notify_message_flagged: Alguém denunciar mensagem do chat
       notify_channel_invite: Alguém me convida para um canal de chat
       notify_channel_invite_declined: Alguém recusa meu convite para um canal de chat
+
+      notify_moderator_promoted: Alguém me torna moderador de um canal de chat
+      notify_ownership_transfer: Alguém me oferece a posse de um canal de chat
+      notify_ownership_transfer_declined: Alguém recusa assumir meu canal de chat
+      notify_ownership_inherited: Viro dono de um canal de chat que o dono deixou
 
   admin:
     settings:

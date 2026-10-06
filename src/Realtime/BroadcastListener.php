@@ -14,6 +14,7 @@ use Flarum\User\User;
 use Psr\Log\LoggerInterface;
 use Ramon\Chat\Channel;
 use Ramon\Chat\Event\ChannelModeratorChanged;
+use Ramon\Chat\Event\ChannelOwnershipTransferred;
 use Ramon\Chat\Event\ChannelStatusChanged;
 use Ramon\Chat\Event\ChannelWasArchived;
 use Ramon\Chat\Event\ChannelWasCreated;
@@ -29,6 +30,8 @@ use Ramon\Chat\Event\MessageWasEdited;
 use Ramon\Chat\Event\MessageWasPurged;
 use Ramon\Chat\Event\MessageWasRestored;
 use Ramon\Chat\Event\MessageWasSent;
+use Ramon\Chat\Event\OwnershipTransferEnded;
+use Ramon\Chat\Event\OwnershipTransferRequested;
 use Ramon\Chat\Event\ReactionToggled;
 use Ramon\Chat\Event\ThreadWasCreated;
 use Ramon\Chat\Event\ThreadWasEdited;
@@ -361,6 +364,56 @@ class BroadcastListener
     }
 
     /**
+     * The channel changed hands. The whole room hears it, because the owner
+     * badge moves in every open members tab, and both people involved re-read
+     * what they may now do there. `previousOwnerId` is what tells the old
+     * owner the push concerns them too.
+     */
+    public function whenOwnershipTransferred(ChannelOwnershipTransferred $event): void
+    {
+        $this->membership(
+            $event->channel,
+            $event->newOwner,
+            'owner_changed',
+            $event->newOwner,
+            tellMembers: true,
+            extra: ['previousOwnerId' => $event->previousOwner?->id !== null ? (int) $event->previousOwner->id : null]
+        );
+    }
+
+    /**
+     * A handover offered, after the code: the member it is offered to, and
+     * whoever started it, so an open members tab on either side re-reads it.
+     */
+    public function whenTransferRequested(OwnershipTransferRequested $event): void
+    {
+        $this->membership($event->channel, $event->to, 'transfer_requested', $event->from, tellMembers: false);
+    }
+
+    /**
+     * A handover withdrawn, declined or replaced. Both parties hear it; the
+     * room never knew it was happening.
+     */
+    public function whenTransferEnded(OwnershipTransferEnded $event): void
+    {
+        $to = User::query()->find($event->transfer->to_user_id);
+        $from = User::query()->find($event->transfer->from_user_id);
+
+        if ($to === null) {
+            return;
+        }
+
+        $this->membership(
+            $event->channel,
+            $to,
+            'transfer_ended',
+            $from,
+            tellMembers: false,
+            extra: ['reason' => $event->reason]
+        );
+    }
+
+    /**
      * The queue moved; every moderator recounts their own badge.
      */
     public function whenFlagsChanged(FlagsChanged $event): void
@@ -453,13 +506,16 @@ class BroadcastListener
      * The payload carries ids and display names only; the client refetches the
      * channel through the API when it needs the row, and the visibility scope
      * decides there whether it may have it.
+     *
+     * @param  array<string, mixed>  $extra  Scalars a particular action adds.
      */
     protected function membership(
         Channel $channel,
         User $user,
         string $action,
         ?User $actor,
-        bool $tellMembers
+        bool $tellMembers,
+        array $extra = []
     ): void {
         $payload = [
             'channelId'   => (int) $channel->id,
@@ -471,7 +527,7 @@ class BroadcastListener
             'actorId'     => $actor?->id !== null ? (int) $actor->id : null,
             'actorName'   => $actor?->display_name,
             'userCount'   => (int) $channel->user_count,
-        ];
+        ] + $extra;
 
         $this->broadcaster->toUser((int) $user->id, self::EVENT_MEMBERSHIP, $payload);
 

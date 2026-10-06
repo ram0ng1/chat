@@ -292,6 +292,29 @@ class ChannelPolicy extends AbstractPolicy
     }
 
     /**
+     * Handing the channel to another member: its owner, and administrators for
+     * any channel, including one whose creator is gone. Not chat moderators:
+     * who owns a room is between the owner and the person taking it over.
+     * Off while channels are in administrators' hands, and for a channel that
+     * is archived or deleted, where there is nothing left to run.
+     */
+    public function transferOwnership(User $actor, Channel $channel): ?bool
+    {
+        if (! $channel->isCategory()
+            || $channel->isArchived()
+            || $channel->isDeleted()
+            || ! $this->ownership->membersOwnChannels()) {
+            return false;
+        }
+
+        if ($actor->isAdmin()) {
+            return true;
+        }
+
+        return $this->ownership->manages($actor, $channel) ? true : null;
+    }
+
+    /**
      * @see \Ramon\Chat\MessageMention::TYPE_HERE
      * @see \Ramon\Chat\MessageMention::TYPE_ALL
      */

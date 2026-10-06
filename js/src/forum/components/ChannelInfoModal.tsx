@@ -13,6 +13,7 @@ import userLink from "../utils/userLink";
 
 import type Channel from "../../common/models/Channel";
 import { NotificationLevel } from "../../common/models/Channel";
+import type { OwnershipTransferState } from "../../common/models/Channel";
 import chatState from "../state/chat";
 import { isOnline } from "../utils/presence";
 import { MembersSkeleton } from "./Skeletons";
@@ -20,6 +21,14 @@ import { channelIcon } from "../utils/channelIcon";
 import { sendKeyPreference, type SendKey } from "../utils/shortcuts";
 import iconLabel from "../utils/iconLabel";
 import { loadAddMembersModal } from "../utils/lazy";
+import TransferCodeModal from "./TransferCodeModal";
+import {
+  acceptTransfer,
+  cancelTransfer,
+  declineTransfer,
+  startTransfer,
+} from "../utils/transfers";
+import { invitationErrorText } from "../utils/invitations";
 
 export interface ChannelInfoModalAttrs extends IInternalModalAttrs {
   channel: Channel;
@@ -48,6 +57,13 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
   private moderatorIds: number[] = [];
   /** People invited and not yet answered. Served to managers only. */
   private invited: User[] = [];
+
+  /**
+   * The pending ownership handover, as the server shows it to this reader:
+   * the owner's own (waiting for the code, or for the answer), or the one
+   * offered to this reader. Read with the member list, like `moderatorIds`.
+   */
+  private transfer: OwnershipTransferState | null = null;
   private loadingMembers = false;
   private loadedMembers = false;
   private memberFilter = "";
@@ -410,6 +426,8 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
           </p>
         ) : null}
 
+        {this.transferBanner()}
+
         <input
           className="FormControl ChatChannelInfo-filter"
           type="search"
@@ -618,6 +636,27 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
       );
     }
 
+    // Handing the channel over. Offered to its owner (and administrators) for
+    // anyone else in the list; the server still decides whether that member
+    // may own channels, and says so if not.
+    if (channel.canTransferOwnership() && !this.isOwner(user)) {
+      controls.push(
+        <Button
+          className="Button Button--icon Button--flat ChatChannelInfo-member-transfer"
+          icon="fas fa-crown"
+          disabled={this.working}
+          {...iconLabel(
+            app.translator.trans(
+              "ramon-chat.forum.info.transfer_ownership",
+              { username: username(user) },
+              true,
+            ),
+          )}
+          onclick={() => this.startTransfer(user)}
+        />,
+      );
+    }
+
     if (channel.canManageMembers()) {
       controls.push(
         <Button
@@ -637,6 +676,248 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
     }
 
     return controls;
+  }
+
+  /**
+   * The pending handover, with what this reader can do about it: the owner
+   * enters the code or cancels; the member it is offered to accepts or
+   * declines, the same two answers the notification row carries.
+   */
+  protected transferBanner(): Mithril.Children {
+    const transfer = this.transfer;
+
+    if (!transfer) return null;
+
+    let text: Mithril.Children;
+    const actions: Mithril.Children[] = [];
+
+    if (transfer.incoming) {
+      text = app.translator.trans("ramon-chat.forum.info.transfer_incoming", {
+        username: this.userName(transfer.fromUserId),
+      });
+
+      actions.push(
+        <Button
+          className="Button Button--primary Button--compact"
+          icon="fas fa-check"
+          disabled={this.working}
+          onclick={() => this.answerTransfer(true)}
+        >
+          {app.translator.trans("ramon-chat.forum.notifications.invite_accept")}
+        </Button>,
+        <Button
+          className="Button Button--compact"
+          icon="fas fa-xmark"
+          disabled={this.working}
+          onclick={() => this.answerTransfer(false)}
+        >
+          {app.translator.trans(
+            "ramon-chat.forum.notifications.invite_decline",
+          )}
+        </Button>,
+      );
+    } else {
+      const recipient = this.userName(transfer.toUserId);
+
+      text = app.translator.trans(
+        transfer.confirmed
+          ? "ramon-chat.forum.info.transfer_pending_answer"
+          : "ramon-chat.forum.info.transfer_pending_code",
+        { username: recipient },
+      );
+
+      if (
+        !transfer.confirmed &&
+        String(transfer.fromUserId) === String(app.session.user?.id())
+      ) {
+        actions.push(
+          <Button
+            className="Button Button--primary Button--compact"
+            icon="fas fa-key"
+            disabled={this.working}
+            onclick={() => this.openCodeModal(recipient)}
+          >
+            {app.translator.trans("ramon-chat.forum.info.transfer_enter_code")}
+          </Button>,
+        );
+      }
+
+      actions.push(
+        <Button
+          className="Button Button--compact"
+          icon="fas fa-xmark"
+          disabled={this.working}
+          onclick={() => this.cancelTransfer()}
+        >
+          {app.translator.trans("ramon-chat.forum.info.transfer_cancel")}
+        </Button>,
+      );
+    }
+
+    return (
+      <div className="ChatChannelInfo-transfer">
+        <i className="fas fa-crown" aria-hidden="true" />
+        <span className="ChatChannelInfo-transfer-text">{text}</span>
+        <span className="ChatChannelInfo-transfer-actions">{actions}</span>
+      </div>
+    );
+  }
+
+  /** A member's display name by id, from the list or the store. */
+  protected userName(id: number): string {
+    const user =
+      this.members.find((member) => Number(member.id()) === Number(id)) ??
+      (app.store.getById("users", String(id)) as User | undefined);
+
+    return user
+      ? user.displayName()
+      : (app.translator.trans(
+          "ramon-chat.forum.notifications.someone",
+          {},
+          true,
+        ) as string);
+  }
+
+  /**
+   * First step: asked once, then the server mails the owner a code and the
+   * code dialog opens over this one.
+   */
+  protected async startTransfer(user: User): Promise<void> {
+    if (this.working) return;
+
+    const confirmed = confirm(
+      app.translator.trans(
+        "ramon-chat.forum.info.transfer_confirm_start",
+        {
+          channel: this.attrs.channel.displayName(),
+          username: username(user),
+        },
+        true,
+      ),
+    );
+
+    if (!confirmed) return;
+
+    this.working = true;
+    m.redraw();
+
+    try {
+      const channel = await startTransfer(
+        this.attrs.channel.id() as string,
+        Number(user.id()),
+      );
+
+      this.adoptMembers(channel);
+      this.openCodeModal(user.displayName());
+    } catch (e: any) {
+      app.alerts.show(
+        { type: "error" },
+        invitationErrorText(e, "ramon-chat.forum.info.transfer_failed"),
+      );
+    } finally {
+      this.working = false;
+      m.redraw();
+    }
+  }
+
+  protected openCodeModal(recipientName: string): void {
+    app.modal.show(
+      TransferCodeModal,
+      {
+        channel: this.attrs.channel,
+        recipientName,
+        onConfirmed: (channel: Channel | null) => {
+          if (channel) {
+            this.adoptMembers(channel);
+          } else {
+            this.reloadMembers();
+          }
+        },
+      },
+      true,
+    );
+  }
+
+  protected async cancelTransfer(): Promise<void> {
+    if (this.working) return;
+
+    this.working = true;
+    m.redraw();
+
+    try {
+      this.adoptMembers(
+        await cancelTransfer(this.attrs.channel.id() as string),
+      );
+
+      app.alerts.show(
+        { type: "success" },
+        app.translator.trans("ramon-chat.forum.info.transfer_cancelled"),
+      );
+    } catch (e: any) {
+      app.alerts.show(
+        { type: "error" },
+        invitationErrorText(e, "ramon-chat.forum.info.transfer_failed"),
+      );
+      this.reloadMembers();
+    } finally {
+      this.working = false;
+      m.redraw();
+    }
+  }
+
+  protected async answerTransfer(accept: boolean): Promise<void> {
+    if (this.working) return;
+
+    this.working = true;
+    m.redraw();
+
+    try {
+      const id = this.attrs.channel.id() as string;
+
+      this.adoptMembers(
+        await (accept ? acceptTransfer(id) : declineTransfer(id)),
+      );
+
+      app.alerts.show(
+        { type: "success" },
+        app.translator.trans(
+          accept
+            ? "ramon-chat.forum.info.transfer_accepted"
+            : "ramon-chat.forum.info.transfer_declined",
+        ),
+      );
+    } catch (e: any) {
+      app.alerts.show(
+        { type: "error" },
+        invitationErrorText(e, "ramon-chat.forum.info.transfer_failed"),
+      );
+      this.reloadMembers();
+    } finally {
+      this.working = false;
+      m.redraw();
+    }
+  }
+
+  /**
+   * Redraws the tab from a channel the server answered with, members and all.
+   * The transfer endpoints include participants, so the badges, the role list
+   * and the pending handover all come from that one answer.
+   */
+  protected adoptMembers(channel: Channel | null): void {
+    if (!channel) {
+      this.reloadMembers();
+
+      return;
+    }
+
+    this.members = (channel.participants() || []).filter(Boolean) as User[];
+    this.moderatorIds = (channel.moderatorIds() ?? []).map(Number);
+    this.transfer = channel.ownershipTransfer() ?? null;
+  }
+
+  protected reloadMembers(): void {
+    this.loadedMembers = false;
+    void this.loadMembers();
   }
 
   /**
@@ -820,9 +1101,11 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
       this.members = (channel.participants() || []).filter(Boolean) as User[];
       this.moderatorIds = (channel.moderatorIds() ?? []).map(Number);
       this.invited = (channel.invitedUsers() || []).filter(Boolean) as User[];
+      this.transfer = channel.ownershipTransfer() ?? null;
     } catch {
       this.members = [];
       this.invited = [];
+      this.transfer = null;
     } finally {
       this.loadingMembers = false;
       this.loadedMembers = true;

@@ -353,7 +353,17 @@ return [
         // waiting to be found the next time someone opens the queue. Alert only:
         // a busy channel can produce a run of reports, and a mailbox is the wrong
         // place for a queue.
-        ->type(Notification\MessageFlaggedBlueprint::class, ['alert']),
+        ->type(Notification\MessageFlaggedBlueprint::class, ['alert'])
+
+        // Being made a moderator of a channel, and the two halves of handing a
+        // channel over: the offer, with accept and decline on the row, and the
+        // refusal that goes back to whoever offered. Alert only: none of them
+        // is worth an e-mail, and the code that is lives in its own mail.
+        ->type(Notification\ModeratorPromotedBlueprint::class, ['alert'])
+        ->type(Notification\OwnershipTransferBlueprint::class, ['alert'])
+        ->type(Notification\OwnershipTransferDeclinedBlueprint::class, ['alert'])
+        // The moderator who inherits a channel its owner left.
+        ->type(Notification\OwnershipInheritedBlueprint::class, ['alert']),
 
     // ── Domain listeners ─────────────────────────────────────────────────────
     (new Extend\Event())
@@ -384,7 +394,18 @@ return [
         ->listen(Event\UserWasInvited::class, Listener\NotifyInvitations::class.'@whenInvited')
         ->listen(Event\UserJoinedChannel::class, Listener\NotifyInvitations::class.'@whenJoined')
         ->listen(Event\InviteWasDeclined::class, Listener\NotifyInvitations::class.'@whenDeclined')
-        ->listen(Event\InviteWasCancelled::class, Listener\NotifyInvitations::class.'@whenCancelled'),
+        ->listen(Event\InviteWasCancelled::class, Listener\NotifyInvitations::class.'@whenCancelled')
+        ->listen(Event\ChannelModeratorChanged::class, Listener\NotifyModeratorChanges::class)
+        // Ownership handover: the offer and its answer in the bell, and the
+        // pending handover dropped when either side leaves or the room goes.
+        ->listen(Event\OwnershipTransferRequested::class, Listener\NotifyOwnershipTransfers::class.'@whenRequested')
+        ->listen(Event\OwnershipTransferEnded::class, Listener\NotifyOwnershipTransfers::class.'@whenEnded')
+        ->listen(Event\ChannelOwnershipTransferred::class, Listener\NotifyOwnershipTransfers::class.'@whenTransferred')
+        ->listen(Event\UserLeftChannel::class, Listener\CancelOwnershipTransfers::class.'@whenLeft')
+        ->listen(Event\ChannelWasDeleted::class, Listener\CancelOwnershipTransfers::class.'@whenDeleted')
+        ->listen(Event\ChannelWasArchived::class, Listener\CancelOwnershipTransfers::class.'@whenArchived')
+        // A deleted account's channels pass to their oldest moderators first.
+        ->listen(\Flarum\User\Event\Deleting::class, Listener\HandOverOwnedChannels::class),
 
     // ── Console ──────────────────────────────────────────────────────────────
     (new Extend\Console())
@@ -491,6 +512,9 @@ return [
                 ->listen(Event\InviteWasDeclined::class, Realtime\BroadcastListener::class.'@whenInviteDeclined')
                 ->listen(Event\InviteWasCancelled::class, Realtime\BroadcastListener::class.'@whenInviteCancelled')
                 ->listen(Event\ChannelModeratorChanged::class, Realtime\BroadcastListener::class.'@whenModeratorChanged')
+                ->listen(Event\ChannelOwnershipTransferred::class, Realtime\BroadcastListener::class.'@whenOwnershipTransferred')
+                ->listen(Event\OwnershipTransferRequested::class, Realtime\BroadcastListener::class.'@whenTransferRequested')
+                ->listen(Event\OwnershipTransferEnded::class, Realtime\BroadcastListener::class.'@whenTransferEnded')
                 // The moderators' queue badge, recounted by each of them.
                 ->listen(Event\FlagsChanged::class, Realtime\BroadcastListener::class.'@whenFlagsChanged'),
         ]),

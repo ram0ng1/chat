@@ -22,6 +22,10 @@ import ChatDrawer, { loadDrawerPanel } from "./components/ChatDrawer";
 import ChannelInviteNotification from "./components/ChannelInviteNotification";
 import ChannelInviteDeclinedNotification from "./components/ChannelInviteDeclinedNotification";
 import MessageFlaggedNotification from "./components/MessageFlaggedNotification";
+import ModeratorPromotedNotification from "./components/ModeratorPromotedNotification";
+import OwnershipTransferNotification from "./components/OwnershipTransferNotification";
+import OwnershipTransferDeclinedNotification from "./components/OwnershipTransferDeclinedNotification";
+import OwnershipInheritedNotification from "./components/OwnershipInheritedNotification";
 import {
   bindRealtime,
   setPollingFallback,
@@ -51,6 +55,10 @@ export {
   ChannelInviteNotification,
   ChannelInviteDeclinedNotification,
   MessageFlaggedNotification,
+  ModeratorPromotedNotification,
+  OwnershipTransferNotification,
+  OwnershipTransferDeclinedNotification,
+  OwnershipInheritedNotification,
   // Exported for diagnosis: in the console,
   //   flarum.extensions['ramon-chat'].realtimeBound()
   // tells you whether the chat is on the websocket or on the polling fallback.
@@ -202,6 +210,14 @@ app.initializers.add("ramon-chat", () => {
   app.notificationComponents.chatChannelInviteDeclined =
     ChannelInviteDeclinedNotification;
   app.notificationComponents.chatMessageFlagged = MessageFlaggedNotification;
+  app.notificationComponents.chatModeratorPromoted =
+    ModeratorPromotedNotification;
+  app.notificationComponents.chatOwnershipTransfer =
+    OwnershipTransferNotification;
+  app.notificationComponents.chatOwnershipTransferDeclined =
+    OwnershipTransferDeclinedNotification;
+  app.notificationComponents.chatOwnershipInherited =
+    OwnershipInheritedNotification;
 
   extend(
     "flarum/forum/components/NotificationGrid",
@@ -220,6 +236,38 @@ app.initializers.add("ramon-chat", () => {
         icon: "fas fa-user-xmark",
         label: app.translator.trans(
           "ramon-chat.forum.settings.notify_channel_invite_declined",
+        ),
+      });
+
+      items.add("chatModeratorPromoted", {
+        name: "chatModeratorPromoted",
+        icon: "fas fa-user-shield",
+        label: app.translator.trans(
+          "ramon-chat.forum.settings.notify_moderator_promoted",
+        ),
+      });
+
+      items.add("chatOwnershipTransfer", {
+        name: "chatOwnershipTransfer",
+        icon: "fas fa-crown",
+        label: app.translator.trans(
+          "ramon-chat.forum.settings.notify_ownership_transfer",
+        ),
+      });
+
+      items.add("chatOwnershipTransferDeclined", {
+        name: "chatOwnershipTransferDeclined",
+        icon: "fas fa-user-xmark",
+        label: app.translator.trans(
+          "ramon-chat.forum.settings.notify_ownership_transfer_declined",
+        ),
+      });
+
+      items.add("chatOwnershipInherited", {
+        name: "chatOwnershipInherited",
+        icon: "fas fa-crown",
+        label: app.translator.trans(
+          "ramon-chat.forum.settings.notify_ownership_inherited",
         ),
       });
 

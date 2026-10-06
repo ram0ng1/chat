@@ -964,10 +964,15 @@ interface MembershipPayload {
     | "invite_declined"
     | "invite_cancelled"
     | "promoted"
-    | "demoted";
+    | "demoted"
+    | "owner_changed"
+    | "transfer_requested"
+    | "transfer_ended";
   actorId: number | null;
   actorName: string | null;
   userCount: number;
+  /** On `owner_changed`: who owned the channel until now. */
+  previousOwnerId?: number | null;
 }
 
 /**
@@ -1029,6 +1034,23 @@ function onMembership(data: MembershipPayload): void {
     // its members — and those answers are the server's to give. Anyone else
     // only needs the member list re-read, which the notice below does.
     if (mine && channel) refreshCapabilities(data.channelId);
+  } else if (data.action === "owner_changed") {
+    // The owner badge moves for everyone; what the two people involved may
+    // now do there is the server's to say, so only they re-read the record.
+    const previous =
+      me !== undefined &&
+      data.previousOwnerId != null &&
+      String(data.previousOwnerId) === String(me);
+
+    if (channel) channel.pushAttributes({ creatorId: data.userId });
+
+    if ((mine || previous) && channel) refreshCapabilities(data.channelId);
+  } else if (
+    data.action === "transfer_requested" ||
+    data.action === "transfer_ended"
+  ) {
+    // Only an open members tab cares, and the notice below re-reads it; the
+    // offer itself reaches the member as a notification.
   } else if (data.action === "invited") {
     if (mine && channel) {
       channel.pushAttributes({

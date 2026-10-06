@@ -9,6 +9,20 @@ export declare const enum NotificationLevel {
     Mentions = 1,
     Always = 2
 }
+/**
+ * A pending ownership handover. Mirrors ChannelResource::transferState().
+ *
+ * `incoming` is true for the member it is offered to; `confirmed` is false
+ * while the owner has yet to enter the code mailed to them.
+ */
+export interface OwnershipTransferState {
+    id: number;
+    fromUserId: number;
+    toUserId: number;
+    confirmed: boolean;
+    incoming: boolean;
+    expiresAt: string;
+}
 export default class Channel extends Model {
     type: () => string;
     name: () => string | null;
@@ -39,6 +53,7 @@ export default class Channel extends Model {
      * is worse than one that shows the wait.
      */
     slowModeRemaining: () => number;
+    bypassesSlowMode: () => boolean;
     /**
      * Longest message this channel accepts, or null to follow the forum setting.
      *
@@ -79,10 +94,19 @@ export default class Channel extends Model {
     isHiddenMember: () => boolean;
     canClose: () => boolean;
     canArchive: () => boolean;
+    /** May take the channel back out of the archive. */
+    canUnarchive: () => boolean;
     canDelete: () => boolean;
     canManageMembers: () => boolean;
     /** May promote members to moderators of this channel — its owner, or chat moderators. */
     canManageModerators: () => boolean;
+    /** May hand the channel to another member: its owner, or an administrator. */
+    canTransferOwnership: () => boolean;
+    /**
+     * The pending handover, as this reader may see it, or null. Filled only when
+     * participants are loaded, like `moderatorIds`.
+     */
+    ownershipTransfer: () => OwnershipTransferState | null;
     creatorId: () => number | null;
     /** Members holding the channel's own moderator role; filled when participants are loaded. */
     moderatorIds: () => number[];

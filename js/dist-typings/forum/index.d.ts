@@ -11,8 +11,12 @@ import ChatDrawer from "./components/ChatDrawer";
 import ChannelInviteNotification from "./components/ChannelInviteNotification";
 import ChannelInviteDeclinedNotification from "./components/ChannelInviteDeclinedNotification";
 import MessageFlaggedNotification from "./components/MessageFlaggedNotification";
+import ModeratorPromotedNotification from "./components/ModeratorPromotedNotification";
+import OwnershipTransferNotification from "./components/OwnershipTransferNotification";
+import OwnershipTransferDeclinedNotification from "./components/OwnershipTransferDeclinedNotification";
+import OwnershipInheritedNotification from "./components/OwnershipInheritedNotification";
 import { realtimeBound, realtimeDelivered, realtimeLive } from "./realtime";
-export { Channel, Message, Thread, Upload, MessageFlag, ChatState, chatState, ChatNavButton, ChatDrawer, ChannelInviteNotification, ChannelInviteDeclinedNotification, MessageFlaggedNotification, realtimeBound, realtimeDelivered, realtimeLive, };
+export { Channel, Message, Thread, Upload, MessageFlag, ChatState, chatState, ChatNavButton, ChatDrawer, ChannelInviteNotification, ChannelInviteDeclinedNotification, MessageFlaggedNotification, ModeratorPromotedNotification, OwnershipTransferNotification, OwnershipTransferDeclinedNotification, OwnershipInheritedNotification, realtimeBound, realtimeDelivered, realtimeLive, };
 /**
  * Opens (or creates) a direct channel with a user and shows it.
  *

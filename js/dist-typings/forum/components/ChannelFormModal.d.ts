@@ -231,13 +231,14 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
     protected destroy(): Promise<void>;
     protected setStatus(status: "open" | "closed"): Promise<void>;
     protected archive(): Promise<void>;
+    protected unarchive(): Promise<void>;
     /**
      * Runs one immediate state change.
      *
      * `action` names the button that owns the spinner for the duration; `loading`
      * still gates the rest of the form, so nothing else can be started meanwhile.
      */
-    protected act(action: "status" | "archive", path: string, attributes: Record<string, unknown>): Promise<void>;
+    protected act(action: "status" | "archive" | "unarchive", path: string, attributes: Record<string, unknown>): Promise<void>;
     /**
      * Category picker, rendered only when flarum/tags is present. A tag-bound
      * channel inherits that tag's permissions, which is how a restricted category

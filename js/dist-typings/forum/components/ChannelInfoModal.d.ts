@@ -19,8 +19,22 @@ export interface ChannelInfoModalAttrs extends IInternalModalAttrs {
 export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
     private tab;
     private members;
+    /**
+     * Who holds the channel's moderator role, as of the last read of the member
+     * list or the last promotion. Kept here rather than read off the store's
+     * record: every other read of the channel comes without the member list and
+     * answers this empty, so a capability refresh landing while the tab was open
+     * wiped every badge from it.
+     */
+    private moderatorIds;
     /** People invited and not yet answered. Served to managers only. */
     private invited;
+    /**
+     * The pending ownership handover, as the server shows it to this reader:
+     * the owner's own (waiting for the code, or for the answer), or the one
+     * offered to this reader. Read with the member list, like `moderatorIds`.
+     */
+    private transfer;
     private loadingMembers;
     private loadedMembers;
     private memberFilter;
@@ -89,6 +103,29 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
      */
     protected memberControls(user: User): Mithril.Children;
     /**
+     * The pending handover, with what this reader can do about it: the owner
+     * enters the code or cancels; the member it is offered to accepts or
+     * declines, the same two answers the notification row carries.
+     */
+    protected transferBanner(): Mithril.Children;
+    /** A member's display name by id, from the list or the store. */
+    protected userName(id: number): string;
+    /**
+     * First step: asked once, then the server mails the owner a code and the
+     * code dialog opens over this one.
+     */
+    protected startTransfer(user: User): Promise<void>;
+    protected openCodeModal(recipientName: string): void;
+    protected cancelTransfer(): Promise<void>;
+    protected answerTransfer(accept: boolean): Promise<void>;
+    /**
+     * Redraws the tab from a channel the server answered with, members and all.
+     * The transfer endpoints include participants, so the badges, the role list
+     * and the pending handover all come from that one answer.
+     */
+    protected adoptMembers(channel: Channel | null): void;
+    protected reloadMembers(): void;
+    /**
      * Hands the channel's moderator role to a member, or takes it back.
      *
      * The response carries the channel with its participants, so pushing it
@@ -145,6 +182,7 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
     protected saveSendKey(value: SendKey): Promise<void>;
     protected setStatus(status: "open" | "closed"): Promise<void>;
     protected archive(): Promise<void>;
+    protected unarchive(): Promise<void>;
     protected destroy(): Promise<void>;
     /**
      * Runs one immediate state change.
@@ -152,5 +190,5 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
      * `action` names the button that owns the spinner for the duration; `working`
      * still gates every other control, so nothing else can be started meanwhile.
      */
-    protected act(action: "status" | "archive", path: string, attributes: Record<string, unknown>): Promise<void>;
+    protected act(action: "status" | "archive" | "unarchive", path: string, attributes: Record<string, unknown>): Promise<void>;
 }

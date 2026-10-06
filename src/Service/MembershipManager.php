@@ -22,7 +22,8 @@ use Ramon\Chat\ChannelUser;
 class MembershipManager
 {
     public function __construct(
-        protected ConnectionInterface $db
+        protected ConnectionInterface $db,
+        protected OwnershipSuccession $succession
     ) {
     }
 
@@ -109,10 +110,16 @@ class MembershipManager
     /**
      * Leaves without destroying the membership row, so read state and history
      * survive a rejoin.
+     *
+     * An owner leaving hands the channel to its oldest moderator in the same
+     * transaction (OwnershipSuccession); the announcement goes out after the
+     * commit, before the caller announces the departure itself.
      */
-    public function leave(Channel $channel, User $user): ?ChannelUser
+    public function leave(Channel $channel, User $user, ?User $actor = null): ?ChannelUser
     {
-        return $this->db->transaction(function () use ($channel, $user) {
+        $settled = null;
+
+        $membership = $this->db->transaction(function () use ($channel, $user, &$settled) {
             /** @var ChannelUser|null $membership */
             $membership = ChannelUser::query()
                 ->where('channel_id', $channel->id)
@@ -138,10 +145,16 @@ class MembershipManager
                 $channel->decrement('user_count');
             }
 
+            $settled = $this->succession->settle($channel, $user);
+
             $channel->forgetMembership($user);
 
             return $membership;
         });
+
+        $this->succession->announce($settled, $actor);
+
+        return $membership;
     }
 
     public function updatePreferences(

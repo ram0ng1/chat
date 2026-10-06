@@ -52,6 +52,16 @@ ramon-chat:
     not_a_member: That user is not in this channel.
     invite_not_found: There is no pending invitation to answer here.
 
+    # Ownership transfers
+    transfer_unavailable: This channel cannot change owner right now.
+    transfer_target_is_owner: That member already owns this channel.
+    transfer_target_not_allowed: That member is not allowed to own channels.
+    transfer_rate_limited: You have started too many transfers recently. Try again later.
+    transfer_not_found: There is no pending transfer to answer here.
+    transfer_expired: This transfer has expired. Start it again.
+    transfer_code_locked: Too many wrong codes. Start the transfer again.
+    transfer_code_invalid: "{remaining, plural, one {That code is wrong. # attempt left.} other {That code is wrong. # attempts left.}}"
+
     # Transcripts
     transcript_empty: No messages were selected, or you cannot read them.
     transcript_too_many: "{max, plural, one {You can quote at most # message at once.} other {You can quote at most # messages at once.}}"
@@ -89,6 +99,12 @@ ramon-chat:
         # the core Escaper printed any raw tag as text either way.
         intro: "<strong>{author}</strong> mentioned you in <strong>{channel}</strong>."
         action: Open the channel
+
+    # The confirmation code for an ownership transfer, mailed to whoever
+    # started it. Sent through core's informational layout, which escapes it.
+    transfer_code:
+      subject: "Confirm the transfer of {channel}"
+      body: "Your confirmation code is {code}. Enter it to hand {channel} over to {recipient}. It expires in {minutes} minutes. If you did not ask for this, ignore this e-mail and nothing will change."
 
   ##
   # Notification list entries.
@@ -499,6 +515,25 @@ ramon-chat:
       demote_moderator: "Remove {username} as moderator of this channel"
       moderator_promoted: "{username} is now a moderator of this channel."
       moderator_demoted: "{username} is no longer a moderator of this channel."
+
+      # Handing the channel over to another member.
+      transfer_ownership: "Transfer ownership to {username}"
+      transfer_title: Transfer ownership
+      transfer_confirm_start: "Offer {channel} to {username}? A code goes to your e-mail, and once they accept you become a moderator here."
+      transfer_intro: "Enter the 6-digit code we sent to your e-mail to offer this channel to {username}."
+      transfer_code_label: Confirmation code
+      transfer_submit: Confirm
+      transfer_offered: "{username} was asked to take over this channel."
+      transfer_pending_code: "Waiting for your code to offer this channel to {username}."
+      transfer_pending_answer: "Waiting for {username} to accept this channel."
+      transfer_incoming: "{username} wants to transfer this channel to you."
+      transfer_enter_code: Enter code
+      transfer_cancel: Cancel transfer
+      transfer_cancelled: The transfer was cancelled.
+      transfer_accepted: You now own this channel.
+      transfer_declined: You declined the transfer.
+      transfer_failed: Could not complete the transfer.
+
       no_members: No members match.
       save_failed: Could not save that change.
 
@@ -525,6 +560,10 @@ ramon-chat:
       message_flagged: "{username} reported a message in {channel}"
       channel_invite: "{username} invited you to {channel}"
       channel_invite_declined: "{username} declined your invitation to {channel}"
+      moderator_promoted: "{username} made you a moderator of {channel}"
+      ownership_transfer: "{username} wants to transfer {channel} to you"
+      ownership_transfer_declined: "{username} declined to take over {channel}"
+      ownership_inherited: "{username} left {channel}, so you are now its owner"
       invite_accept: Accept
       invite_decline: Decline
       someone: Someone
@@ -545,6 +584,11 @@ ramon-chat:
       notify_message_flagged: Someone reports a chat message
       notify_channel_invite: Someone invites me to a chat channel
       notify_channel_invite_declined: Someone declines my invitation to a chat channel
+
+      notify_moderator_promoted: Someone makes me a moderator of a chat channel
+      notify_ownership_transfer: Someone offers me ownership of a chat channel
+      notify_ownership_transfer_declined: Someone declines to take over my chat channel
+      notify_ownership_inherited: I become the owner of a chat channel its owner left
 
   ##
   # Admin-facing strings.

@@ -41,6 +41,7 @@ use Ramon\Chat\Service\ChannelArchiver;
 use Ramon\Chat\Service\ChannelOwnership;
 use Ramon\Chat\Service\InvitationManager;
 use Ramon\Chat\Service\MembershipManager;
+use Ramon\Chat\Service\OwnershipTransfers;
 use Ramon\Chat\Service\SlowMode;
 use Ramon\Chat\Service\UnreadTracker;
 use Tobyz\JsonApiServer\Context as OriginalContext;
@@ -72,7 +73,8 @@ class ChannelResource extends AbstractDatabaseResource
         protected SettingsRepositoryInterface $settings,
         protected SlowMode $slowMode,
         protected ActionThrottle $throttle,
-        protected ExtensionManager $extensions
+        protected ExtensionManager $extensions,
+        protected OwnershipTransfers $transfers
     ) {
     }
 
@@ -543,7 +545,7 @@ class ChannelResource extends AbstractDatabaseResource
                         throw new ForbiddenException();
                     }
 
-                    $membership = $target !== null ? $this->memberships->leave($channel, $user) : null;
+                    $membership = $target !== null ? $this->memberships->leave($channel, $user, $actor) : null;
 
                     // Not a member — nothing to do, and reporting success on a no-op
                     // would tell the caller a removal happened that did not.
@@ -574,6 +576,98 @@ class ChannelResource extends AbstractDatabaseResource
                 ->action(fn (Context $context) => $this->setModerator($context, false))
                 ->defaultInclude(['participants']),
 
+            // Handing the channel to another member, in three steps: the owner
+            // picks someone and gets a code by e-mail, enters it, and the member
+            // accepts or declines. Every step answers with the channel and its
+            // members, so the members tab redraws from the server's word. See
+            // Service\OwnershipTransfers for the rules of each step.
+            Endpoint\Endpoint::make('startTransfer')
+                ->route('POST', '/{id}/transfer')
+                ->authenticated()
+                ->action(function (Context $context) {
+                    /** @var Channel $channel */
+                    $channel = $context->model;
+                    $actor = $context->getActor();
+
+                    if (! $actor->can('transferOwnership', $channel)) {
+                        throw new ForbiddenException();
+                    }
+
+                    $userId = (int) Arr::get($context->body(), 'data.attributes.userId', 0);
+
+                    $user = $userId > 0
+                        // @phpstan-ignore method.notFound (Flarum model scope)
+                        ? User::query()->whereVisibleTo($actor)->whereKey($userId)->first()
+                        : null;
+
+                    if ($user === null) {
+                        throw new ValidationException([
+                            'userId' => $this->translator->trans('ramon-chat.api.not_a_member'),
+                        ]);
+                    }
+
+                    $this->transfers->start($channel, $actor, $user);
+
+                    return $this->withMembers($channel);
+                })
+                ->defaultInclude(['participants']),
+
+            Endpoint\Endpoint::make('confirmTransfer')
+                ->route('POST', '/{id}/transfer/confirm')
+                ->authenticated()
+                ->action(function (Context $context) {
+                    /** @var Channel $channel */
+                    $channel = $context->model;
+
+                    $this->transfers->confirm(
+                        $channel,
+                        $context->getActor(),
+                        (string) Arr::get($context->body(), 'data.attributes.code', '')
+                    );
+
+                    return $this->withMembers($channel);
+                })
+                ->defaultInclude(['participants']),
+
+            Endpoint\Endpoint::make('cancelTransfer')
+                ->route('POST', '/{id}/transfer/cancel')
+                ->authenticated()
+                ->action(function (Context $context) {
+                    /** @var Channel $channel */
+                    $channel = $context->model;
+
+                    $this->transfers->cancel($channel, $context->getActor());
+
+                    return $this->withMembers($channel);
+                })
+                ->defaultInclude(['participants']),
+
+            Endpoint\Endpoint::make('acceptTransfer')
+                ->route('POST', '/{id}/transfer/accept')
+                ->authenticated()
+                ->action(function (Context $context) {
+                    /** @var Channel $channel */
+                    $channel = $context->model;
+
+                    $this->transfers->accept($channel, $context->getActor());
+
+                    return $this->withMembers($channel);
+                })
+                ->defaultInclude(['participants']),
+
+            Endpoint\Endpoint::make('declineTransfer')
+                ->route('POST', '/{id}/transfer/decline')
+                ->authenticated()
+                ->action(function (Context $context) {
+                    /** @var Channel $channel */
+                    $channel = $context->model;
+
+                    $this->transfers->decline($channel, $context->getActor());
+
+                    return $this->withMembers($channel);
+                })
+                ->defaultInclude(['participants']),
+
             Endpoint\Endpoint::make('leave')
                 ->route('POST', '/{id}/leave')
                 ->authenticated()
@@ -588,7 +682,7 @@ class ChannelResource extends AbstractDatabaseResource
 
                     $this->assertNotTogglingMembership($channel, $actor);
 
-                    $membership = $this->memberships->leave($channel, $actor);
+                    $membership = $this->memberships->leave($channel, $actor, $actor);
 
                     // Leaving a channel you are not in changes nothing, and must
                     // not tell the room that it did.
@@ -968,6 +1062,18 @@ class ChannelResource extends AbstractDatabaseResource
             Schema\Boolean::make('canManageModerators')
                 ->get(fn (Channel $c, Context $context) => $context->getActor()->can('manageModerators', $c)),
 
+            Schema\Boolean::make('canTransferOwnership')
+                ->get(fn (Channel $c, Context $context) => $context->getActor()->can('transferOwnership', $c)),
+
+            // The pending handover, as the reader is allowed to see it: whoever
+            // started it, or may start one, sees it from the code onwards; the
+            // member it is offered to sees it once the code has been entered,
+            // and nobody else sees it at all. Read only where the member list
+            // is, like `moderatorIds`, so the channel list pays no query per row.
+            Schema\Arr::make('ownershipTransfer')
+                ->nullable()
+                ->get(fn (Channel $c, Context $context) => $this->transferState($c, $context)),
+
             // So the members tab can label the owner without loading the creator.
             Schema\Integer::make('creatorId')
                 ->property('creator_id')
@@ -1245,12 +1351,56 @@ class ChannelResource extends AbstractDatabaseResource
 
         if ($membership->isModerator() !== $moderator) {
             $membership->is_moderator = $moderator;
+            // When the role was given, which decides who inherits the
+            // channel if its owner leaves (OwnershipSuccession).
+            $membership->moderator_since = $moderator ? Carbon::now() : null;
             $membership->save();
 
             $this->events->dispatch(new ChannelModeratorChanged($channel, $user, $moderator, $actor));
         }
 
         return $this->withMembers($channel);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    protected function transferState(Channel $channel, Context $context): ?array
+    {
+        if (! $channel->exists || ! $channel->isCategory()) {
+            return null;
+        }
+
+        if (! $channel->relationLoaded('participants')) {
+            $include = explode(',', (string) ($context->request->getQueryParams()['include'] ?? ''));
+
+            if (! in_array('participants', array_map('trim', $include), true)) {
+                return null;
+            }
+        }
+
+        $transfer = $this->transfers->pending($channel);
+
+        if ($transfer === null) {
+            return null;
+        }
+
+        $actor = $context->getActor();
+        $actorId = (int) $actor->id;
+        $outgoing = (int) $transfer->from_user_id === $actorId || $actor->can('transferOwnership', $channel);
+
+        if (! $outgoing && ((int) $transfer->to_user_id !== $actorId || ! $transfer->isConfirmed())) {
+            return null;
+        }
+
+        return [
+            'id'         => (int) $transfer->id,
+            'fromUserId' => (int) $transfer->from_user_id,
+            'toUserId'   => (int) $transfer->to_user_id,
+            'confirmed'  => $transfer->isConfirmed(),
+            'incoming'   => ! $outgoing,
+            'expiresAt'  => $transfer->expires_at->toIso8601String(),
+        ];
     }
 
     /**

@@ -28,6 +28,11 @@ export default class BrowseChannelsPage<CustomAttrs extends IPageAttrs = IPageAt
      */
     protected empty(): Mithril.Children;
     protected card(channel: Channel): Mithril.Children;
+    /**
+     * A round icon-only control on a card. The label is both the tooltip and
+     * the accessible name, since the glyph alone says nothing to a screen reader.
+     */
+    protected iconButton(icon: string, labelKey: string, onclick: () => void, danger?: boolean): Mithril.Children;
     protected setFilter(filter: BrowseFilter): void;
     /** Debounced so typing does not issue a request per keystroke. */
     protected onSearch(value: string): void;

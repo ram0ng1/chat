@@ -2206,6 +2206,44 @@ body.ChatFullPage {
     }
   }
 
+  // Handing the channel over: muted at rest like the remove control, in the
+  // primary colour on hover, since it is a hand-off rather than an ejection.
+  &-member-transfer {
+    flex-shrink: 0;
+    color: var(--avocado-muted-icon);
+    transition: color var(--avocado-t-fast);
+
+    &:hover:not(:disabled),
+    &:focus-visible {
+      color: var(--primary-color);
+    }
+  }
+
+  // The pending handover, above the member list, with its answers beside it.
+  &-transfer {
+    .chat-flex-row(@chat-space-sm);
+    flex-wrap: wrap;
+    margin: @chat-space-sm 0;
+    padding: @chat-space-sm @chat-space-md;
+    border: 1px solid var(--avocado-border-soft);
+    border-radius: @chat-radius-sm;
+    font-size: @chat-font-label;
+
+    > .fa-crown {
+      color: var(--primary-color);
+    }
+
+    &-text {
+      flex: 1 1 180px;
+      min-width: 0;
+    }
+
+    &-actions {
+      .chat-flex-row(@chat-space-xs);
+      flex-wrap: wrap;
+    }
+  }
+
   // Destructive actions are separated so they are not adjacent to routine ones.
   &-danger {
     padding: @chat-space-lg;
@@ -2221,6 +2259,14 @@ body.ChatFullPage {
     // padding the mixin adds for the hit area.
     margin-left: -@chat-space-sm;
   }
+}
+
+// The ownership transfer code: six digits, spaced so a misread is easy to see.
+.ChatTransferCodeModal-code {
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.4em;
+  text-align: center;
 }
 
 // ── Selection mode ───────────────────────────────────────────────────────────

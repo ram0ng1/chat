@@ -14,6 +14,7 @@ export interface ChatComposerAttrs extends ComponentAttrs {
 export default class ChatComposer extends Component<ChatComposerAttrs> {
     private textarea;
     private joining;
+    private unarchiving;
     private sending;
     /** Seconds left before this channel will accept another message from us. */
     private cooldown;
@@ -95,6 +96,17 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
      */
     protected slowed(): Mithril.Children;
     protected frozen(channel: Channel): Mithril.Children;
+    /**
+     * The archived notice: where the transcript went, and the way back out of
+     * the archive for whoever may take it.
+     */
+    protected archivedNotice(channel: Channel): Mithril.Children;
+    /**
+     * Takes the channel out of the archive. It comes back closed, so the notice
+     * turns into the closed one and the composer stays away until the channel
+     * is reopened.
+     */
+    protected unarchive(channel: Channel): Promise<void>;
     /**
      * Joins the channel so the composer can appear.
      *
