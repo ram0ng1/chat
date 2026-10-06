@@ -825,6 +825,9 @@ interface ChannelPayload {
   status: string;
   /** Set when the channel was deleted; nothing else in the payload applies. */
   deleted?: boolean;
+  /** Set when the channel was archived: when, and the discussion it went to. */
+  archivedAt?: string | null;
+  archivedDiscussionId?: number | null;
   postPermission?: string;
   isPrivate?: boolean;
   threadingEnabled?: boolean;
@@ -868,6 +871,10 @@ function onChannel(data: ChannelPayload): void {
     ...(data.emoji !== undefined ? { emoji: data.emoji } : {}),
     ...(data.description !== undefined
       ? { description: data.description }
+      : {}),
+    ...(data.archivedAt !== undefined ? { archivedAt: data.archivedAt } : {}),
+    ...(data.archivedDiscussionId !== undefined
+      ? { archivedDiscussionId: data.archivedDiscussionId }
       : {}),
   });
 

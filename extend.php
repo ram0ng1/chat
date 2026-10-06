@@ -470,6 +470,7 @@ return [
                 ->listen(Event\ThreadWasCreated::class, Realtime\BroadcastListener::class.'@whenThreadChanged')
                 ->listen(Event\ChannelStatusChanged::class, Realtime\BroadcastListener::class.'@whenChannelChanged')
                 ->listen(Event\ChannelWasEdited::class, Realtime\BroadcastListener::class.'@whenChannelChanged')
+                ->listen(Event\ChannelWasArchived::class, Realtime\BroadcastListener::class.'@whenChannelArchived')
                 // A deleted channel leaves every member's sidebar at once, instead
                 // of lingering as a row that answers with a 404.
                 ->listen(Event\ChannelWasDeleted::class, Realtime\BroadcastListener::class.'@whenChannelDeleted')

@@ -13,6 +13,7 @@ use Flarum\User\User;
 use Psr\Log\LoggerInterface;
 use Ramon\Chat\Channel;
 use Ramon\Chat\Event\ChannelStatusChanged;
+use Ramon\Chat\Event\ChannelWasArchived;
 use Ramon\Chat\Event\ChannelWasDeleted;
 use Ramon\Chat\Event\ChannelWasEdited;
 use Ramon\Chat\Event\InviteWasCancelled;
@@ -239,6 +240,26 @@ class BroadcastListener
                 'channelId' => (int) $event->channel->id,
                 'status'    => $event->channel->status,
                 'deleted'   => true,
+            ],
+            null
+        );
+    }
+
+    /**
+     * Archiving freezes the channel for good, so members' composers have to go
+     * the moment it happens, the same way closing does. Carries where the
+     * transcript went, which is what the frozen notice links to.
+     */
+    public function whenChannelArchived(ChannelWasArchived $event): void
+    {
+        $this->broadcaster->toChannelMembers(
+            $event->channel,
+            self::EVENT_CHANNEL,
+            [
+                'channelId'            => (int) $event->channel->id,
+                'status'               => $event->channel->status,
+                'archivedAt'           => $event->channel->archived_at?->toIso8601String(),
+                'archivedDiscussionId' => (int) $event->discussion->id,
             ],
             null
         );

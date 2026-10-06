@@ -35,6 +35,7 @@ const frozen = "!!document.querySelector('.ChatChannel .ChatChannel-frozen')";
 const errorAlerts = "document.querySelectorAll('.AlertManager .Alert--error').length";
 
 const browser = await launchBrowser({ label: "B" });
+let archivedDiscussionId = null;
 
 try {
   await t.must("B joins", (await joinChannel(b.token, channelId)).status === 200);
@@ -73,6 +74,33 @@ try {
 
   await browser.screenshot("channel-status-01");
 
+  // ── Archived ────────────────────────────────────────────────────────────────
+  // Archiving needs a closed channel; the close lands live as above, then the
+  // archive must turn the notice into the archived one without a reload.
+  await t.must("admin closes it again", (await setStatus("closed")).status === 200);
+  await browser.waitFor("!(" + composer + ")", 5000, 25);
+
+  at = Date.now();
+  const archived = await api(admin.token, "POST", "/chat-channels/" + channelId + "/archive", {
+    data: { type: "chat-channels", id: String(channelId), attributes: { title: "E2E archive " + channelId } },
+  });
+  await t.must("admin archives the channel", archived.status === 200, "HTTP " + archived.status);
+  archivedDiscussionId = Number(archived.json?.data?.attributes?.archivedDiscussionId ?? 0) || null;
+
+  await t.check(
+    "B sees the archived state live",
+    Boolean(
+      await browser.waitFor(
+        "(() => { const c = app.store.getById('chat-channels', '" + channelId + "'); return c && c.isArchived() && !!c.archivedDiscussionId(); })()",
+        5000,
+        25,
+      ),
+    ),
+    Date.now() - at + " ms",
+  );
+  await t.check("B still has no composer", !(await browser.evaluate(composer)));
+  await t.check("without an error alert after archiving", (await browser.evaluate(errorAlerts)) === 0);
+
   const errors = browser.consoleErrors.filter((e) => !/favicon|manifest/i.test(e));
   await t.check("no uncaught page exceptions", errors.length === 0, errors.slice(0, 3).join(" | "));
 } catch (e) {
@@ -84,6 +112,11 @@ try {
   }
 } finally {
   await browser.close();
+
+  if (archivedDiscussionId) {
+    const gone = await api(admin.token, "DELETE", "/discussions/" + archivedDiscussionId);
+    log("cleanup archive discussion " + archivedDiscussionId + " HTTP " + gone.status);
+  }
 
   const removed = await deleteChannel(admin.token, channelId);
   log("cleanup channel " + channelId + " HTTP " + removed.status);
