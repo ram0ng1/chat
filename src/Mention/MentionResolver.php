@@ -12,6 +12,7 @@ namespace Ramon\Chat\Mention;
 use Carbon\Carbon;
 use Flarum\Group\Group;
 use Flarum\User\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Ramon\Chat\Message;
 use Ramon\Chat\MessageMention;
@@ -53,6 +54,12 @@ class MentionResolver
         }
 
         $mentions = collect();
+        // Asked only when a group is actually named: it reads the author, and
+        // most messages mention no group at all.
+        $mayMentionGroupsMemo = null;
+        $mayMentionGroups = function () use ($message, &$mayMentionGroupsMemo): bool {
+            return $mayMentionGroupsMemo ??= $this->mayMentionGroups($message);
+        };
         $seenUsers = [];
         $seenGroups = [];
         $seenChannelWide = [];
@@ -65,6 +72,15 @@ class MentionResolver
 
             if ($type === MessageMention::TYPE_GROUP && ! isset($seenGroups[$id])) {
                 $seenGroups[$id] = true;
+
+                // The parsed form records the group, not whether the author was
+                // allowed to name it: flarum/mentions only checks when it parses
+                // with an actor in hand, and not every path that stores content
+                // has one.
+                if (! $mayMentionGroups() || $this->mentionableGroup($id) === null) {
+                    continue;
+                }
+
                 $mentions->push($this->make($message, MessageMention::TYPE_GROUP, groupId: $id));
             }
         }
@@ -95,7 +111,10 @@ class MentionResolver
                     continue;
                 }
 
-                $group = $this->findGroupByName($name);
+                // Groups by name only for someone allowed to ping a group at all.
+                // Without the check any member's `@Moderators` reached every user
+                // in the group.
+                $group = $mayMentionGroups() ? $this->findGroupByName($name) : null;
 
                 if ($group !== null && ! isset($seenGroups[$group->id])) {
                     $seenGroups[$group->id] = true;
@@ -200,10 +219,51 @@ class MentionResolver
 
     protected function findGroupByName(string $name): ?Group
     {
-        return Group::query()
-            ->where('name_singular', $name)
-            ->orWhere('name_plural', $name)
+        return $this->mentionableGroups()
+            ->where(function ($query) use ($name) {
+                $query->where('name_singular', $name)
+                    ->orWhere('name_plural', $name);
+            })
             ->first();
+    }
+
+    protected function mentionableGroup(int $id): ?Group
+    {
+        return $this->mentionableGroups()->whereKey($id)->first();
+    }
+
+    /**
+     * The groups a mention may name: never guests or members, which would be
+     * the whole forum, and never a hidden group, whose membership is not public.
+     * The same exclusions flarum/mentions applies to a post.
+     *
+     * @return Builder<Group>
+     */
+    protected function mentionableGroups(): Builder
+    {
+        $query = Group::query();
+
+        // Statements rather than a chain: the where* methods are typed as
+        // returning the base query builder, which would lose the Eloquent one.
+        $query->where('is_hidden', false);
+        $query->whereNotIn('id', [Group::GUEST_ID, Group::MEMBER_ID]);
+
+        return $query;
+    }
+
+    /**
+     * `mentionGroups` is core's permission for the same act in a post. A bot or
+     * webhook message has no author and so cannot ping a group.
+     */
+    protected function mayMentionGroups(Message $message): bool
+    {
+        if ($message->user_id === null) {
+            return false;
+        }
+
+        $author = $message->relationLoaded('user') ? $message->user : $message->user()->first();
+
+        return $author instanceof User && $author->hasPermission('mentionGroups');
     }
 
     protected function make(Message $message, string $type, ?int $userId = null, ?int $groupId = null): MessageMention

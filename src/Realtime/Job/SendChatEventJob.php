@@ -66,7 +66,7 @@ class SendChatEventJob extends AbstractJob
         }
 
         $recipients = $this->userId !== null
-            ? collect([$this->userId])
+            ? $this->singleUser($this->userId)
             : $this->channelMembers();
 
         if ($recipients->isEmpty()) {
@@ -121,25 +121,14 @@ class SendChatEventJob extends AbstractJob
             return collect();
         }
 
-        // For a direct channel, membership *is* the visibility rule — the scope
-        // resolves through the same `chat_channel_user` rows we just read. Nothing
-        // further to check, and no per-user query.
-        if ($channel->isDirect() || $channel->tag_id === null) {
-            return $memberIds->values();
-        }
-
-        // A tag-bound channel inherits the tag's `viewForum`, and a membership row
-        // outlives a permission change — so someone who joined before the category
-        // was restricted must not keep receiving pushes.
+        // `groups` eager-loaded because `permissionGroupIds()` reads it, and this
+        // runs inside the send request — leaving it lazy put the per-member query
+        // back in by another door.
         //
         // `whereKey` rather than `whereIn('id', ...)`: the two do the same thing,
         // but `whereIn` is reached through Eloquent's mixin onto the query builder
         // and comes back typed as that builder, which loses the model type and
         // turns the collection below into one of anonymous rows.
-        //
-        // `groups` eager-loaded because `permissionGroupIds()` reads it, and this
-        // runs inside the send request — leaving it lazy put the per-member query
-        // back in by another door.
         $users = User::query()->whereKey($memberIds->all())->with('groups')->get();
 
         // Decided once per distinct permission set rather than once per member.
@@ -147,12 +136,47 @@ class SendChatEventJob extends AbstractJob
         // latency the sender waits on, and the answer is the same for everyone
         // whose permissions are the same. See PermissionSetVisibility.
         $visibility = new PermissionSetVisibility();
+
+        // Every audience passes the chat gate first. A membership row outlives
+        // the permission behind it: a member whose `ramon-chat.use` was revoked,
+        // or who was suspended (flarum/suspend demotes their groups), still holds
+        // the row, and a direct channel's private messages kept reaching them.
+        $users = $users->filter(fn (User $user) => $visibility->usesChat($user));
+
+        // For a direct or untagged channel, membership plus the chat gate *is*
+        // the visibility rule. A deleted channel is excluded by the scope itself,
+        // so asking it would drop everyone — and the one thing still sent about a
+        // deleted channel is that it is gone, which its former members must hear.
+        if ($channel->isDirect() || $channel->tag_id === null || $channel->deleted_at !== null) {
+            return $users->map(fn (User $user) => (int) $user->id)->values();
+        }
+
+        // A tag-bound channel inherits the tag's `viewForum`, and a membership row
+        // outlives a permission change — so someone who joined before the category
+        // was restricted must not keep receiving pushes.
         $channelId = (int) $channel->id;
 
         return $users
             ->filter(fn (User $user) => $visibility->channelVisible($user, $channelId))
             ->map(fn (User $user) => (int) $user->id)
             ->values();
+    }
+
+    /**
+     * A push addressed to one person, still behind the chat gate: the
+     * membership and invitation events it carries are chat data too.
+     *
+     * @return Collection<int, int>
+     */
+    protected function singleUser(int $userId): Collection
+    {
+        $user = User::query()->whereKey($userId)->with('groups')->first();
+
+        if (! $user instanceof User || ! $user->hasPermission('ramon-chat.use')) {
+            return collect();
+        }
+
+        return collect([$userId]);
     }
 
     /**

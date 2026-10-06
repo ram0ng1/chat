@@ -37,10 +37,22 @@ class GroupMentionAndNumberingTest extends TestCase
                 ['id' => 3, 'username' => 'mod_one', 'email' => 'mod1@machine.local', 'password' => 'x', 'is_email_confirmed' => 1],
                 ['id' => 4, 'username' => 'mod_two', 'email' => 'mod2@machine.local', 'password' => 'x', 'is_email_confirmed' => 1],
                 ['id' => 5, 'username' => 'bystander', 'email' => 'by@machine.local', 'password' => 'x', 'is_email_confirmed' => 1],
+                // A moderator who never joined the channel.
+                ['id' => 6, 'username' => 'mod_away', 'email' => 'mod3@machine.local', 'password' => 'x', 'is_email_confirmed' => 1],
+            ],
+            'groups' => [
+                ['id' => 10, 'name_singular' => 'Secret', 'name_plural' => 'Secrets', 'is_hidden' => 1],
             ],
             'group_user' => [
                 ['user_id' => 3, 'group_id' => Group::MODERATOR_ID],
                 ['user_id' => 4, 'group_id' => Group::MODERATOR_ID],
+                ['user_id' => 6, 'group_id' => Group::MODERATOR_ID],
+                ['user_id' => 4, 'group_id' => 10],
+            ],
+            'chat_channel_user' => [
+                ['channel_id' => 1, 'user_id' => 3, 'created_at' => $now],
+                ['channel_id' => 1, 'user_id' => 4, 'created_at' => $now],
+                ['channel_id' => 1, 'user_id' => 5, 'created_at' => $now],
             ],
             'chat_channels' => [
                 ['id' => 1, 'type' => 'category', 'name' => 'Um', 'slug' => 'um', 'status' => 'open', 'created_at' => $now, 'updated_at' => $now],
@@ -52,6 +64,8 @@ class GroupMentionAndNumberingTest extends TestCase
             ],
             'chat_message_mentions' => [
                 ['id' => 1, 'message_id' => 1, 'type' => MessageMention::TYPE_GROUP, 'group_id' => Group::MODERATOR_ID, 'created_at' => $now],
+                ['id' => 2, 'message_id' => 2, 'type' => MessageMention::TYPE_GROUP, 'group_id' => 10, 'created_at' => $now],
+                ['id' => 3, 'message_id' => 2, 'type' => MessageMention::TYPE_GROUP, 'group_id' => Group::MEMBER_ID, 'created_at' => $now],
             ],
         ]);
     }
@@ -64,7 +78,22 @@ class GroupMentionAndNumberingTest extends TestCase
 
         $ids = $app->getContainer()->make(UnreadTracker::class)->mentionedUserIds($message);
 
+        // Not 6: a group mention reaches the group's members in this channel,
+        // not the group forum-wide.
         $this->assertSame([4], $ids);
+    }
+
+    /**
+     * Rows a mention of a hidden group, or of members, could have left behind
+     * before the resolver refused them still expand to nobody.
+     */
+    public function test_hidden_and_everyone_groups_never_expand(): void
+    {
+        $app = $this->app();
+
+        $message = Message::query()->findOrFail(2);
+
+        $this->assertSame([], $app->getContainer()->make(UnreadTracker::class)->mentionedUserIds($message));
     }
 
     public function test_new_messages_continue_their_own_channels_sequence(): void

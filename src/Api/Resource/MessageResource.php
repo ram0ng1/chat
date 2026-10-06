@@ -17,9 +17,11 @@ use Flarum\Api\Schema;
 use Flarum\Api\Sort\SortColumn;
 use Flarum\Foundation\ValidationException;
 use Flarum\Locale\Translator;
+use Flarum\Post\Exception\FloodingException;
 use Flarum\User\User;
 use Illuminate\Contracts\Events\Dispatcher as Events;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Arr;
 use Laminas\Diactoros\Response\EmptyResponse;
 use Laminas\Diactoros\Response\JsonResponse;
@@ -36,6 +38,7 @@ use Ramon\Chat\Mention\MentionResolver;
 use Ramon\Chat\Message;
 use Ramon\Chat\MessageReaction;
 use Ramon\Chat\MessageRevision;
+use Ramon\Chat\Service\ActionThrottle;
 use Ramon\Chat\Service\MessageDispatcher;
 use Ramon\Chat\Thread;
 use Tobyz\JsonApiServer\Context as OriginalContext;
@@ -51,9 +54,19 @@ class MessageResource extends AbstractDatabaseResource
         protected Events $events,
         protected MessageDispatcher $dispatcher,
         protected MentionResolver $mentions,
-        protected LoggerInterface $log
+        protected LoggerInterface $log,
+        protected ActionThrottle $throttle
     ) {
     }
+
+    /**
+     * Bounds on reactions, which are rows anyone who can read a message can
+     * add. Twenty kinds on one message is already more than a chip row can
+     * show; ten from one person is someone using the bar as a keyboard.
+     */
+    protected const MAX_DISTINCT_REACTIONS = 20;
+
+    protected const MAX_REACTIONS_PER_USER = 10;
 
     public function type(): string
     {
@@ -128,7 +141,12 @@ class MessageResource extends AbstractDatabaseResource
                 // Bookmarks are narrowed to the actor: the field only ever asks
                 // whether *they* bookmarked it, and a popular message can carry a
                 // row per member otherwise.
-                ->eagerLoad(['user.groups', 'reactions', 'uploads', 'mentions', 'thread', 'flags', 'channel'])
+                ->eagerLoad(['user.groups', 'reactions', 'uploads', 'mentions', 'flags', 'channel'])
+                // Scoped by hand: an eager-loaded relation is already present when
+                // the include is serialised, so core's relationship buffer, which
+                // is what applies ThreadResource's scope, never runs for it. A
+                // deleted thread was included with its title on every reply.
+                ->eagerLoadWhere('thread', fn ($query, Context $context) => $query->whereVisibleTo($context->getActor()))
                 ->eagerLoadWhere('bookmarks', fn ($query, Context $context) => $query->where('user_id', $context->getActor()->id))
                 // Max 100 so jumping to an old message (a pin, a quoted reply) can
                 // fill the gap above the loaded window in a few requests.
@@ -208,6 +226,12 @@ class MessageResource extends AbstractDatabaseResource
                             'content' => $this->translator->trans('ramon-chat.api.message_empty'),
                         ]);
                     }
+
+                    // The policy has already confirmed a channel that takes posts
+                    // from this actor; these are the content rules a send applies.
+                    /** @var Channel $channel */
+                    $channel = $message->channel;
+                    $this->dispatcher->assertMayRevise($channel, $actor, $content);
 
                     $message->reviseContent($content, $actor);
                     $message->save();
@@ -332,6 +356,12 @@ class MessageResource extends AbstractDatabaseResource
                         throw new ForbiddenException();
                     }
 
+                    // Toggling either way counts: removing is a write and a push
+                    // to every member just as adding is.
+                    if (! $this->throttle->attempt('react.'.$actor->id, 15, 10)) {
+                        throw new FloodingException();
+                    }
+
                     $emoji = $this->normaliseEmoji(
                         (string) Arr::get($context->body(), 'data.attributes.emoji', '')
                     );
@@ -349,12 +379,25 @@ class MessageResource extends AbstractDatabaseResource
                         $existing->delete();
                         $added = false;
                     } else {
+                        $this->assertRoomForReaction($message, $actor, $emoji);
+
                         $reaction = new MessageReaction();
                         $reaction->message_id = $message->id;
                         $reaction->user_id = $actor->id;
                         $reaction->emoji = $emoji;
                         $reaction->created_at = Carbon::now();
-                        $reaction->save();
+
+                        // Two clicks racing past the lookup above both try to
+                        // insert; the unique index keeps one, and the loser is the
+                        // same reaction already there rather than a 500.
+                        try {
+                            $reaction->save();
+                        } catch (UniqueConstraintViolationException) {
+                            $message->unsetRelation('reactions');
+
+                            return $message;
+                        }
+
                         $added = true;
                     }
 
@@ -386,6 +429,23 @@ class MessageResource extends AbstractDatabaseResource
                         throw new ForbiddenException();
                     }
 
+                    if (! $this->throttle->attempt('bookmark.'.$actor->id, 30, 10)) {
+                        throw new FloodingException();
+                    }
+
+                    // Validated rather than handed to the column: a name past its
+                    // 200 characters was a database error, so a 500, and a
+                    // non-string one was whatever the driver made of it.
+                    $name = Arr::get($context->body(), 'data.attributes.name');
+
+                    if ($name !== null && (! is_string($name) || mb_strlen($name) > 200)) {
+                        throw new ValidationException([
+                            'name' => $this->translator->trans('ramon-chat.api.bookmark_name_too_long', ['max' => 200]),
+                        ]);
+                    }
+
+                    $name = $name === null ? null : (trim($name) ?: null);
+
                     /** @var Bookmark|null $existing */
                     $existing = Bookmark::query()
                         ->where('message_id', $message->id)
@@ -398,7 +458,7 @@ class MessageResource extends AbstractDatabaseResource
                         $bookmark = new Bookmark();
                         $bookmark->message_id = $message->id;
                         $bookmark->user_id = $actor->id;
-                        $bookmark->name = Arr::get($context->body(), 'data.attributes.name');
+                        $bookmark->name = $name;
                         $bookmark->save();
                     }
 
@@ -674,7 +734,7 @@ class MessageResource extends AbstractDatabaseResource
             return false;
         }
 
-        return ! ($actor->can('ramon-chat.moderate') || $actor->id === $message->user_id);
+        return ! ($actor->hasPermission('ramon-chat.moderate') || $actor->id === $message->user_id);
     }
 
     /**
@@ -791,6 +851,36 @@ class MessageResource extends AbstractDatabaseResource
     }
 
     /**
+     * Refuses a new reaction that would take the message past its bounds.
+     * Removing one is never refused, so someone at the cap can always undo.
+     *
+     * @throws ValidationException
+     */
+    protected function assertRoomForReaction(Message $message, User $actor, string $emoji): void
+    {
+        $existing = MessageReaction::query()->where('message_id', $message->id);
+
+        $kinds = (clone $existing)->distinct()->pluck('emoji')->map(fn ($e) => strtolower((string) $e));
+
+        if ($kinds->count() >= self::MAX_DISTINCT_REACTIONS && ! $kinds->contains(strtolower($emoji))) {
+            throw new ValidationException([
+                'emoji' => $this->translator->trans('ramon-chat.api.reaction_limit'),
+            ]);
+        }
+
+        if ((clone $existing)->where('user_id', $actor->id)->count() >= self::MAX_REACTIONS_PER_USER) {
+            throw new ValidationException([
+                'emoji' => $this->translator->trans('ramon-chat.api.reaction_limit'),
+            ]);
+        }
+    }
+
+    /**
+     * A bare shortcode only, the form every client sends. Not checked against
+     * a catalogue: custom emoji from Flarum's Flamoji react by shortcode too, and
+     * their names are the forum's own. What bounds abuse is the length here and
+     * the per-message caps in assertRoomForReaction().
+     *
      * @throws ValidationException
      */
     protected function normaliseEmoji(string $emoji): string
@@ -798,7 +888,7 @@ class MessageResource extends AbstractDatabaseResource
         // Accept both `:heart:` and `heart`, store the bare shortcode.
         $emoji = trim($emoji, ": \t\n\r");
 
-        if ($emoji === '' || mb_strlen($emoji) > 60 || ! preg_match('/^[a-z0-9_+\-]+$/i', $emoji)) {
+        if ($emoji === '' || ! preg_match('/\A[a-z0-9_+\-]{1,60}\z/i', $emoji)) {
             throw new ValidationException([
                 'emoji' => $this->translator->trans('ramon-chat.api.invalid_reaction'),
             ]);

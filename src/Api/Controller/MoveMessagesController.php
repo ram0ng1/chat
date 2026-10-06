@@ -11,6 +11,7 @@ namespace Ramon\Chat\Api\Controller;
 
 use Flarum\Foundation\ValidationException;
 use Flarum\Http\RequestUtil;
+use Flarum\User\Exception\PermissionDeniedException;
 use Flarum\Locale\Translator;
 use Illuminate\Contracts\Events\Dispatcher as Events;
 use Illuminate\Database\ConnectionInterface;
@@ -22,6 +23,7 @@ use Psr\Http\Server\RequestHandlerInterface;
 use Ramon\Chat\Channel;
 use Ramon\Chat\Event\MessageWasMoved;
 use Ramon\Chat\Message;
+use Ramon\Chat\Thread;
 use Tobyz\JsonApiServer\Exception\ForbiddenException;
 
 /**
@@ -47,7 +49,12 @@ class MoveMessagesController implements RequestHandlerInterface
     {
         $actor = RequestUtil::getActor($request);
         $actor->assertRegistered();
-        $actor->assertCan('ramon-chat.moderate');
+        // The raw permission, not the Gate: `can()` on a permission name falls
+        // through to the Gate's fallback, which any extension's catch-all policy
+        // can answer for.
+        if (! $actor->hasPermission('ramon-chat.moderate')) {
+            throw new PermissionDeniedException();
+        }
 
         $body = $request->getParsedBody();
         $attributes = (array) Arr::get($body, 'data.attributes', []);
@@ -109,6 +116,13 @@ class MoveMessagesController implements RequestHandlerInterface
             $affected = [];
             $moved = 0;
 
+            // Every thread a moved message belonged to, captured before the loop
+            // detaches them. Each keeps pointers (root, last reply) that may now
+            // name a message in another channel — one the thread's readers may
+            // not be allowed to see — so all of them are put right below.
+            $threadIds = $messages->pluck('thread_id')->filter()->unique()->values()->all();
+            $movedIds = $messages->pluck('id')->map(fn ($id) => (int) $id)->all();
+
             // Take the destination's current high-water mark once, then assign
             // sequential numbers. Doing this in PHP rather than per-row SQL keeps
             // the whole move to one pass and avoids N subqueries.
@@ -143,6 +157,22 @@ class MoveMessagesController implements RequestHandlerInterface
                 $moved++;
 
                 $this->events->dispatch(new MessageWasMoved($message, $source ?? $target, $target, $actor));
+            }
+
+            // A thread stays in its channel with its replies; only the root
+            // leaves. It goes on without one rather than being taken along: the
+            // replies were not selected, and carrying them into the destination
+            // would move conversation the moderator never chose. The panel still
+            // opens from the threads list and falls back to an untitled label,
+            // and the counters are recounted from what is still in it.
+            if ($threadIds !== []) {
+                foreach (Thread::query()->whereKey($threadIds)->get() as $thread) {
+                    if ($thread->original_message_id !== null && in_array((int) $thread->original_message_id, $movedIds, true)) {
+                        $thread->original_message_id = null;
+                    }
+
+                    $thread->refreshMetadata()->save();
+                }
             }
 
             $affected[$target->id] = $target;

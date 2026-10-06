@@ -114,6 +114,11 @@ class MessageFlagResource extends AbstractDatabaseResource
      * The `message.` prefix is what carries them across: when the buffer loads
      * the reported messages, `Endpoint::getEagerLoadsFor('message')` hands it
      * everything named here beneath that relation.
+     *
+     * `message` itself is where-loaded through the visibility scope, ahead of
+     * these. `loadMissing()` on a nested path loads a missing first segment
+     * unconstrained, and the buffer skips a relation that is already loaded, so
+     * without it the reported message would bypass MessageResource's scope.
      */
     protected const EAGER_LOAD = [
         'message.user.groups',
@@ -133,6 +138,7 @@ class MessageFlagResource extends AbstractDatabaseResource
                 ->defaultSort('-createdAt')
                 ->defaultInclude(['user', 'message', 'message.user', 'message.channel', 'resolvedBy'])
                 ->eagerLoad(self::EAGER_LOAD)
+                ->eagerLoadWhere('message', fn ($query, Context $context) => $query->whereVisibleTo($context->getActor()))
                 ->eagerLoadWhere(
                     'message.bookmarks',
                     fn ($query, Context $context) => $query->where('user_id', $context->getActor()->id)
@@ -144,6 +150,7 @@ class MessageFlagResource extends AbstractDatabaseResource
                 ->can('ramon-chat.moderate')
                 ->defaultInclude(['user', 'message', 'message.user', 'message.channel', 'resolvedBy'])
                 ->eagerLoad(self::EAGER_LOAD)
+                ->eagerLoadWhere('message', fn ($query, Context $context) => $query->whereVisibleTo($context->getActor()))
                 ->eagerLoadWhere(
                     'message.bookmarks',
                     fn ($query, Context $context) => $query->where('user_id', $context->getActor()->id)

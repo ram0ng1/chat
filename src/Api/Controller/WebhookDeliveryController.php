@@ -11,6 +11,7 @@ namespace Ramon\Chat\Api\Controller;
 
 use Flarum\Foundation\ValidationException;
 use Flarum\Locale\Translator;
+use Flarum\Post\Exception\FloodingException;
 use Flarum\Settings\SettingsRepositoryInterface;
 use Illuminate\Contracts\Events\Dispatcher as Events;
 use Illuminate\Support\Arr;
@@ -20,6 +21,7 @@ use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
 use Ramon\Chat\Event\MessageWasSent;
 use Ramon\Chat\Message;
+use Ramon\Chat\Service\ActionThrottle;
 use Ramon\Chat\Service\UnreadTracker;
 use Ramon\Chat\Webhook;
 use Tobyz\JsonApiServer\Exception\ForbiddenException;
@@ -36,11 +38,16 @@ use Tobyz\JsonApiServer\Exception\ForbiddenException;
  */
 class WebhookDeliveryController implements RequestHandlerInterface
 {
+    protected const MAX_PER_IP_PER_MINUTE = 120;
+
+    protected const MAX_PER_WEBHOOK_PER_MINUTE = 60;
+
     public function __construct(
         protected Events $events,
         protected Translator $translator,
         protected SettingsRepositoryInterface $settings,
-        protected UnreadTracker $unread
+        protected UnreadTracker $unread,
+        protected ActionThrottle $throttle
     ) {
     }
 
@@ -56,10 +63,25 @@ class WebhookDeliveryController implements RequestHandlerInterface
             throw new ForbiddenException();
         }
 
+        // Per address, before the key is looked up: this route is unauthenticated,
+        // so the only thing standing between a scanner and an unbounded run of
+        // key lookups is how often one address may ask.
+        $ip = (string) ($request->getAttribute('ipAddress') ?? Arr::get($request->getServerParams(), 'REMOTE_ADDR', ''));
+
+        if (! $this->throttle->attempt('webhook.ip.'.sha1($ip), self::MAX_PER_IP_PER_MINUTE, 60)) {
+            throw new FloodingException();
+        }
+
         $webhook = $this->resolve($key);
 
         if ($webhook === null) {
             throw new ForbiddenException();
+        }
+
+        // And per webhook, so one leaked key cannot flood its channel faster than
+        // a chat-bound integration has any reason to post.
+        if (! $this->throttle->attempt('webhook.hook.'.$webhook->id, self::MAX_PER_WEBHOOK_PER_MINUTE, 60)) {
+            throw new FloodingException();
         }
 
         $channel = $webhook->channel;
@@ -126,13 +148,21 @@ class WebhookDeliveryController implements RequestHandlerInterface
      */
     protected function resolve(string $key): ?Webhook
     {
-        if (strlen($key) < 16) {
+        // Keys are minted by Str::random, so alphanumeric only. Anything else is
+        // not a key and never reaches the database.
+        if (! preg_match('/\A[A-Za-z0-9]{16,128}\z/', $key)) {
             return null;
         }
 
+        // The prefix is escaped: it comes from the URL, and an unescaped `%` or
+        // `_` turned the lookup into a wildcard match over every active key,
+        // which both widens the scan and leaks how many keys share a pattern
+        // through the comparison time.
+        $prefix = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], substr($key, 0, 8));
+
         $candidates = Webhook::query()
             ->where('active', true)
-            ->where('key', 'like', substr($key, 0, 8).'%')
+            ->where('key', 'like', $prefix.'%')
             ->with('channel')
             ->get();
 
