@@ -86,10 +86,10 @@ class MessageResource extends AbstractDatabaseResource
     }
 
     /**
-     * Conta a coleção só quando o cliente lê o total: a listagem de fixadas, que
-     * decide se a faixa oferece a lista completa. Em qualquer outra página o
-     * COUNT(*) varria o histórico inteiro do canal a cada abertura e a cada
-     * página, e ninguém o lia.
+     * Counts the collection only when the client reads the total: the pinned
+     * listing, which decides whether the strip offers the full list. On any
+     * other page the COUNT(*) scanned the channel's whole history on every open
+     * and every page, and nobody read it.
      */
     public function count(object $query, OriginalContext $context): ?int
     {

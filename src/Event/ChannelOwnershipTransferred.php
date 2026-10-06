@@ -14,12 +14,12 @@ use Ramon\Chat\Channel;
 use Ramon\Chat\ChannelTransfer;
 
 /**
- * O canal mudou de dono. Disparado depois do commit: `channel` já aponta para
- * o novo dono.
+ * The channel changed owner. Fired after commit: `channel` already points to
+ * the new owner.
  *
- * Por uma transferência aceita (`transfer` presente; o dono anterior, se ainda
- * era membro, virou moderador do canal) ou por sucessão (`inherited`): o dono
- * saiu e o moderador mais antigo assumiu.
+ * Either by an accepted transfer (`transfer` present; the previous owner, if
+ * still a member, became a moderator of the channel) or by succession
+ * (`inherited`): the owner left and the longest-serving moderator took over.
  */
 class ChannelOwnershipTransferred
 {

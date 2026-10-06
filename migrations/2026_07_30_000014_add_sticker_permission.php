@@ -22,10 +22,10 @@ use Illuminate\Database\Schema\Builder;
  * already hold, so seeding them explicitly would only duplicate the badge in the
  * admin grid.
  *
- * O seed só ocorre quando o grupo existe: um fórum pode tê-lo apagado, e
- * `group_permission.group_id` é FK para `groups` — inserir às cegas aborta a
- * ativação inteira da extensão com SQLSTATE[23000]. Mesmo guard que
- * `Migration::addPermissions` aplica.
+ * The seed only runs when the group exists: a forum may have deleted it, and
+ * `group_permission.group_id` is an FK to `groups`, so inserting blindly aborts
+ * the whole extension's activation with SQLSTATE[23000]. Same guard that
+ * `Migration::addPermissions` applies.
  */
 return [
     // Flarum's migrator passes a schema Builder, never a ConnectionInterface;

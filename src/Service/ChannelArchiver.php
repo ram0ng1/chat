@@ -20,7 +20,6 @@ use Flarum\Post\Post;
 use Flarum\Post\PostCreationThrottler;
 use Flarum\User\User;
 use Illuminate\Contracts\Events\Dispatcher as Events;
-use Illuminate\Database\ConnectionInterface;
 use Ramon\Chat\Channel;
 use Ramon\Chat\Event\ChannelStatusChanged;
 use Ramon\Chat\Event\ChannelWasArchived;
@@ -68,7 +67,6 @@ class ChannelArchiver
     public const MAX_MESSAGES = 500;
 
     public function __construct(
-        protected ConnectionInterface $db,
         protected Events $events,
         protected Translator $translator,
         protected TranscriptRenderer $transcript,
@@ -109,7 +107,7 @@ class ChannelArchiver
             $this->assertMayPublish($channel, $actor, $existing);
         }
 
-        return $this->db->transaction(function () use ($channel, $actor, $existing, $title) {
+        return Channel::query()->getConnection()->transaction(function () use ($channel, $actor, $existing, $title) {
             $discussion = $existing ?? Discussion::start($title, $actor);
 
             if ($existing === null) {

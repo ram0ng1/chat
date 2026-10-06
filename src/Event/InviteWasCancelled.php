@@ -13,7 +13,7 @@ use Flarum\User\User;
 use Ramon\Chat\Channel;
 
 /**
- * Quem gerencia o canal retirou um convite antes da resposta.
+ * Whoever manages the channel withdrew an invite before it was answered.
  */
 class InviteWasCancelled
 {

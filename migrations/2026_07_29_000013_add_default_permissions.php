@@ -11,21 +11,21 @@ use Flarum\Database\Migration;
 use Flarum\Group\Group;
 
 /**
- * Padrões do chat: participar é coisa de membro, moderar não.
+ * Chat defaults: taking part is a member thing, moderating is not.
  *
- * Entrar no chat, abrir uma conversa direta, anexar um arquivo e reagir são o
- * uso ordinário da funcionalidade — um chat que nenhum membro pode abrir não é
- * um chat, é uma sala de equipe. Ficam em MODERADOR apenas a menção que notifica
- * o canal inteiro e a moderação em si.
+ * Joining the chat, opening a direct conversation, attaching a file and reacting
+ * are the ordinary use of the feature: a chat no member can open is not a chat,
+ * it is a staff room. Only the mention that notifies the whole channel and
+ * moderation itself stay with MODERATOR.
  *
- * Todo usuário registrado entra implicitamente no grupo Membro
- * (`User::getPermissions()`), então conceder a MEMBER também cobre moderadores.
- * Administradores não recebem linha: `User::hasPermission()` já devolve `true`
- * para eles, e semeá-los duplica o badge no grid — ver a migração
- * `2026_07_30_000010_drop_redundant_admin_permissions`.
+ * Every registered user implicitly joins the Member group
+ * (`User::getPermissions()`), so granting to MEMBER also covers moderators.
+ * Administrators get no row: `User::hasPermission()` already returns `true` for
+ * them, and seeding them duplicates the badge in the grid (see migration
+ * `2026_07_30_000010_drop_redundant_admin_permissions`).
  *
- * `Migration::addPermissions` pula grupos que não existem, então um fórum que
- * apagou Moderador não quebra na ativação.
+ * `Migration::addPermissions` skips groups that do not exist, so a forum that
+ * deleted Moderator does not break on activation.
  */
 return Migration::addPermissions([
     'ramon-chat.use'                 => Group::MEMBER_ID,

@@ -1,23 +1,23 @@
 import type ChatState from "../state/ChatState";
 
 /**
- * Quanto tempo a linha fica destacada depois do salto. Espelha
- * `@chat-jump-highlight` no LESS, que governa a animação em si — os dois
- * precisam andar juntos, senão a classe sai antes de a animação terminar (o
- * destaque some no meio) ou fica depois dela (a linha volta ao normal e a barra
- * lateral permanece acesa).
+ * How long the row stays highlighted after the jump. Mirrors
+ * `@chat-jump-highlight` in the LESS, which governs the animation itself: the two
+ * must move together, otherwise the class leaves before the animation ends (the
+ * highlight vanishes midway) or stays after it (the row returns to normal and the
+ * side bar stays lit).
  */
 const HIGHLIGHT_MS = 3000;
 
 /**
- * Centra uma linha do stream e a destaca por alguns segundos.
+ * Centers a stream row and highlights it for a few seconds.
  *
- * O alvo é procurado dentro do scroller que contém `from` — o painel de tópico e
- * o canal desenham a mesma `ChatMessage`, e uma busca no documento levaria a
- * rolar o stream errado quando os dois estão abertos.
+ * The target is looked up inside the scroller that contains `from`: the topic
+ * panel and the channel draw the same `ChatMessage`, and a document-wide lookup
+ * would scroll the wrong stream when both are open.
  *
- * Devolve `false` quando a linha não está na janela carregada, para quem chamou
- * poder avisar em vez de engolir o clique.
+ * Returns `false` when the row is not in the loaded window, so the caller can
+ * warn instead of swallowing the click.
  */
 export function jumpToMessage(
   id: number | string,
@@ -34,14 +34,13 @@ export function jumpToMessage(
 
   if (!scroller || !node) return false;
 
-  // Deliberadamente não é `scrollIntoView`: ele rola *todos* os ancestrais
-  // roláveis do nó, o documento incluído. No celular isso arrastava a página
-  // inteira para baixo só para mover uma linha dentro de um contêiner que já
-  // estava na tela.
+  // Deliberately not `scrollIntoView`: it scrolls *all* scrollable ancestors of
+  // the node, the document included. On mobile that dragged the whole page down
+  // just to move one row inside a container that was already on screen.
   //
-  // Medido pelos rects e não por `offsetTop`, que é relativo ao ancestral
-  // posicionado mais próximo e só coincide com o espaço de coordenadas do
-  // scroller por acidente do CSS atual.
+  // Measured by rects rather than `offsetTop`, which is relative to the nearest
+  // positioned ancestor and only matches the scroller's coordinate space by
+  // accident of the current CSS.
   const nodeRect = node.getBoundingClientRect();
   const scrollerRect = scroller.getBoundingClientRect();
   const centred =
@@ -49,8 +48,8 @@ export function jumpToMessage(
     scrollerRect.top -
     (scroller.clientHeight - nodeRect.height) / 2;
 
-  // Suave só em saltos curtos. Atravessar centenas de linhas animando levava
-  // segundos até a mensagem aparecer; um salto longo vai direto, como no Discord.
+  // Smooth only for short jumps. Animating across hundreds of rows took seconds
+  // before the message showed up; a long jump goes straight there, like Discord.
   scroller.scrollTo({
     top: Math.max(0, scroller.scrollTop + centred),
     behavior: Math.abs(centred) > scroller.clientHeight * 2 ? "auto" : "smooth",
@@ -62,17 +61,18 @@ export function jumpToMessage(
 }
 
 /**
- * Timers em voo, por linha. Sem isso, saltar duas vezes para a mesma mensagem
- * deixaria o primeiro timer apagar o destaque no meio do segundo.
+ * In-flight timers, per row. Without this, jumping twice to the same message
+ * would let the first timer clear the highlight midway through the second.
  */
 const timers = new WeakMap<HTMLElement, number>();
 
 function highlight(node: HTMLElement): void {
   window.clearTimeout(timers.get(node));
 
-  // Reaplicar a classe que já está lá não reinicia a animação. Tirar, forçar o
-  // reflow lendo `offsetWidth` e pôr de volta é o que faz o segundo salto para a
-  // mesma linha acender de novo em vez de não fazer nada visível.
+  // Reapplying a class that is already there does not restart the animation.
+  // Removing it, forcing a reflow by reading `offsetWidth` and putting it back is
+  // what makes the second jump to the same row light up again instead of doing
+  // nothing visible.
   node.classList.remove("ChatMessage--flash");
   void node.offsetWidth;
   node.classList.add("ChatMessage--flash");
@@ -87,12 +87,12 @@ function highlight(node: HTMLElement): void {
 }
 
 /**
- * Salta para uma mensagem do canal, carregando antes o trecho do histórico que
- * a separa da janela quando ela é mais antiga do que o que já está na tela.
+ * Jumps to a channel message, first loading the slice of history that separates
+ * it from the window when it is older than what is already on screen.
  *
- * O scroller é relido depois do carregamento porque o redraw pode tê-lo
- * recriado. Devolve `false` só quando a mensagem não pode estar no stream do
- * canal — resposta de tópico, apagada, ou além do limite de páginas.
+ * The scroller is re-read after loading because the redraw may have recreated
+ * it. Returns `false` only when the message cannot be in the channel stream:
+ * a topic reply, a deleted one, or beyond the page limit.
  */
 export async function revealAndJump(
   state: ChatState,

@@ -1,9 +1,9 @@
 /**
- * Fachada do chunk preguiçoso com a interface do chat.
+ * Facade for the lazy chunk holding the chat interface.
  *
- * Um ponto de entrada só para as três superfícies (página, painel do drawer,
- * navegação de canais), para que o webpack gere um chunk nomeado e registrado
- * em vez de chunks compartilhados numerados, que o Flarum não registra.
+ * A single entry point for the three surfaces (page, drawer panel, channel
+ * navigation), so webpack emits one named, registered chunk instead of numbered
+ * shared chunks, which Flarum does not register.
  */
 export { default as ChatPage } from "./components/ChatPage";
 export { default as ChatDrawerPanel } from "./components/ChatDrawerPanel";

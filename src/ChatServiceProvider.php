@@ -9,8 +9,11 @@
 
 namespace Ramon\Chat;
 
+use Flarum\Extension\ExtensionManager;
 use Flarum\Foundation\AbstractServiceProvider;
+use Flarum\Foundation\Config;
 use Flarum\Formatter\Formatter;
+use Flarum\Http\UrlGenerator;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Contracts\Cache\Store;
 use Ramon\Chat\Service\RateLimiter;
@@ -43,5 +46,14 @@ class ChatServiceProvider extends AbstractServiceProvider
 
         Message::setFormatter($formatter);
         MessageRevision::setFormatter($formatter);
+
+        $url = $this->container->make(UrlGenerator::class);
+
+        Channel::setServices(
+            $this->container->make(ExtensionManager::class),
+            $this->container->make(Config::class)
+        );
+        Upload::setUrlGenerator($url);
+        Webhook::setUrlGenerator($url);
     }
 }

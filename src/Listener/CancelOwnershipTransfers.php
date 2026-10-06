@@ -15,8 +15,9 @@ use Ramon\Chat\Event\UserLeftChannel;
 use Ramon\Chat\Service\OwnershipTransfers;
 
 /**
- * Encerra a transferência pendente quando ela perde o sentido: uma das partes
- * saiu ou foi removida do canal, ou o canal foi apagado ou arquivado.
+ * Ends the pending transfer when it stops making sense: one of the parties
+ * left or was removed from the channel, or the channel was deleted or
+ * archived.
  */
 class CancelOwnershipTransfers
 {

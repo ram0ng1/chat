@@ -14,9 +14,9 @@ use Ramon\Chat\Channel;
 use Ramon\Chat\ChannelTransfer;
 
 /**
- * Uma transferência terminou sem mudar o dono: recusada por quem ia receber,
- * cancelada, ou substituída por uma nova. A linha já foi apagada; `transfer`
- * é a cópia em memória, para quem precisa saber quem eram as partes.
+ * A transfer ended without changing the owner: declined by the recipient,
+ * cancelled, or replaced by a new one. The row is already deleted; `transfer`
+ * is the in-memory copy, for whoever needs to know who the parties were.
  */
 class OwnershipTransferEnded
 {

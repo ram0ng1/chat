@@ -14,8 +14,8 @@ use Ramon\Chat\ChannelRank;
 use Ramon\Chat\Rank\RankBook;
 
 /**
- * Qual cargo aparece ao lado de cada nome: dono, depois moderador, depois os
- * cargos do dono na ordem dele.
+ * Which rank shows next to each name: owner, then moderator, then the owner's
+ * ranks in their order.
  */
 class RankBookTest extends TestCase
 {

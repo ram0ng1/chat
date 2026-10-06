@@ -17,9 +17,9 @@ use Ramon\Chat\Access\GlobalPolicy;
 use Ramon\Chat\Service\ChannelOwnership;
 
 /**
- * Criar canais obedece ao modo de `ramon-chat.channel_ownership` antes da
- * permissão: no modo "administradores" a grade não conta; no modo "membros" a
- * permissão `createChannel` volta a decidir.
+ * Creating channels obeys the `ramon-chat.channel_ownership` mode before the
+ * permission: in "administrators" mode the grid does not count; in "members"
+ * mode the `createChannel` permission decides again.
  */
 class GlobalPolicyTest extends TestCase
 {

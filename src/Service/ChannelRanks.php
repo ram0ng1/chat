@@ -25,14 +25,14 @@ use Ramon\Chat\Rank\RankBook;
 use WeakMap;
 
 /**
- * Os cargos de um canal: o livro que se lê ao lado de cada nome, e as
- * escritas de quem os administra.
+ * A channel's ranks: the book read next to each name, and the writes of
+ * whoever manages them.
  *
- * O livro não depende de quem lê, então fica em cache por canal e é apagado a
- * cada mudança que o afeta: as escritas daqui e, por Listener\ForgetChannelRanks,
- * promoções, transferências, entradas e saídas. Dentro da requisição ele é
- * lembrado na própria instância do canal, que as mensagens de uma página
- * compartilham, então uma página de cinquenta mensagens lê o cache uma vez.
+ * The book does not depend on who reads it, so it is cached per channel and
+ * cleared on every change that affects it: the writes here and, through
+ * Listener\ForgetChannelRanks, promotions, transfers, joins and leaves. Within
+ * a request it is remembered on the channel instance itself, which the
+ * messages of a page share, so a page of fifty messages reads the cache once.
  */
 class ChannelRanks
 {
@@ -52,7 +52,7 @@ class ChannelRanks
     }
 
     /**
-     * Null para uma conversa direta, que não tem cargos.
+     * Null for a direct conversation, which has no ranks.
      *
      * @return array<string, mixed>|null
      */
@@ -77,7 +77,7 @@ class ChannelRanks
     }
 
     /**
-     * O cargo exibido ao lado do nome do autor, ou null.
+     * The rank shown next to the author's name, or null.
      *
      * @return array<string, mixed>|null
      */
@@ -137,8 +137,8 @@ class ChannelRanks
     }
 
     /**
-     * Edita um cargo criado pelo dono, ou personaliza um embutido. `$target` é
-     * o id de um, ou 'owner' / 'moderator'.
+     * Edits an owner-created rank, or customizes a built-in one. `$target` is
+     * the id of one, or 'owner' / 'moderator'.
      *
      * @param  array<string, mixed>  $attributes
      */
@@ -157,8 +157,8 @@ class ChannelRanks
     }
 
     /**
-     * Apaga um cargo criado pelo dono, e com ele quem o tinha. Num embutido,
-     * volta ao padrão.
+     * Deletes an owner-created rank, and with it whoever held it. On a built-in
+     * one, it reverts to the default.
      */
     public function delete(Channel $channel, User $actor, int|string $target): void
     {
@@ -177,7 +177,7 @@ class ChannelRanks
     }
 
     /**
-     * A nova ordem dos cargos criados pelo dono: todos eles, cada um uma vez.
+     * The new order of the owner-created ranks: all of them, each once.
      *
      * @param  array<int, mixed>  $ids
      */
@@ -215,10 +215,10 @@ class ChannelRanks
     }
 
     /**
-     * Os cargos de um membro, todos de uma vez: os que não estão na lista saem.
+     * A member's ranks, all at once: the ones not in the list are removed.
      *
-     * Só para quem está no canal e aparece nele: um membro oculto recebe a
-     * mesma resposta de quem não é membro.
+     * Only for someone who is in the channel and shows up in it: a hidden
+     * member gets the same response as a non-member.
      *
      * @param  array<int, mixed>  $rankIds
      */
@@ -283,7 +283,7 @@ class ChannelRanks
     }
 
     /**
-     * Lê só os campos conhecidos, cada um validado. Os demais são ignorados.
+     * Reads only the known fields, each validated. The rest are ignored.
      *
      * @param  array<string, mixed>  $attributes
      */
@@ -346,8 +346,8 @@ class ChannelRanks
     }
 
     /**
-     * Um embutido sem linha volta como modelo novo, com os padrões; salvá-lo
-     * é o que o personaliza.
+     * A built-in without a row comes back as a new model with the defaults;
+     * saving it is what customizes it.
      */
     protected function find(Channel $channel, int|string $target): ChannelRank
     {
@@ -397,8 +397,9 @@ class ChannelRanks
     }
 
     /**
-     * Duas consultas: os cargos (que RankBook ordena), e os membros presentes e visíveis que são
-     * moderadores ou têm algum cargo, já com os cargos de cada um.
+     * Two queries: the ranks (which RankBook orders), and the present, visible
+     * members who are moderators or hold some rank, already with each one's
+     * ranks.
      *
      * @return array{ranks: list<array<string, mixed>>, moderatorIds: list<int>, assignments: array<int, list<int>>}
      */

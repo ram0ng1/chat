@@ -16,7 +16,6 @@ use Flarum\Locale\Translator;
 use Flarum\Settings\SettingsRepositoryInterface;
 use Flarum\User\User;
 use Illuminate\Contracts\Events\Dispatcher as Events;
-use Illuminate\Database\ConnectionInterface;
 use Ramon\Chat\Channel;
 use Ramon\Chat\Event\MessageWasSent;
 use Ramon\Chat\Event\ThreadWasCreated;
@@ -36,7 +35,6 @@ use Ramon\Chat\Upload;
 class MessageDispatcher
 {
     public function __construct(
-        protected ConnectionInterface $db,
         protected ExtensionManager $extensions,
         protected Events $events,
         protected SettingsRepositoryInterface $settings,
@@ -92,7 +90,7 @@ class MessageDispatcher
 
         $threadWasCreated = false;
 
-        $message = $this->db->transaction(function () use (
+        $message = Message::query()->getConnection()->transaction(function () use (
             $channel, $actor, $content, &$thread, $replyTo, $uploadIds, $createThread, &$threadWasCreated
         ) {
             // Starting a thread from a message that has none yet: create the
@@ -173,7 +171,7 @@ class MessageDispatcher
      */
     public function sendSystem(Channel $channel, string $key, array $data = []): Message
     {
-        $message = $this->db->transaction(function () use ($channel, $key, $data) {
+        $message = Message::query()->getConnection()->transaction(function () use ($channel, $key, $data) {
             $message = Message::buildSystem($channel, $key, $data);
             $message->save();
 
@@ -313,11 +311,10 @@ class MessageDispatcher
         }
 
         // Asked of the extension manager rather than by probing for a `stickers`
-        // table. `ConnectionInterface` does not declare `getSchemaBuilder()` — it
-        // lives on the concrete Connection — so that probe would fatal on any
-        // driver implementing only the interface. It was also the wrong question:
-        // what matters is whether the extension is enabled, not whether a table
-        // happens to be left over from an uninstall.
+        // table: what matters is whether the extension is enabled, not whether a
+        // table happens to be left over from an uninstall. The table itself is
+        // read directly so the chat never takes a class dependency on the
+        // stickers package, which is an optional integration.
         if (! $this->extensions->isEnabled('ramon-stickers')) {
             return;
         }
@@ -328,7 +325,7 @@ class MessageDispatcher
             return;
         }
 
-        $used = $this->db->table('stickers')
+        $used = Message::query()->getConnection()->table('stickers')
             ->whereIn('text_to_replace', array_unique($matches[0]))
             ->exists();
 

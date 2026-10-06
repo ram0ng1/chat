@@ -60,7 +60,7 @@ class ChannelImageController implements RequestHandlerInterface
         $actor = RequestUtil::getActor($request);
         $actor->assertRegistered();
 
-        $id = (int) Arr::get($request->getQueryParams(), 'id');
+        $id = (int) Arr::get((array) $request->getAttribute('routeParameters'), 'id', 0);
 
         // whereVisibleTo before the policy: a channel the actor cannot see must
         // answer the same way whether or not it exists.

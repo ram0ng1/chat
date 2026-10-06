@@ -25,18 +25,19 @@ use Ramon\Chat\Event\OwnershipTransferEnded;
 use Ramon\Chat\Event\OwnershipTransferRequested;
 
 /**
- * Passa um canal de um dono para outro, em três tempos.
+ * Passes a channel from one owner to another, in three steps.
  *
- * 1. Quem pode transferir escolhe um membro; um código de seis dígitos vai
- *    para o próprio e-mail de quem iniciou, e só o hash dele é guardado.
- * 2. Quem iniciou digita o código; a transferência vira um pedido para o
- *    membro escolhido.
- * 3. O membro aceita (vira dono, e o dono anterior vira moderador do canal)
- *    ou recusa.
+ * 1. Whoever can transfer picks a member; a six-digit code goes to the
+ *    initiator's own email, and only its hash is stored.
+ * 2. The initiator types the code; the transfer becomes a request to the
+ *    chosen member.
+ * 3. The member accepts (becomes owner, and the previous owner becomes a
+ *    moderator of the channel) or declines.
  *
- * O código confirma que o pedido saiu de quem tem acesso à caixa de e-mail da
- * conta, e não só de uma sessão aberta. O aceite garante que ninguém recebe
- * um canal sem querer. O código nunca é registrado em log nem devolvido.
+ * The code confirms the request came from someone with access to the
+ * account's mailbox, and not just an open session. Acceptance guarantees
+ * nobody receives a channel unwillingly. The code is never logged nor
+ * returned.
  */
 class OwnershipTransfers
 {
@@ -45,13 +46,13 @@ class OwnershipTransfers
     public const MAX_ATTEMPTS = 5;
 
     /**
-     * Quantas transferências uma conta pode iniciar por hora: cada uma é um
-     * e-mail, e a caixa de entrada de ninguém deve virar alvo de repetição.
+     * How many transfers an account can start per hour: each one is an email,
+     * and nobody's inbox should become a target for repetition.
      */
     public const STARTS_PER_HOUR = 3;
 
     /**
-     * Quanto tempo um pedido confirmado espera a resposta de quem recebe.
+     * How long a confirmed request waits for the recipient's answer.
      */
     public const ANSWER_TTL_DAYS = 7;
 
@@ -66,8 +67,8 @@ class OwnershipTransfers
     }
 
     /**
-     * A transferência ainda viva do canal, ou null. Uma vencida conta como
-     * nenhuma; quem a encontra depois é que a apaga.
+     * The channel's still-live transfer, or null. An expired one counts as
+     * none; whoever finds it later is the one who deletes it.
      */
     public function pending(Channel $channel): ?ChannelTransfer
     {
@@ -78,8 +79,8 @@ class OwnershipTransfers
     }
 
     /**
-     * Abre a transferência e envia o código. Uma transferência anterior do
-     * mesmo canal é substituída.
+     * Opens the transfer and sends the code. A previous transfer of the same
+     * channel is replaced.
      */
     public function start(Channel $channel, User $actor, User $target): ChannelTransfer
     {
@@ -125,9 +126,9 @@ class OwnershipTransfers
     }
 
     /**
-     * Confere o código de quem iniciou. Cada erro conta; no quinto a
-     * transferência é descartada. As contagens são gravadas antes de o erro
-     * ser lançado, para que a recusa não as desfaça junto com a transação.
+     * Checks the initiator's code. Each mistake counts; on the fifth the
+     * transfer is discarded. The counts are written before the error is
+     * thrown, so the rejection does not undo them along with the transaction.
      */
     public function confirm(Channel $channel, User $actor, string $code): ChannelTransfer
     {
@@ -205,8 +206,9 @@ class OwnershipTransfers
     }
 
     /**
-     * Quem recebe aceita: vira dono, o dono anterior vira moderador do canal
-     * se ainda for membro, e a transferência é encerrada, tudo numa transação.
+     * The recipient accepts: becomes owner, the previous owner becomes a
+     * moderator of the channel if still a member, and the transfer is ended,
+     * all in one transaction.
      */
     public function accept(Channel $channel, User $actor): ChannelTransfer
     {
@@ -271,7 +273,7 @@ class OwnershipTransfers
     }
 
     /**
-     * Quem recebe recusa. Quem iniciou é avisado (ver NotifyOwnershipTransfers).
+     * The recipient declines. The initiator is notified (see NotifyOwnershipTransfers).
      */
     public function decline(Channel $channel, User $actor): ChannelTransfer
     {
@@ -281,7 +283,7 @@ class OwnershipTransfers
     }
 
     /**
-     * Quem iniciou, ou quem pode transferir o canal, desiste.
+     * The initiator, or whoever can transfer the channel, gives up.
      */
     public function cancel(Channel $channel, User $actor): ChannelTransfer
     {
@@ -297,9 +299,10 @@ class OwnershipTransfers
     }
 
     /**
-     * Encerra o que estiver pendente no canal, quando algo tira o sentido da
-     * transferência: o canal foi apagado ou arquivado, ou uma das partes saiu.
-     * Com `$user`, só a transferência em que essa pessoa é parte.
+     * Ends whatever is pending on the channel, when something removes the
+     * transfer's meaning: the channel was deleted or archived, or one of the
+     * parties left. With `$user`, only the transfer in which that person is a
+     * party.
      */
     public function cancelFor(Channel $channel, ?User $user = null, ?User $actor = null): void
     {
@@ -320,8 +323,8 @@ class OwnershipTransfers
     }
 
     /**
-     * Some com a linha e avisa. Apagada fora de uma transação: é uma única
-     * escrita, e o evento só sai depois dela.
+     * Removes the row and notifies. Deleted outside a transaction: it is a
+     * single write, and the event only goes out after it.
      */
     protected function end(Channel $channel, ChannelTransfer $transfer, string $reason, ?User $actor): ChannelTransfer
     {
@@ -335,7 +338,7 @@ class OwnershipTransfers
     }
 
     /**
-     * O pedido confirmado endereçado ao ator, ou um 422 traduzido.
+     * The confirmed request addressed to the actor, or a translated 422.
      */
     protected function incomingFor(Channel $channel, User $actor): ChannelTransfer
     {
@@ -358,8 +361,8 @@ class OwnershipTransfers
     }
 
     /**
-     * Só um canal de categoria, ativo, num fórum em que membros são donos de
-     * canais. No modo "administradores" ser dono não concede nada.
+     * Only a category channel, active, in a forum where members own channels.
+     * In "administrators" mode owning grants nothing.
      */
     protected function assertTransferable(Channel $channel): void
     {
@@ -372,10 +375,10 @@ class OwnershipTransfers
     }
 
     /**
-     * Quem recebe tem de ser membro visível do canal, não o dono atual, e
-     * poder de fato ser dono de canais: sem `manageOwnChannels` a propriedade
-     * seria inerte. Uma conta suspensa perde a permissão pelo flarum/suspend,
-     * e a data de suspensão é conferida também aqui.
+     * The recipient must be a visible member of the channel, not the current
+     * owner, and able to actually own channels: without `manageOwnChannels`
+     * ownership would be inert. A suspended account loses the permission
+     * through flarum/suspend, and the suspension date is checked here too.
      */
     protected function assertEligible(Channel $channel, User $target, string $field): void
     {
@@ -405,8 +408,9 @@ class OwnershipTransfers
     }
 
     /**
-     * O código vai para o e-mail de quem iniciou, no idioma dessa pessoa, pela
-     * fila de e-mails do Flarum. O layout informativo do core escapa o corpo.
+     * The code goes to the initiator's email, in that person's language,
+     * through Flarum's mail queue. The core's informational layout escapes the
+     * body.
      */
     protected function mailCode(Channel $channel, User $actor, User $target, string $code): void
     {

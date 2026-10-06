@@ -8,22 +8,22 @@
  */
 
 /**
- * Neutralizada. Era uma migração de re-semeadura, e re-semear é justamente o que
- * uma extensão não pode fazer.
+ * Neutralized. It was a re-seeding migration, and re-seeding is precisely what an
+ * extension must not do.
  *
- * A versão anterior reaplicava `ramon-chat.use`, `startDirect`, `upload` e
- * `react` ao grupo Membro para cobrir instalações antigas que nunca receberam o
- * padrão de `2026_07_29_000013`. O efeito colateral era que qualquer fórum que
- * tivesse revogado essas permissões de propósito as recebia de volta na
- * atualização seguinte — a extensão sobrescrevendo, calada, a decisão do admin.
+ * The previous version reapplied `ramon-chat.use`, `startDirect`, `upload` and
+ * `react` to the Member group to cover old installs that never received the
+ * default from `2026_07_29_000013`. The side effect was that any forum that had
+ * revoked those permissions on purpose got them back on the next update: the
+ * extension silently overriding the admin's decision.
  *
- * Semear o padrão na primeira instalação é legítimo e continua em
- * `2026_07_29_000013`. Reaplicá-lo depois não é: dali em diante a configuração de
- * permissões pertence ao fórum, e a extensão só lê.
+ * Seeding the default on first install is legitimate and stays in
+ * `2026_07_29_000013`. Reapplying it afterwards is not: from then on the
+ * permission setup belongs to the forum, and the extension only reads it.
  *
- * O arquivo fica no lugar em vez de ser apagado: o nome dele já está gravado na
- * tabela `migrations` de quem atualizou, e removê-lo não desfaz nada — apenas
- * apagaria o registro de por que ele existiu.
+ * The file stays in place instead of being deleted: its name is already recorded
+ * in the `migrations` table of anyone who upgraded, and removing it undoes
+ * nothing, it would only erase the record of why it existed.
  */
 return [
     'up'   => fn () => null,

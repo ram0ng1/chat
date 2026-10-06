@@ -8,10 +8,10 @@
  */
 
 /*
- * Apaga, como o endpoint de exclusão faria, canais que a API não deixa a suíte
- * apagar: uma conversa direta só é visível aos participantes, e só um
- * administrador pode excluí-la, então nenhum token sozinho alcança uma conversa
- * entre dois usuários de teste. Só para o fórum de desenvolvimento.
+ * Deletes, as the delete endpoint would, channels the API won't let the suite
+ * delete: a direct conversation is only visible to its participants, and only
+ * an administrator can delete it, so no single token reaches a conversation
+ * between two test users. Development forum only.
  *
  *     php tests/E2E/lib/purge-channels.php 12 13
  */

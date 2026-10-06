@@ -21,13 +21,13 @@ use Ramon\Chat\Notification\ChannelInviteDeclinedBlueprint;
 use Ramon\Chat\Service\InvitationManager;
 
 /**
- * Mantém a notificação de convite em dia com a tabela de convites.
+ * Keeps the invite notification in sync with the invites table.
  *
- * O NotificationSyncer recebe a lista completa de quem deve ter a
- * notificação (tipo + canal + convidador): cria para quem entrou na lista e
- * apaga para quem saiu. Chamá-lo com os convites ainda pendentes é o que faz
- * um convite aceito, recusado ou cancelado sumir do sino sem código próprio
- * para cada caso.
+ * The NotificationSyncer receives the full list of who should have the
+ * notification (type + channel + inviter): it creates for those who entered
+ * the list and deletes for those who left. Calling it with the still-pending
+ * invites is what makes an accepted, declined or cancelled invite vanish from
+ * the bell without dedicated code for each case.
  */
 class NotifyInvitations
 {

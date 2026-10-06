@@ -14,8 +14,8 @@ use Flarum\Database\AbstractModel;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * Um cargo de canal. Ver Rank\RankBook para como os cargos viram o que se vê
- * ao lado de cada nome.
+ * A channel rank. See Rank\RankBook for how ranks become what shows next to
+ * each name.
  *
  * @property int $id
  * @property int $channel_id
@@ -36,7 +36,7 @@ class ChannelRank extends AbstractModel
     public const BUILTIN_MODERATOR = 'moderator';
 
     /**
-     * Cargos criados pelo dono por canal. Os embutidos não contam.
+     * Owner-created ranks per channel. The built-in ones do not count.
      */
     public const MAX_PER_CHANNEL = 20;
 
@@ -45,8 +45,8 @@ class ChannelRank extends AbstractModel
     public const COLOR_PATTERN = '/\A#[0-9a-fA-F]{6}\z/';
 
     /**
-     * Só uma classe do FontAwesome, na forma curta ou na longa. Vai para um
-     * atributo `class`, então nada além de letras, dígitos e hífens.
+     * Only a FontAwesome class, in the short or the long form. It goes into a
+     * `class` attribute, so nothing but letters, digits and hyphens.
      */
     public const ICON_PATTERN = '/\A(?:fa[srb]?|fa-(?:solid|regular|brands)) fa-[a-z0-9-]{1,48}\z/';
 

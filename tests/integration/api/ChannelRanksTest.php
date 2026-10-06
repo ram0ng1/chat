@@ -23,8 +23,9 @@ use Ramon\Chat\Tests\integration\FlushesCache;
 use Ramon\Chat\Tests\integration\ResetsVisibilityScopers;
 
 /**
- * Cargos de canal: quem os administra, o que é aceito, quem pode recebê-los,
- * qual aparece ao lado do nome, e quanto custa servi-los numa página.
+ * Channel ranks: who manages them, what is accepted, who can receive them,
+ * which one shows next to the name, and how much it costs to serve them on a
+ * page.
  */
 class ChannelRanksTest extends TestCase
 {

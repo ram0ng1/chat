@@ -39,10 +39,10 @@ class UserJoinedChannel
          */
         public bool $automatic = false,
         /**
-         * Entrada por convite. `acceptedInvite` marca a transição e `invitedBy`
-         * diz quem convidou, quando a conta ainda existe: a sala narra o aceite
-         * como resposta a esse convite, e a notificação que o carregava é
-         * encerrada em nome desse convidador.
+         * Join by invite. `acceptedInvite` marks the transition and `invitedBy`
+         * says who invited, when the account still exists: the room narrates the
+         * acceptance as a reply to that invite, and the notification that carried
+         * it is closed on behalf of that inviter.
          */
         public bool $acceptedInvite = false,
         public ?User $invitedBy = null

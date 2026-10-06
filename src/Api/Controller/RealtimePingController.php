@@ -18,11 +18,12 @@ use Psr\Http\Server\RequestHandlerInterface;
 use Ramon\Chat\Realtime\ChatBroadcaster;
 
 /**
- * Empurra um `ramonChat.pong` para o próprio canal privado do ator.
+ * Pushes a `ramonChat.pong` to the actor's own private channel.
  *
- * Prova a ida e volta inteira (PHP → daemon → navegador) logo após a inscrição,
- * para o cliente desligar o polling sem esperar a primeira mensagem do chat.
- * Limitado a um por usuário a cada 3s; o excedente responde 204 sem empurrar.
+ * Proves the whole round trip (PHP → daemon → browser) right after
+ * subscribing, so the client can turn polling off without waiting for the
+ * first chat message. Limited to one per user every 3s; the excess answers 204
+ * without pushing.
  */
 class RealtimePingController implements RequestHandlerInterface
 {

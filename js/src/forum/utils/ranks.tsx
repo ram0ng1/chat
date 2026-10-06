@@ -7,11 +7,12 @@ import type { RankBook, RankEntry } from "../../common/models/Channel";
 import type Message from "../../common/models/Message";
 
 /**
- * Cargos de canal no cliente: qual cargo cada pessoa exibe, e como desenhá-lo.
+ * Channel ranks on the client: which rank each person displays, and how to
+ * draw it.
  *
- * A prioridade espelha Ramon\Chat\Rank\RankBook: dono, moderador e então os
- * cargos do dono na ordem dele. Funções puras, sem estado: este módulo entra
- * em mais de um chunk, e um estado aqui seria um por chunk.
+ * Priority mirrors Ramon\Chat\Rank\RankBook: owner, moderator, then the owner's
+ * ranks in the owner's order. Pure functions, no state: this module ends up in
+ * more than one chunk, and state here would be one copy per chunk.
  */
 
 export const ICON_PATTERN =

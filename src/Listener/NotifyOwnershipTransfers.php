@@ -22,13 +22,13 @@ use Ramon\Chat\Notification\OwnershipTransferBlueprint;
 use Ramon\Chat\Notification\OwnershipTransferDeclinedBlueprint;
 
 /**
- * Mantém o pedido de transferência no sino de quem recebe enquanto ele está
- * em aberto, avisa quem iniciou quando o pedido é recusado, e avisa quem
- * herdou um canal cujo dono saiu.
+ * Keeps the transfer request in the recipient's bell while it is open,
+ * notifies the initiator when the request is declined, and notifies whoever
+ * inherited a channel whose owner left.
  *
- * Cada destinatário é conferido contra a visibilidade do canal antes de
- * receber qualquer coisa: o assunto da notificação é o canal, e um aviso
- * sobre um canal que a pessoa não pode ver não deve existir.
+ * Each recipient is checked against the channel's visibility before receiving
+ * anything: the notification's subject is the channel, and a notice about a
+ * channel the person cannot see should not exist.
  */
 class NotifyOwnershipTransfers
 {
@@ -71,9 +71,9 @@ class NotifyOwnershipTransfers
     }
 
     /**
-     * Uma transferência aceita só tira o pedido do sino. Uma sucessão avisa o
-     * novo dono, que não pediu nada e precisa saber que agora responde pelo
-     * canal.
+     * An accepted transfer only removes the request from the bell. A succession
+     * notifies the new owner, who asked for nothing and needs to know they are
+     * now responsible for the channel.
      */
     public function whenTransferred(ChannelOwnershipTransferred $event): void
     {
@@ -92,9 +92,10 @@ class NotifyOwnershipTransfers
     }
 
     /**
-     * Tira o pedido do sino de quem ia recebê-lo. Pela transferência, e não
-     * pelo NotificationSyncer: o pedido pode ter sido feito por alguém que
-     * nem existe mais como parte, e só há um por canal de cada vez.
+     * Removes the request from the bell of whoever was going to receive it. Via
+     * the transfer, not the NotificationSyncer: the request may have been made
+     * by someone who no longer exists as a party, and there is only one per
+     * channel at a time.
      */
     protected function withdraw(Channel $channel, ChannelTransfer $transfer): void
     {

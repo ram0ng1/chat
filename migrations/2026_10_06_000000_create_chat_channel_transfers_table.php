@@ -11,11 +11,11 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Schema\Builder;
 
 /**
- * Transferências de propriedade de canal em andamento.
+ * Channel ownership transfers in progress.
  *
- * No máximo uma por canal. Guarda só o hash do código enviado por e-mail a
- * quem iniciou, nunca o código. A linha some quando a transferência é aceita,
- * recusada, cancelada ou substituída.
+ * At most one per channel. Stores only the hash of the code emailed to whoever
+ * started it, never the code. The row goes away when the transfer is accepted,
+ * declined, cancelled or replaced.
  */
 return [
     'up' => function (Builder $schema) {

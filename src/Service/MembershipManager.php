@@ -11,7 +11,6 @@ namespace Ramon\Chat\Service;
 
 use Carbon\Carbon;
 use Flarum\User\User;
-use Illuminate\Database\ConnectionInterface;
 use Ramon\Chat\Channel;
 use Ramon\Chat\ChannelUser;
 
@@ -22,7 +21,6 @@ use Ramon\Chat\ChannelUser;
 class MembershipManager
 {
     public function __construct(
-        protected ConnectionInterface $db,
         protected OwnershipSuccession $succession
     ) {
     }
@@ -48,7 +46,7 @@ class MembershipManager
         ?int $notificationLevel = null,
         bool $hidden = false
     ): ChannelUser {
-        return $this->db->transaction(function () use ($channel, $user, $notificationLevel, $hidden) {
+        return ChannelUser::query()->getConnection()->transaction(function () use ($channel, $user, $notificationLevel, $hidden) {
             /** @var ChannelUser|null $membership */
             $membership = ChannelUser::query()
                 ->where('channel_id', $channel->id)
@@ -119,7 +117,7 @@ class MembershipManager
     {
         $settled = null;
 
-        $membership = $this->db->transaction(function () use ($channel, $user, &$settled) {
+        $membership = ChannelUser::query()->getConnection()->transaction(function () use ($channel, $user, &$settled) {
             /** @var ChannelUser|null $membership */
             $membership = ChannelUser::query()
                 ->where('channel_id', $channel->id)

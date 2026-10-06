@@ -13,8 +13,8 @@ use Flarum\User\User;
 use Ramon\Chat\Channel;
 
 /**
- * O convidado recusou. `$inviter` é quem convidou, quando a conta ainda
- * existe; quem é avisado disso é decidido em Listener\NotifyInvitations.
+ * The invitee declined. `$inviter` is whoever sent the invite, when the
+ * account still exists; who gets told is decided in Listener\NotifyInvitations.
  */
 class InviteWasDeclined
 {

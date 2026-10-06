@@ -11,6 +11,7 @@ namespace Ramon\Chat;
 
 use Carbon\Carbon;
 use Flarum\Database\AbstractModel;
+use Flarum\Http\UrlGenerator;
 use Flarum\User\User;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
@@ -39,6 +40,12 @@ class Webhook extends AbstractModel
 {
     protected $table = 'chat_webhooks';
 
+    /**
+     * Handed over by ChatServiceProvider; see Channel::$extensions for why a
+     * static is safe here.
+     */
+    protected static ?UrlGenerator $url = null;
+
     public $timestamps = true;
 
 
@@ -55,6 +62,11 @@ class Webhook extends AbstractModel
         'deliveries_count'  => 'integer',
         'last_delivered_at' => 'datetime',
     ];
+
+    public static function setUrlGenerator(UrlGenerator $url): void
+    {
+        static::$url = $url;
+    }
 
     public static function build(string $name, Channel $channel, ?User $creator = null): static
     {
@@ -90,7 +102,7 @@ class Webhook extends AbstractModel
 
     public function url(): string
     {
-        return resolve(\Flarum\Http\UrlGenerator::class)
+        return static::$url
             ->to('api')
             ->path('chat/hooks/'.$this->key);
     }
