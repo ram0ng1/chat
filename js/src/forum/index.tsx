@@ -31,6 +31,7 @@ import {
   realtimeLive,
 } from "./realtime";
 import { bindShortcuts } from "./utils/shortcuts";
+import { installComposerStacking } from "./utils/stacking";
 import { shouldUseChatDrawer } from "./utils/surface";
 import { chatTitle, chatIcon } from "./utils/branding";
 import ChatPageResolver from "./resolvers/ChatPageResolver";
@@ -380,6 +381,7 @@ app.initializers.add("ramon-chat", () => {
       mountDrawer();
 
       bindShortcuts();
+      installComposerStacking();
 
       // Chat reports in flarum/flags' own list, when that extension is present.
       bindFlagsIntegration();

@@ -51,7 +51,11 @@
   position: fixed;
   right: 16px;
   bottom: 0;
-  z-index: var(--avocado-z-dropdown);
+  // Just above the forum composer (1020) and the theme's reply bubble, which
+  // share its layer, so a parked bubble never covers the conversation; still
+  // under dropdowns, modals, alerts and tooltips (1030+). The composer comes
+  // forward only while it is being used, see utils/stacking.ts.
+  z-index: ~"calc(var(--zindex-composer, 1020) + 5)";
 
   display: flex;
   flex-direction: column;
@@ -4871,5 +4875,19 @@ body.ChatFullPage {
     i {
       font-size: 10px;
     }
+  }
+}
+
+// The composer, the theme's reply bubble and its floating card come in front
+// of the chat drawer only while they are being used (focus or a press inside
+// them); utils/stacking.ts toggles the class on <html>.
+html.ChatComposerFront {
+  // `.App-composer` is the fixed layer that actually stacks the composer.
+  .App-composer,
+  #composer,
+  #composer .Composer,
+  #avocado-reply-dock,
+  .AvocadoComposerDock {
+    z-index: ~"calc(var(--zindex-composer, 1020) + 6)";
   }
 }
