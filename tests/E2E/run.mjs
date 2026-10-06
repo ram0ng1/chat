@@ -22,6 +22,7 @@ const suites = [
   "transitions.mjs",
   "channel-gone.mjs",
   "channel-status.mjs",
+  "live-state.mjs",
   "slow-mode-owner.mjs",
   "admin-page.mjs",
   "permissions.mjs",

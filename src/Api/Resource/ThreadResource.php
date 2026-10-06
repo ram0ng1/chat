@@ -135,12 +135,17 @@ class ThreadResource extends AbstractDatabaseResource
             // $context->model, which is what core does for model-scoped endpoints.
             Endpoint\Update::make()
                 ->authenticated()
-                ->can('rename')
-                ->action(function (Context $context) {
-                    /** @var Thread $thread */
-                    $thread = $context->model;
-
-                    $this->events->dispatch(new ThreadWasEdited($thread, $context->getActor()));
+                // A closure, not the bare string. Flarum treats a callable
+                // ability as a resolver and calls it — and 'rename' is PHP's
+                // rename(), so every rename answered with a 500.
+                ->can(fn () => 'rename')
+                // An `after` hook, not `action()`. Update's action is the one
+                // that fills and saves the model, and replacing it left a
+                // rename that answered 200, announced itself, and wrote nothing.
+                ->after(function (Context $context, Thread $thread) {
+                    if ($thread->wasChanged()) {
+                        $this->events->dispatch(new ThreadWasEdited($thread, $context->getActor()));
+                    }
 
                     return $thread;
                 }),

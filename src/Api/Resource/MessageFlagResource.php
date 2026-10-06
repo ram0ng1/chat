@@ -20,8 +20,10 @@ use Flarum\Group\Group;
 use Flarum\Locale\Translator;
 use Flarum\Notification\NotificationSyncer;
 use Flarum\User\User;
+use Illuminate\Contracts\Events\Dispatcher as Events;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Arr;
+use Ramon\Chat\Event\FlagsChanged;
 use Ramon\Chat\Message;
 use Ramon\Chat\MessageFlag;
 use Ramon\Chat\Notification\MessageFlaggedBlueprint;
@@ -43,7 +45,8 @@ class MessageFlagResource extends AbstractDatabaseResource
 {
     public function __construct(
         protected Translator $translator,
-        protected NotificationSyncer $notifications
+        protected NotificationSyncer $notifications,
+        protected Events $events
     ) {
     }
 
@@ -220,6 +223,8 @@ class MessageFlagResource extends AbstractDatabaseResource
 
                     $this->notifyAdministrators($flag, $message, $actor);
 
+                    $this->events->dispatch(new FlagsChanged($actor));
+
                     return $flag;
                 })
                 ->defaultInclude(['user', 'message']),
@@ -241,6 +246,8 @@ class MessageFlagResource extends AbstractDatabaseResource
                     }
 
                     $flag->resolve($actor)->save();
+
+                    $this->events->dispatch(new FlagsChanged($actor));
 
                     return $flag;
                 })

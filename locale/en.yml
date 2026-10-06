@@ -18,6 +18,7 @@ ramon-chat:
     invalid_reply_target: You cannot reply to a message from another channel.
     invalid_thread_target: That thread does not belong to this channel.
     invalid_channel_status: A channel can only be set to open or closed.
+    channel_archived_status: This channel is archived. Unarchive it first.
     threading_disabled: Threads are not enabled in this channel.
     channel_not_found: That channel does not exist, or you cannot access it.
     archive_discussion_not_found: That discussion does not exist, or you cannot access it.
@@ -145,6 +146,7 @@ ramon-chat:
       moderators_only: Only moderators can send messages in this channel.
       archived: This channel has been archived.
       archived_link: View the archived transcript
+      unarchive: Unarchive
       no_messages: No messages yet. Say something.
       scroll_to_latest: Jump to the latest message
       members: "{count, plural, one {# member} other {# members}}"
@@ -387,8 +389,8 @@ ramon-chat:
       failed: Those changes could not be saved.
       saved: Channel updated.
       lifecycle: Channel state
-      lifecycle_help: Closing stops new messages but keeps the channel readable. Archiving copies the history into a discussion and freezes the channel for good.
-      archive_confirm: Archive this channel? Its history is copied into a discussion and the channel is frozen permanently.
+      lifecycle_help: Closing stops new messages but keeps the channel readable. Archiving copies the history into a discussion and freezes the channel until it is unarchived.
+      archive_confirm: Archive this channel? Its history is copied into a discussion and the channel is frozen until unarchived.
 
     add_members:
       title: Invite members
@@ -477,6 +479,7 @@ ramon-chat:
       close_channel: Close channel
       reopen_channel: Reopen channel
       archive_channel: Archive channel
+      unarchive_channel: Unarchive channel
       delete_channel: Delete channel
       delete_confirm: Deleting a channel cannot be undone. Delete it anyway?
       member_search: Filter members

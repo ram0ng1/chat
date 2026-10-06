@@ -468,6 +468,13 @@ return [
                 ->listen(Event\MessagePinToggled::class, Realtime\BroadcastListener::class.'@whenMessageChanged')
                 ->listen(Event\ReactionToggled::class, Realtime\BroadcastListener::class.'@whenReactionToggled')
                 ->listen(Event\ThreadWasCreated::class, Realtime\BroadcastListener::class.'@whenThreadChanged')
+                ->listen(Event\ThreadWasEdited::class, Realtime\BroadcastListener::class.'@whenThreadChanged')
+                // Once per move rather than once per message, and after the
+                // commit, so both rooms read the rows where they now are.
+                ->listen(Event\MessagesWereMoved::class, Realtime\BroadcastListener::class.'@whenMessagesMoved')
+                // Registered after AutoJoinUsers above, so the members it adds
+                // are already in the audience when this resolves it.
+                ->listen(Event\ChannelWasCreated::class, Realtime\BroadcastListener::class.'@whenChannelCreated')
                 ->listen(Event\ChannelStatusChanged::class, Realtime\BroadcastListener::class.'@whenChannelChanged')
                 ->listen(Event\ChannelWasEdited::class, Realtime\BroadcastListener::class.'@whenChannelChanged')
                 ->listen(Event\ChannelWasArchived::class, Realtime\BroadcastListener::class.'@whenChannelArchived')
@@ -482,7 +489,10 @@ return [
                 ->listen(Event\UserJoinedChannel::class, Realtime\BroadcastListener::class.'@whenJoined')
                 ->listen(Event\UserLeftChannel::class, Realtime\BroadcastListener::class.'@whenLeft')
                 ->listen(Event\InviteWasDeclined::class, Realtime\BroadcastListener::class.'@whenInviteDeclined')
-                ->listen(Event\InviteWasCancelled::class, Realtime\BroadcastListener::class.'@whenInviteCancelled'),
+                ->listen(Event\InviteWasCancelled::class, Realtime\BroadcastListener::class.'@whenInviteCancelled')
+                ->listen(Event\ChannelModeratorChanged::class, Realtime\BroadcastListener::class.'@whenModeratorChanged')
+                // The moderators' queue badge, recounted by each of them.
+                ->listen(Event\FlagsChanged::class, Realtime\BroadcastListener::class.'@whenFlagsChanged'),
         ]),
 
     // ── Privacy and auditing ─────────────────────────────────────────────────

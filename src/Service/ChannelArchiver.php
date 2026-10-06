@@ -22,6 +22,7 @@ use Flarum\User\User;
 use Illuminate\Contracts\Events\Dispatcher as Events;
 use Illuminate\Database\ConnectionInterface;
 use Ramon\Chat\Channel;
+use Ramon\Chat\Event\ChannelStatusChanged;
 use Ramon\Chat\Event\ChannelWasArchived;
 use Ramon\Chat\Message;
 
@@ -173,6 +174,33 @@ class ChannelArchiver
 
             return $discussion;
         });
+    }
+
+    /**
+     * Takes a channel out of the archive, closed.
+     *
+     * Closed rather than open: whoever undoes an archive has not necessarily
+     * decided the room should take messages again, and reopening is one more
+     * deliberate click from there.
+     *
+     * The archive stamps are cleared, the discussion link included. The
+     * transcript stays in the forum as an ordinary discussion; what goes is the
+     * channel's claim to be archived, which the archive action keys on, and a
+     * channel archived again later gets a link to its new transcript.
+     */
+    public function unarchive(Channel $channel, User $actor): Channel
+    {
+        $previous = $channel->status;
+
+        $channel->status = Channel::STATUS_CLOSED;
+        $channel->archived_discussion_id = null;
+        $channel->archived_at = null;
+        $channel->archived_by_id = null;
+        $channel->save();
+
+        $this->events->dispatch(new ChannelStatusChanged($channel, $previous, $actor));
+
+        return $channel;
     }
 
     /**

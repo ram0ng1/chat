@@ -9,6 +9,8 @@
 
 namespace Ramon\Chat\Realtime\Job;
 
+use Flarum\Group\Group;
+use Flarum\Group\Permission;
 use Flarum\Queue\AbstractJob;
 use Flarum\User\User;
 use Illuminate\Contracts\Container\Container;
@@ -46,13 +48,15 @@ class SendChatEventJob extends AbstractJob
      * @param  int|null  $channelId     Fan out to this channel's members.
      * @param  int|null  $userId        Or deliver to exactly this one user.
      * @param  int|null  $exceptUserId  The actor, who already knows what happened.
+     * @param  bool  $moderators        Or deliver to everyone holding `ramon-chat.moderate`.
      */
     public function __construct(
         protected string $event,
         protected array $payload,
         protected ?int $channelId = null,
         protected ?int $userId = null,
-        protected ?int $exceptUserId = null
+        protected ?int $exceptUserId = null,
+        protected bool $moderators = false
     ) {
         parent::__construct();
     }
@@ -65,9 +69,11 @@ class SendChatEventJob extends AbstractJob
             return;
         }
 
-        $recipients = $this->userId !== null
-            ? $this->singleUser($this->userId)
-            : $this->channelMembers();
+        $recipients = match (true) {
+            $this->userId !== null => $this->singleUser($this->userId),
+            $this->moderators => $this->chatModerators(),
+            default => $this->channelMembers(),
+        };
 
         if ($recipients->isEmpty()) {
             return;
@@ -177,6 +183,42 @@ class SendChatEventJob extends AbstractJob
         }
 
         return collect([$userId]);
+    }
+
+    /**
+     * Everyone who works the moderation queue.
+     *
+     * Narrowed in SQL to the groups granted `ramon-chat.moderate`, plus the
+     * administrators, who hold every permission without being listed; then
+     * asked of each user, which is what honours flarum/suspend's demotion.
+     *
+     * A forum that grants the permission to every member has no moderators to
+     * single out, and pushing to every account would be a broadcast in all but
+     * name. Nothing is sent there; the badge catches up on the next page load.
+     *
+     * @return Collection<int, int>
+     */
+    protected function chatModerators(): Collection
+    {
+        $groupIds = Permission::query()
+            ->where('permission', 'ramon-chat.moderate')
+            ->pluck('group_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        if (in_array(Group::GUEST_ID, $groupIds, true) || in_array(Group::MEMBER_ID, $groupIds, true)) {
+            return collect();
+        }
+
+        $groupIds[] = Group::ADMINISTRATOR_ID;
+
+        return User::query()
+            ->whereHas('groups', fn ($query) => $query->whereIn('groups.id', $groupIds))
+            ->with('groups')
+            ->get()
+            ->filter(fn (User $user) => (int) $user->id !== $this->exceptUserId && $user->hasPermission('ramon-chat.moderate'))
+            ->map(fn (User $user) => (int) $user->id)
+            ->values();
     }
 
     /**

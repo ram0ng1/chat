@@ -16,6 +16,8 @@ const EVENT_REACTION = "ramonChat.reaction";
 const EVENT_THREAD = "ramonChat.thread";
 const EVENT_CHANNEL = "ramonChat.channel";
 const EVENT_MEMBERSHIP = "ramonChat.membership";
+const EVENT_MESSAGES_MOVED = "ramonChat.messagesMoved";
+const EVENT_FLAGS = "ramonChat.flags";
 const EVENT_TYPING = "ramonChat.typing";
 const EVENT_PONG = "ramonChat.pong";
 
@@ -115,6 +117,8 @@ function bindTo(channel: any): void {
   on(EVENT_THREAD, (data: any) => onThread(data));
   on(EVENT_CHANNEL, (data: any) => onChannel(data));
   on(EVENT_MEMBERSHIP, (data: any) => onMembership(data));
+  on(EVENT_MESSAGES_MOVED, (data: any) => onMessagesMoved(data));
+  on(EVENT_FLAGS, () => onFlags());
   on(EVENT_TYPING, (data: any) => onTyping(data));
   // Carries nothing: arriving at all is the proof `on()` records.
   on(EVENT_PONG, () => m.redraw());
@@ -825,6 +829,12 @@ interface ChannelPayload {
   status: string;
   /** Set when the channel was deleted; nothing else in the payload applies. */
   deleted?: boolean;
+  /**
+   * Set when the channel was just created with this reader already in it: the
+   * other side of a direct conversation, or an auto-join channel.
+   */
+  created?: boolean;
+  imageUrl?: string | null;
   /** Set when the channel was archived: when, and the discussion it went to. */
   archivedAt?: string | null;
   archivedDiscussionId?: number | null;
@@ -849,6 +859,21 @@ function onChannel(data: ChannelPayload): void {
 
   const channel = chatState.channel(data.channelId);
 
+  if (data.created) {
+    // Read through the API rather than built from the push, so the record
+    // carries this reader's own flags. Spread over a second and a half: an
+    // auto-join channel tells every account at once, and they should not all
+    // ask in the same instant.
+    if (!channel) {
+      window.setTimeout(
+        () => adoptChannel(data.channelId),
+        Math.floor(Math.random() * 1500),
+      );
+    }
+
+    return;
+  }
+
   if (!channel) return;
 
   const before = channel.postPermission();
@@ -872,6 +897,7 @@ function onChannel(data: ChannelPayload): void {
     ...(data.description !== undefined
       ? { description: data.description }
       : {}),
+    ...(data.imageUrl !== undefined ? { imageUrl: data.imageUrl } : {}),
     ...(data.archivedAt !== undefined ? { archivedAt: data.archivedAt } : {}),
     ...(data.archivedDiscussionId !== undefined
       ? { archivedDiscussionId: data.archivedDiscussionId }
@@ -906,10 +932,18 @@ function onChannel(data: ChannelPayload): void {
     channel.pushAttributes({ canPostMessage: false });
   }
 
+  // Whoever runs the room also has to hear which state actions it now
+  // offers them: closing makes archiving possible, archiving makes undoing it
+  // possible, and none of those flags rides on the broadcast either. Asked of
+  // the flags this reader already holds, so an ordinary member — who had none
+  // of them before and has none after — costs the server nothing.
+  const runsRoom =
+    channel.canClose() || channel.canArchive() || channel.canUnarchive();
+
   if (
     permissionMoved ||
     slowModeMoved ||
-    (statusMoved && data.status === "open")
+    (statusMoved && (data.status === "open" || runsRoom))
   ) {
     refreshCapabilities(data.channelId);
   }
@@ -924,7 +958,13 @@ interface MembershipPayload {
   userId: number;
   username: string;
   action:
-    "invited" | "joined" | "left" | "invite_declined" | "invite_cancelled";
+    | "invited"
+    | "joined"
+    | "left"
+    | "invite_declined"
+    | "invite_cancelled"
+    | "promoted"
+    | "demoted";
   actorId: number | null;
   actorName: string | null;
   userCount: number;
@@ -984,6 +1024,11 @@ function onMembership(data: MembershipPayload): void {
     } else if (channel) {
       channel.pushAttributes({ userCount: data.userCount });
     }
+  } else if (data.action === "promoted" || data.action === "demoted") {
+    // The role moves what this member may do in the room — close it, manage
+    // its members — and those answers are the server's to give. Anyone else
+    // only needs the member list re-read, which the notice below does.
+    if (mine && channel) refreshCapabilities(data.channelId);
   } else if (data.action === "invited") {
     if (mine && channel) {
       channel.pushAttributes({
@@ -1004,6 +1049,140 @@ function onMembership(data: MembershipPayload): void {
   chatState.notifyMembershipChange(data.channelId);
 
   m.redraw();
+}
+
+interface MessagesMovedPayload {
+  channelId: number;
+  /** In the room the messages left: which rows to drop. */
+  movedOut?: number[];
+  /** Moved message id => the thread it was taken out of. */
+  threadIds?: Record<string, number> | number[];
+  threads?: {
+    threadId: number;
+    repliesCount: number;
+    originalMessageId: number | null;
+    lastMessageId: number | null;
+  }[];
+  /** In the room they went to: which rows to read. */
+  movedIn?: number[];
+  /** Unix time no later than the move; every moved row was updated since. */
+  movedAt?: number;
+  messagesCount?: number;
+}
+
+/**
+ * Messages moved out of, or into, a channel this reader is in.
+ *
+ * Leaving is applied from the push: the rows are dropped, from the thread
+ * panel too, and the threads they left take their new counts. Arriving is read
+ * through the API — the payload carries only ids, and the destination's
+ * visibility rules decide what this reader gets. The ids span a range, and the
+ * window is narrowed to it, so this is one request however many moved.
+ */
+function onMessagesMoved(data: MessagesMovedPayload): void {
+  const channel = chatState.channel(data.channelId);
+
+  if (channel && data.messagesCount !== undefined) {
+    channel.pushAttributes({ messagesCount: data.messagesCount });
+  }
+
+  if (data.movedOut?.length) {
+    const threadIds = (data.threadIds ?? {}) as Record<string, number>;
+
+    for (const id of data.movedOut) {
+      chatState.removeMessage(data.channelId, id);
+
+      const threadId = threadIds[String(id)];
+
+      if (threadId) chatState.removeThreadMessage(threadId, id);
+    }
+
+    for (const thread of data.threads ?? []) {
+      const record = app.store.getById("chat-threads", String(thread.threadId));
+
+      record?.pushAttributes({
+        repliesCount: thread.repliesCount,
+        originalMessageId: thread.originalMessageId,
+        lastMessageId: thread.lastMessageId,
+      });
+    }
+  }
+
+  // Only into a window that is open. A channel this reader has not loaded
+  // fetches the rows when it is opened, like everything else in it.
+  if (data.movedIn?.length && chatState.streams[data.channelId]) {
+    const lowest = Math.min(...data.movedIn);
+    const highest = Math.max(...data.movedIn);
+    const wanted = new Set(data.movedIn.map(String));
+
+    app.store
+      .find<Message[]>(
+        "chat-messages",
+        {
+          filter: {
+            channel: data.channelId,
+            greaterThan: lowest - 1,
+            lessThan: highest + 1,
+            ...(data.movedAt ? { updatedSince: data.movedAt } : {}),
+          },
+          sort: "id",
+          page: { limit: 100 },
+        },
+        undefined,
+        { errorHandler: ignoreNoLongerVisible },
+      )
+      .then((results) => {
+        for (const message of (Array.isArray(results)
+          ? results
+          : []) as Message[]) {
+          if (wanted.has(String(message.id())))
+            chatState.upsertMessage(message);
+        }
+
+        m.redraw();
+      })
+      .catch(() => {});
+  }
+
+  m.redraw();
+}
+
+/** A recount of the moderation badge already scheduled. */
+let flagsTimer: number | null = null;
+
+/**
+ * The moderation queue moved: re-read this moderator's own open count.
+ *
+ * The count is per reader — it only covers reports on messages they can see —
+ * so it is asked for, not carried. The forum document is what serves it, the
+ * same place the page load read it from. Batched, so a moderator deleting a
+ * run of reported messages recounts once.
+ */
+function onFlags(): void {
+  if (!app.forum.attribute<boolean>("canModerateChat")) return;
+
+  if (flagsTimer !== null) return;
+
+  flagsTimer = window.setTimeout(() => {
+    flagsTimer = null;
+
+    app
+      .request<any>({
+        method: "GET",
+        url: app.forum.attribute("apiUrl"),
+        errorHandler: ignoreNoLongerVisible,
+      } as any)
+      .then((payload) => {
+        const count = payload?.data?.attributes?.chatOpenFlagsCount;
+
+        if (typeof count === "number") {
+          app.forum.pushAttributes({ chatOpenFlagsCount: count });
+        }
+
+        m.redraw();
+      })
+      .catch(() => {});
+  }, 400);
 }
 
 /**

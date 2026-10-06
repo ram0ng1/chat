@@ -202,9 +202,15 @@ class ChannelPolicy extends AbstractPolicy
         return $actor->hasPermission('ramon-chat.moderate') ? true : null;
     }
 
+    /**
+     * Closing and reopening. Not on an archived channel: the status endpoint
+     * used to accept it there, and "reopening" an archive by status left the
+     * archive stamps behind, so the archive action never came back. Leaving an
+     * archive is `unarchive`'s job.
+     */
     public function close(User $actor, Channel $channel): ?bool
     {
-        if ($channel->isDirect()) {
+        if ($channel->isDirect() || $channel->isArchived()) {
             return false;
         }
 
@@ -223,6 +229,20 @@ class ChannelPolicy extends AbstractPolicy
         }
 
         if ($channel->isDirect() || ! $channel->isClosed()) {
+            return false;
+        }
+
+        return $this->ownership->controls($actor, $channel) ? true : null;
+    }
+
+    /**
+     * Undoing an archive, for whoever may archive. Not behind the archiving
+     * setting: turning archiving off should stop new archives, not strand the
+     * channels already frozen.
+     */
+    public function unarchive(User $actor, Channel $channel): ?bool
+    {
+        if ($channel->isDirect() || ! $channel->isArchived()) {
             return false;
         }
 

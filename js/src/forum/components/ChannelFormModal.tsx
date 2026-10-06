@@ -67,7 +67,7 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
    * one flag meant pressing Save spun Close, Archive and Delete along with it,
    * as though the dialog had started four things at once.
    */
-  private pending: "status" | "archive" | "delete" | null = null;
+  private pending: "status" | "archive" | "unarchive" | "delete" | null = null;
 
   /**
    * A picture chosen on the create form, held until the channel exists.
@@ -963,7 +963,9 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
     if (!channel) return null;
 
     const closed = channel.status() === "closed";
-    const archived = Boolean(channel.archivedAt());
+
+    // The status, not `archivedAt`: see ChannelInfoModal::moderation().
+    const archived = channel.isArchived();
     const items: Mithril.Children[] = [];
 
     if (channel.canClose() && !archived) {
@@ -994,6 +996,20 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
           onclick={() => this.archive()}
         >
           {app.translator.trans("ramon-chat.forum.info.archive_channel")}
+        </Button>,
+      );
+    }
+
+    if (archived && channel.canUnarchive()) {
+      items.push(
+        <Button
+          className="Button"
+          icon="fas fa-box-open"
+          loading={this.pending === "unarchive"}
+          disabled={this.loading}
+          onclick={() => this.unarchive()}
+        >
+          {app.translator.trans("ramon-chat.forum.info.unarchive_channel")}
         </Button>,
       );
     }
@@ -1120,6 +1136,14 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
     );
   }
 
+  protected async unarchive(): Promise<void> {
+    await this.act(
+      "unarchive",
+      `/chat-channels/${this.attrs.channel!.id()}/unarchive`,
+      {},
+    );
+  }
+
   /**
    * Runs one immediate state change.
    *
@@ -1127,7 +1151,7 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
    * still gates the rest of the form, so nothing else can be started meanwhile.
    */
   protected async act(
-    action: "status" | "archive",
+    action: "status" | "archive" | "unarchive",
     path: string,
     attributes: Record<string, unknown>,
   ): Promise<void> {

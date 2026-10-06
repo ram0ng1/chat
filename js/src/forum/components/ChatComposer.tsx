@@ -2,6 +2,7 @@ import app from "flarum/forum/app";
 import Component from "flarum/common/Component";
 import type { ComponentAttrs } from "flarum/common/Component";
 import Button from "flarum/common/components/Button";
+import Link from "flarum/common/components/Link";
 import LoadingIndicator from "flarum/common/components/LoadingIndicator";
 import classList from "flarum/common/utils/classList";
 import type Mithril from "mithril";
@@ -64,6 +65,7 @@ const MENTION_DEBOUNCE = 180;
 export default class ChatComposer extends Component<ChatComposerAttrs> {
   private textarea: HTMLTextAreaElement | null = null;
   private joining = false;
+  private unarchiving = false;
   private sending = false;
 
   /** Seconds left before this channel will accept another message from us. */
@@ -474,13 +476,13 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
       );
     }
 
-    const key = channel.isArchived()
-      ? "ramon-chat.forum.channel.archived"
-      : channel.isClosed()
-        ? "ramon-chat.forum.channel.closed"
-        : channel.postPermission() === "moderators"
-          ? "ramon-chat.forum.channel.moderators_only"
-          : "ramon-chat.forum.composer.placeholder_closed";
+    if (channel.isArchived()) return this.archivedNotice(channel);
+
+    const key = channel.isClosed()
+      ? "ramon-chat.forum.channel.closed"
+      : channel.postPermission() === "moderators"
+        ? "ramon-chat.forum.channel.moderators_only"
+        : "ramon-chat.forum.composer.placeholder_closed";
 
     // A megaphone, not a padlock: an announcement channel is not locked, it is
     // read-only by design, and the lock icon reads as something having gone wrong.
@@ -494,6 +496,72 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
         <span>{app.translator.trans(key)}</span>
       </div>
     );
+  }
+
+  /**
+   * The archived notice: where the transcript went, and the way back out of
+   * the archive for whoever may take it.
+   */
+  protected archivedNotice(channel: Channel): Mithril.Children {
+    const discussionId = channel.archivedDiscussionId();
+
+    return (
+      <div className="ChatChannel-frozen ChatChannel-frozen--archived">
+        <i className="fas fa-box-archive" aria-hidden="true" />
+        <span>
+          {app.translator.trans("ramon-chat.forum.channel.archived")}{" "}
+          {discussionId ? (
+            <Link href={app.route("discussion", { id: String(discussionId) })}>
+              {app.translator.trans("ramon-chat.forum.channel.archived_link")}
+            </Link>
+          ) : null}
+        </span>
+
+        {channel.canUnarchive() ? (
+          <span className="ChatChannel-frozen-actions">
+            <Button
+              className="Button"
+              icon="fas fa-box-open"
+              loading={this.unarchiving}
+              onclick={() => this.unarchive(channel)}
+            >
+              {app.translator.trans("ramon-chat.forum.channel.unarchive")}
+            </Button>
+          </span>
+        ) : null}
+      </div>
+    );
+  }
+
+  /**
+   * Takes the channel out of the archive. It comes back closed, so the notice
+   * turns into the closed one and the composer stays away until the channel
+   * is reopened.
+   */
+  protected async unarchive(channel: Channel): Promise<void> {
+    if (this.unarchiving) return;
+
+    this.unarchiving = true;
+    m.redraw();
+
+    try {
+      const payload = await app.request<any>({
+        method: "POST",
+        url: `${app.forum.attribute("apiUrl")}/chat-channels/${channel.id()}/unarchive`,
+        body: { data: { attributes: {} } },
+      });
+
+      if (payload?.data) app.store.pushPayload(payload);
+    } catch (e: any) {
+      app.alerts.show(
+        { type: "error" },
+        e?.response?.errors?.[0]?.detail ??
+          app.translator.trans("ramon-chat.forum.info.save_failed"),
+      );
+    } finally {
+      this.unarchiving = false;
+      m.redraw();
+    }
   }
 
   /**

@@ -49,12 +49,6 @@ parameters:
 			path: src/Access/ScopeThreadVisibility.php
 
 		-
-			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:imageUrl\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: src/Api/Controller/ChannelImageController.php
-
-		-
 			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Ramon\\Chat\\Channel\>\:\:whereVisibleTo\(\)\.$#'
 			identifier: method.notFound
 			count: 1

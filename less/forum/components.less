@@ -999,6 +999,16 @@ body.ChatFullPage {
       border-color: var(--primary-color);
     }
 
+    // Archived: the notice links to the transcript, and offers the way back
+    // out to whoever may take it. Wraps for the same reason as above.
+    &--archived {
+      flex-wrap: wrap;
+
+      a {
+        color: var(--primary-color);
+      }
+    }
+
     &-actions {
       .chat-flex-row(@chat-space-xs);
       margin-left: auto;

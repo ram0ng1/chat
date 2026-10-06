@@ -94,7 +94,7 @@ export default class ChatSelectionBar extends Component<ChatSelectionBarAttrs> {
       (candidate) =>
         candidate.id() !== channel.id() &&
         candidate.canPostMessage() &&
-        !candidate.archivedAt(),
+        !candidate.isArchived(),
     );
 
     if (targets.length === 0) return null;

@@ -37,6 +37,15 @@ export interface ChannelInfoModalAttrs extends IInternalModalAttrs {
 export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
   private tab: "settings" | "members" = "settings";
   private members: User[] = [];
+
+  /**
+   * Who holds the channel's moderator role, as of the last read of the member
+   * list or the last promotion. Kept here rather than read off the store's
+   * record: every other read of the channel comes without the member list and
+   * answers this empty, so a capability refresh landing while the tab was open
+   * wiped every badge from it.
+   */
+  private moderatorIds: number[] = [];
   /** People invited and not yet answered. Served to managers only. */
   private invited: User[] = [];
   private loadingMembers = false;
@@ -55,7 +64,7 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
    * started something — and driving them all from the one flag meant changing
    * the notification level spun Close and Archive along with it.
    */
-  private pending: "status" | "archive" | "delete" | null = null;
+  private pending: "status" | "archive" | "unarchive" | "delete" | null = null;
 
   className(): string {
     return "ChatModal ChatChannelInfoModal Modal--medium";
@@ -274,7 +283,7 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
     const channel = this.attrs.channel;
     const items: Mithril.Children[] = [];
 
-    if (channel.canClose()) {
+    if (channel.canClose() && !channel.isArchived()) {
       const closed = channel.status() === "closed";
 
       items.push(
@@ -294,7 +303,7 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
       );
     }
 
-    if (channel.canArchive() && !channel.archivedAt()) {
+    if (channel.canArchive() && !channel.isArchived()) {
       items.push(
         <Button
           className="Button"
@@ -304,6 +313,23 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
           onclick={() => this.archive()}
         >
           {app.translator.trans("ramon-chat.forum.info.archive_channel")}
+        </Button>,
+      );
+    }
+
+    // Read from the status, not from `archivedAt`. The stamps used to survive a
+    // channel being reopened by status, and a channel that still carried them
+    // never offered the archive action again.
+    if (channel.isArchived() && channel.canUnarchive()) {
+      items.push(
+        <Button
+          className="Button"
+          icon="fas fa-box-open"
+          loading={this.pending === "unarchive"}
+          disabled={this.working}
+          onclick={() => this.unarchive()}
+        >
+          {app.translator.trans("ramon-chat.forum.info.unarchive_channel")}
         </Button>,
       );
     }
@@ -533,9 +559,7 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
   }
 
   protected isModerator(user: User): boolean {
-    return (this.attrs.channel.moderatorIds() ?? []).some(
-      (id) => Number(id) === Number(user.id()),
-    );
+    return this.moderatorIds.some((id) => Number(id) === Number(user.id()));
   }
 
   /** The owner's and channel moderators' labels, so the roles are visible to everyone. */
@@ -550,7 +574,7 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
 
     if (this.isModerator(user)) {
       return (
-        <span className="ChatChannelInfo-member-badge">
+        <span className="ChatChannelInfo-member-badge ChatChannelInfo-member-badge--moderator">
           {app.translator.trans("ramon-chat.forum.info.moderator_badge")}
         </span>
       );
@@ -622,6 +646,8 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
    * refreshes `moderatorIds` on the very model this modal is drawing from.
    */
   protected async setModerator(user: User, moderator: boolean): Promise<void> {
+    if (this.working) return;
+
     this.working = true;
     m.redraw();
 
@@ -633,6 +659,11 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
       });
 
       if (payload?.data) app.store.pushPayload(payload);
+
+      // The answer the server gave, which is what the row is drawn from.
+      const ids = payload?.data?.attributes?.moderatorIds;
+
+      if (Array.isArray(ids)) this.moderatorIds = ids.map(Number);
 
       app.alerts.show(
         { type: "success" },
@@ -787,6 +818,7 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
       )) as unknown as Channel;
 
       this.members = (channel.participants() || []).filter(Boolean) as User[];
+      this.moderatorIds = (channel.moderatorIds() ?? []).map(Number);
       this.invited = (channel.invitedUsers() || []).filter(Boolean) as User[];
     } catch {
       this.members = [];
@@ -908,6 +940,14 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
     );
   }
 
+  protected async unarchive(): Promise<void> {
+    await this.act(
+      "unarchive",
+      `/chat-channels/${this.attrs.channel.id()}/unarchive`,
+      {},
+    );
+  }
+
   protected async destroy(): Promise<void> {
     if (
       !confirm(
@@ -950,7 +990,7 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
    * still gates every other control, so nothing else can be started meanwhile.
    */
   protected async act(
-    action: "status" | "archive",
+    action: "status" | "archive" | "unarchive",
     path: string,
     attributes: Record<string, unknown>,
   ): Promise<void> {

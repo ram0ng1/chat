@@ -15,6 +15,7 @@ ramon-chat:
     invalid_reply_target: Você não pode responder a uma mensagem de outro canal.
     invalid_thread_target: Esse tópico não pertence a este canal.
     invalid_channel_status: Um canal só pode estar aberto ou fechado.
+    channel_archived_status: Este canal está arquivado. Desarquive antes.
     threading_disabled: Tópicos não estão habilitados neste canal.
     channel_not_found: Esse canal não existe ou você não tem acesso a ele.
     archive_discussion_not_found: Essa discussão não existe ou você não tem acesso a ela.
@@ -119,6 +120,7 @@ ramon-chat:
       moderators_only: Apenas moderadores podem enviar mensagens neste canal.
       archived: Este canal foi arquivado.
       archived_link: Ver a transcrição arquivada
+      unarchive: Desarquivar
       no_messages: Nenhuma mensagem ainda. Diga algo.
       scroll_to_latest: Ir à mensagem mais recente
       members: "{count, plural, one {# membro} other {# membros}}"
@@ -361,8 +363,8 @@ ramon-chat:
       failed: Falha ao salvar as alterações.
       saved: Canal atualizado.
       lifecycle: Estado do canal
-      lifecycle_help: Fechar impede novas mensagens mas mantém o canal legível. Arquivar copia o histórico para uma discussão e congela o canal em definitivo.
-      archive_confirm: Arquivar este canal? O histórico é copiado para uma discussão e o canal é congelado permanentemente.
+      lifecycle_help: Fechar impede novas mensagens mas mantém o canal legível. Arquivar copia o histórico para uma discussão e congela o canal até ser desarquivado.
+      archive_confirm: Arquivar este canal? O histórico é copiado para uma discussão e o canal fica congelado até ser desarquivado.
 
     add_members:
       title: Convidar membros
@@ -451,6 +453,7 @@ ramon-chat:
       close_channel: Fechar canal
       reopen_channel: Reabrir canal
       archive_channel: Arquivar canal
+      unarchive_channel: Desarquivar canal
       delete_channel: Excluir canal
       delete_confirm: Excluir um canal não tem volta. Excluir mesmo assim?
       member_search: Filtrar membros

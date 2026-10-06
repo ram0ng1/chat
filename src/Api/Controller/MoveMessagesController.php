@@ -21,6 +21,7 @@ use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
 use Ramon\Chat\Channel;
+use Ramon\Chat\Event\MessagesWereMoved;
 use Ramon\Chat\Event\MessageWasMoved;
 use Ramon\Chat\Message;
 use Ramon\Chat\Thread;
@@ -112,7 +113,10 @@ class MoveMessagesController implements RequestHandlerInterface
             ]);
         }
 
-        $moved = $this->db->transaction(function () use ($messages, $target, $actor) {
+        $bySource = [];
+        $leftThreads = [];
+
+        $moved = $this->db->transaction(function () use ($messages, $target, $actor, &$bySource, &$leftThreads) {
             $affected = [];
             $moved = 0;
 
@@ -135,6 +139,11 @@ class MoveMessagesController implements RequestHandlerInterface
 
                 if ($source !== null) {
                     $affected[$source->id] = $source;
+                    $bySource[(int) $source->id][] = (int) $message->id;
+                }
+
+                if ($message->thread_id !== null) {
+                    $leftThreads[(int) $message->id] = (int) $message->thread_id;
                 }
 
                 $message->channel_id = $target->id;
@@ -183,6 +192,12 @@ class MoveMessagesController implements RequestHandlerInterface
 
             return $moved;
         });
+
+        // After the commit, so a client that refetches on the push reads the
+        // rows where they now are.
+        $sources = Channel::query()->whereKey(array_keys($bySource))->get()->keyBy('id')->all();
+
+        $this->events->dispatch(new MessagesWereMoved($bySource, $sources, $target, $leftThreads, $actor));
 
         return new JsonResponse([
             'data' => [

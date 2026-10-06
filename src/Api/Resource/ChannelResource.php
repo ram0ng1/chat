@@ -27,6 +27,7 @@ use Laminas\Diactoros\Response\EmptyResponse;
 use Ramon\Chat\Access\ScopeChannelVisibility;
 use Ramon\Chat\Channel;
 use Ramon\Chat\ChannelUser;
+use Ramon\Chat\Event\ChannelModeratorChanged;
 use Ramon\Chat\Event\ChannelStatusChanged;
 use Ramon\Chat\Event\ChannelWasCreated;
 use Ramon\Chat\Event\ChannelWasDeleted;
@@ -425,7 +426,7 @@ class ChannelResource extends AbstractDatabaseResource
 
                     $channel->unsetRelation('invitedUsers');
 
-                    return $channel;
+                    return $this->withMembers($channel);
                 })
                 ->defaultInclude(['participants', 'invitedUsers']),
 
@@ -471,7 +472,7 @@ class ChannelResource extends AbstractDatabaseResource
 
                     $channel->unsetRelation('invitedUsers');
 
-                    return $channel;
+                    return $this->withMembers($channel);
                 })
                 ->defaultInclude(['participants', 'invitedUsers']),
 
@@ -554,7 +555,7 @@ class ChannelResource extends AbstractDatabaseResource
 
                     $this->events->dispatch(new UserLeftChannel($channel, $user, $actor, $membership->isHidden()));
 
-                    return $channel;
+                    return $this->withMembers($channel);
                 })
                 ->defaultInclude(['participants']),
 
@@ -646,6 +647,15 @@ class ChannelResource extends AbstractDatabaseResource
                         ]);
                     }
 
+                    // Asked before the ability, which an archived channel fails
+                    // too: a 403 would tell an owner they may not do what they
+                    // may, only not this way.
+                    if ($channel->isArchived()) {
+                        throw new ValidationException([
+                            'status' => $this->translator->trans('ramon-chat.api.channel_archived_status'),
+                        ]);
+                    }
+
                     if (! $actor->can('close', $channel)) {
                         throw new ForbiddenException();
                     }
@@ -683,6 +693,23 @@ class ChannelResource extends AbstractDatabaseResource
                     );
 
                     return $channel;
+                }),
+
+            // Back out of the archive, closed. The realtime path is the status
+            // change's, which already takes members' composers through it.
+            Endpoint\Endpoint::make('unarchive')
+                ->route('POST', '/{id}/unarchive')
+                ->authenticated()
+                ->action(function (Context $context) {
+                    /** @var Channel $channel */
+                    $channel = $context->model;
+                    $actor = $context->getActor();
+
+                    if (! $actor->can('unarchive', $channel)) {
+                        throw new ForbiddenException();
+                    }
+
+                    return $this->archiver->unarchive($channel, $actor);
                 }),
         ];
     }
@@ -929,6 +956,9 @@ class ChannelResource extends AbstractDatabaseResource
             Schema\Boolean::make('canArchive')
                 ->get(fn (Channel $c, Context $context) => $context->getActor()->can('archive', $c)),
 
+            Schema\Boolean::make('canUnarchive')
+                ->get(fn (Channel $c, Context $context) => $context->getActor()->can('unarchive', $c)),
+
             Schema\Boolean::make('canDelete')
                 ->get(fn (Channel $c, Context $context) => $context->getActor()->can('delete', $c)),
 
@@ -943,13 +973,34 @@ class ChannelResource extends AbstractDatabaseResource
                 ->property('creator_id')
                 ->nullable(),
 
-            // Which members hold the channel's own moderator role. Read off the
-            // participants relation when it is loaded — the members tab asks for
-            // it — and empty otherwise, so the channel list pays no query per row.
+            // Which members hold the channel's own moderator role, whenever the
+            // member list is part of the response — the members tab asks for it,
+            // and the promote and demote endpoints include it — and empty
+            // otherwise, so the channel list pays no query per row.
+            //
+            // Not only off a loaded relation. The serializer computes attributes
+            // before it resolves an included relationship, so the relation was
+            // not loaded yet when this ran: it answered empty on every read, and
+            // the owner who had just promoted somebody saw the row unchanged and
+            // clicked again. The member endpoints load the relation themselves
+            // (see withMembers()); a read that asks for it is answered here.
             Schema\Arr::make('moderatorIds')
-                ->get(function (Channel $c) {
+                ->get(function (Channel $c, Context $context) {
                     if (! $c->relationLoaded('participants')) {
-                        return [];
+                        $include = explode(',', (string) ($context->request->getQueryParams()['include'] ?? ''));
+
+                        if (! in_array('participants', array_map('trim', $include), true)) {
+                            return [];
+                        }
+
+                        return $c->memberships()
+                            ->whereNull('left_at')
+                            ->where('hidden', false)
+                            ->where('is_moderator', true)
+                            ->pluck('user_id')
+                            ->map(fn ($id) => (int) $id)
+                            ->values()
+                            ->all();
                     }
 
                     return $c->participants
@@ -1195,13 +1246,22 @@ class ChannelResource extends AbstractDatabaseResource
         if ($membership->isModerator() !== $moderator) {
             $membership->is_moderator = $moderator;
             $membership->save();
+
+            $this->events->dispatch(new ChannelModeratorChanged($channel, $user, $moderator, $actor));
         }
 
-        // The response includes participants; a copy loaded before the change
-        // would carry the old role on its pivot.
-        $channel->unsetRelation('participants');
+        return $this->withMembers($channel);
+    }
 
-        return $channel;
+    /**
+     * The channel with its member list loaded fresh, for the endpoints that
+     * answer with it. Fresh because a copy loaded before the change would
+     * carry the old roles on its pivots; loaded here because the serializer
+     * reads `moderatorIds` before it gets to the included relation.
+     */
+    protected function withMembers(Channel $channel): Channel
+    {
+        return $channel->load('participants');
     }
 
     protected function membership(Channel $channel, User $actor): ?ChannelUser
