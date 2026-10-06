@@ -186,9 +186,9 @@ try {
     "))";
   const roleButton = "(" + row + ")?.querySelector('.ChatChannelInfo-member-role')";
   const isModRow =
-    "(() => { const r = " + row + "; return !!r && !!r.querySelector('.ChatChannelInfo-member-badge--moderator') && !!r.querySelector('.ChatChannelInfo-member-role .fa-user-slash'); })()";
+    "(() => { const r = " + row + "; return !!r && !!r.querySelector('[data-rank=moderator]') && !!r.querySelector('.ChatChannelInfo-member-role .fa-user-slash'); })()";
   const isPlainRow =
-    "(() => { const r = " + row + "; return !!r && !r.querySelector('.ChatChannelInfo-member-badge--moderator') && !!r.querySelector('.ChatChannelInfo-member-role .fa-user-shield'); })()";
+    "(() => { const r = " + row + "; return !!r && !r.querySelector('[data-rank=moderator]') && !!r.querySelector('.ChatChannelInfo-member-role .fa-user-shield'); })()";
   const successAlerts = "document.querySelectorAll('.AlertManager .Alert--success').length";
 
   await t.must("B's row offers Make moderator", Boolean(await owner.waitFor(isPlainRow, 10000)));

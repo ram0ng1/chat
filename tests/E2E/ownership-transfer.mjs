@@ -172,8 +172,8 @@ try {
 
   const row = (user) =>
     "[...document.querySelectorAll('.ChatChannelInfo-member')].find((r) => r.textContent.includes(" + JSON.stringify(user.username) + "))";
-  const owns = (user) => "!!(" + row(user) + ")?.querySelector('.ChatChannelInfo-member-badge--owner')";
-  const moderates = (user) => "!!(" + row(user) + ")?.querySelector('.ChatChannelInfo-member-badge--moderator')";
+  const owns = (user) => "!!(" + row(user) + ")?.querySelector('[data-rank=owner]')";
+  const moderates = (user) => "!!(" + row(user) + ")?.querySelector('[data-rank=moderator]')";
 
   await t.check("B's tab shows the pending offer", Boolean(await browser.waitFor("!!document.querySelector('.ChatChannelInfo-transfer')", 10000)));
   await t.check("B is drawn as owner", Boolean(await browser.waitFor(owns(b), 5000)));

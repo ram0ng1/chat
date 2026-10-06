@@ -23,6 +23,40 @@ export interface OwnershipTransferState {
     incoming: boolean;
     expiresAt: string;
 }
+/**
+ * One rank as the server describes it. Mirrors Ramon\Chat\Rank\RankBook.
+ *
+ * `builtin` names the two every channel has; their `name` and `color` are null
+ * until the owner customises them, meaning the translated default and the
+ * theme's colour. The three derived colours are null exactly when `color` is.
+ */
+export interface RankEntry {
+    key: string;
+    id: number | null;
+    builtin: "owner" | "moderator" | null;
+    name: string | null;
+    color: string | null;
+    icon: string | null;
+    showBadge: boolean;
+    position: number;
+    /** Text on the tag: white or near-black, whichever reads better. */
+    textColor: string | null;
+    /** The colour as a name on a light surface, darkened as far as needed. */
+    nameLight: string | null;
+    /** And on a dark one, lightened. */
+    nameDark: string | null;
+}
+/**
+ * A channel's ranks in priority order, and who holds what. `assignments` maps
+ * a user id to the ids of the custom ranks they hold; PHP sends an empty one
+ * as `[]`.
+ */
+export interface RankBook {
+    ranks: RankEntry[];
+    ownerId: number | null;
+    moderatorIds: number[];
+    assignments: Record<string, number[]> | [];
+}
 export default class Channel extends Model {
     type: () => string;
     name: () => string | null;
@@ -108,6 +142,14 @@ export default class Channel extends Model {
      */
     ownershipTransfer: () => OwnershipTransferState | null;
     creatorId: () => number | null;
+    /** May create, edit and hand out this channel's ranks. */
+    canManageRanks: () => boolean;
+    /**
+     * Every rank here and who holds which. Absent from the channel list, where
+     * the server leaves it off; read it through `utils/ranks`, which falls back
+     * to the rank each message carries.
+     */
+    rankBook: () => RankBook | null | undefined;
     /** Members holding the channel's own moderator role; filled when participants are loaded. */
     moderatorIds: () => number[];
     canMentionChannelWide: () => boolean;

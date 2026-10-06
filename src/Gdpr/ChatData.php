@@ -13,6 +13,7 @@ use Flarum\Gdpr\Data\Type;
 use Illuminate\Support\Arr;
 use Ramon\Chat\Bookmark;
 use Ramon\Chat\ChannelInvite;
+use Ramon\Chat\ChannelRankUser;
 use Ramon\Chat\ChannelTransfer;
 use Ramon\Chat\ChannelUser;
 use Ramon\Chat\Draft;
@@ -140,6 +141,25 @@ class ChatData extends Type
 
         if ($memberships !== []) {
             $exportData[] = ['chat/channels.json' => $this->encodeForExport($memberships)];
+        }
+
+        // The ranks the channels' owners gave them. Labels about this person,
+        // so theirs to see; who gave them, and the rank's settings, are not.
+        $ranks = ChannelRankUser::query()
+            ->where('user_id', $userId)
+            ->with(['rank', 'channel'])
+            ->orderBy('channel_id')
+            ->get()
+            ->map(fn (ChannelRankUser $held) => [
+                'channel'     => $held->channel?->name,
+                'rank'        => $held->rank?->name,
+                'assigned_at' => $held->created_at?->toIso8601String(),
+            ])
+            ->values()
+            ->all();
+
+        if ($ranks !== []) {
+            $exportData[] = ['chat/ranks.json' => $this->encodeForExport($ranks)];
         }
 
         $bookmarks = Bookmark::query()
@@ -344,6 +364,7 @@ class ChatData extends Type
         Bookmark::query()->where('user_id', $this->user->id)->delete();
         ThreadUser::query()->where('user_id', $this->user->id)->delete();
         ChannelUser::query()->where('user_id', $this->user->id)->delete();
+        ChannelRankUser::query()->where('user_id', $this->user->id)->delete();
         ChannelInvite::query()->where('user_id', $this->user->id)->delete();
 
         // Pending ownership handovers either side of: an offer to someone who

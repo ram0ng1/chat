@@ -29,6 +29,14 @@ import {
   startTransfer,
 } from "../utils/transfers";
 import { invitationErrorText } from "../utils/invitations";
+import ChannelRanksTab, { rankRequest } from "./ChannelRanksTab";
+import {
+  displayedRank,
+  heldRankIds,
+  rankName,
+  rankNameAttrs,
+  rankTag,
+} from "../utils/ranks";
 
 export interface ChannelInfoModalAttrs extends IInternalModalAttrs {
   channel: Channel;
@@ -44,7 +52,10 @@ export interface ChannelInfoModalAttrs extends IInternalModalAttrs {
  * flag — so a plain member gets a useful panel rather than a locked one.
  */
 export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
-  private tab: "settings" | "members" = "settings";
+  private tab: "settings" | "members" | "ranks" = "settings";
+
+  /** Whose ranks are open for editing in the members tab, or null. */
+  private assigningUserId: string | null = null;
   private members: User[] = [];
 
   /**
@@ -103,15 +114,22 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
         <div className="ChatChannelInfo-tabs">
           {this.tabButton("settings", "ramon-chat.forum.info.tab_settings")}
           {this.tabButton("members", "ramon-chat.forum.info.tab_members")}
+          {this.attrs.channel.canManageRanks()
+            ? this.tabButton("ranks", "ramon-chat.forum.ranks.tab")
+            : null}
         </div>
 
-        {this.tab === "settings" ? this.settings() : this.memberTab()}
+        {this.tab === "settings"
+          ? this.settings()
+          : this.tab === "ranks"
+            ? ChannelRanksTab.component({ channel: this.attrs.channel })
+            : this.memberTab()}
       </div>
     );
   }
 
   protected tabButton(
-    tab: "settings" | "members",
+    tab: "settings" | "members" | "ranks",
     key: string,
   ): Mithril.Children {
     return (
@@ -443,17 +461,27 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
         />
 
         <div className="ChatChannelInfo-memberList">
+          {/* One keyed item per member, holding the row and, while open, the
+              member's ranks under it: a keyed list may not have holes. */}
           {shown.map((user) => (
-            <div
-              key={user.id()}
-              className={classList("ChatChannelInfo-member", {
-                "ChatChannelInfo-member--online": isOnline(user),
-              })}
-            >
-              <Avatar user={user} className="Avatar" />
-              <span>{userLink(user)}</span>
-              {this.memberBadge(user)}
-              {this.memberControls(user)}
+            <div key={user.id()} className="ChatChannelInfo-memberItem">
+              <div
+                className={classList("ChatChannelInfo-member", {
+                  "ChatChannelInfo-member--online": isOnline(user),
+                })}
+              >
+                <Avatar user={user} className="Avatar" />
+                <span {...rankNameAttrs(this.rankOf(user))}>
+                  {userLink(user)}
+                </span>
+                {this.memberBadge(user)}
+                {this.rankControl(user)}
+                {this.memberControls(user)}
+              </div>
+
+              {this.assigningUserId === user.id()
+                ? this.rankPicker(user)
+                : null}
             </div>
           ))}
 
@@ -580,8 +608,31 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
     return this.moderatorIds.some((id) => Number(id) === Number(user.id()));
   }
 
-  /** The owner's and channel moderators' labels, so the roles are visible to everyone. */
+  /** The rank shown for a member, from the channel's rank book. */
+  protected rankOf(user: User) {
+    const book = this.attrs.channel.rankBook?.();
+
+    return book && Array.isArray(book.ranks)
+      ? displayedRank(book, Number(user.id()))
+      : null;
+  }
+
+  /**
+   * The member's rank, the way author lines draw it: a tag, or nothing here
+   * when the rank colours the name instead. Without a rank book — a direct
+   * conversation has none — the role labels the list always had.
+   */
   protected memberBadge(user: User): Mithril.Children {
+    const book = this.attrs.channel.rankBook?.();
+
+    if (book && Array.isArray(book.ranks)) {
+      const rank = displayedRank(book, Number(user.id()));
+
+      return rank?.showBadge
+        ? rankTag(rank, "ChatChannelInfo-memberRank")
+        : null;
+    }
+
     if (this.isOwner(user)) {
       return (
         <span className="ChatChannelInfo-member-badge ChatChannelInfo-member-badge--owner">
@@ -599,6 +650,124 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
     }
 
     return null;
+  }
+
+  /**
+   * Opens the member's ranks, for whoever manages them. Offered for oneself
+   * too: a chat moderator running another person's room may wear a rank there.
+   */
+  protected rankControl(user: User): Mithril.Children {
+    if (!this.attrs.channel.canManageRanks()) return null;
+
+    const open = this.assigningUserId === user.id();
+
+    return (
+      <Button
+        className={classList(
+          "Button Button--icon Button--flat ChatChannelInfo-member-ranks",
+          { active: open },
+        )}
+        icon="fas fa-tags"
+        disabled={this.working}
+        aria-expanded={open ? "true" : "false"}
+        {...iconLabel(
+          app.translator.trans(
+            "ramon-chat.forum.ranks.assign",
+            { username: username(user) },
+            true,
+          ),
+        )}
+        onclick={() => {
+          this.assigningUserId = open ? null : (user.id() as string);
+        }}
+      />
+    );
+  }
+
+  /**
+   * The owner's ranks as a checklist under the member's row. Each tick saves
+   * at once, the whole set: the server answers with the rank book, which
+   * redraws this list, the member's tag and every author line together.
+   */
+  protected rankPicker(user: User): Mithril.Children {
+    const book = this.attrs.channel.rankBook?.();
+    const custom =
+      book && Array.isArray(book.ranks)
+        ? book.ranks.filter((rank) => rank.builtin === null)
+        : [];
+    const held = book ? heldRankIds(book, Number(user.id())) : [];
+
+    return (
+      <div
+        className="ChatChannelInfo-rankPicker"
+        role="group"
+        aria-label={app.translator.trans(
+          "ramon-chat.forum.ranks.assign",
+          { username: username(user) },
+          true,
+        )}
+      >
+        {custom.length === 0 ? (
+          <span className="helpText">
+            {app.translator.trans("ramon-chat.forum.ranks.assign_empty")}
+          </span>
+        ) : (
+          custom.map((rank) => {
+            const checked = held.includes(Number(rank.id));
+
+            return (
+              <label
+                key={rank.key}
+                className={classList("ChatChannelInfo-rankOption", {
+                  "ChatChannelInfo-rankOption--checked": checked,
+                })}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  disabled={this.working}
+                  onchange={() =>
+                    this.assignRanks(
+                      user,
+                      checked
+                        ? held.filter((id) => id !== Number(rank.id))
+                        : [...held, Number(rank.id)],
+                    )
+                  }
+                />
+                {rank.showBadge ? (
+                  rankTag(rank)
+                ) : (
+                  <span {...rankNameAttrs(rank)}>{rankName(rank)}</span>
+                )}
+              </label>
+            );
+          })
+        )}
+      </div>
+    );
+  }
+
+  protected async assignRanks(user: User, rankIds: number[]): Promise<void> {
+    if (this.working) return;
+
+    this.working = true;
+    m.redraw();
+
+    try {
+      await rankRequest(this.attrs.channel.id() as string, "/assign", {
+        userId: Number(user.id()),
+        rankIds,
+      });
+    } catch (e: any) {
+      app.alerts.show(
+        { type: "error" },
+        invitationErrorText(e, "ramon-chat.forum.ranks.save_failed"),
+      );
+    } finally {
+      this.working = false;
+      m.redraw();
+    }
   }
 
   /**

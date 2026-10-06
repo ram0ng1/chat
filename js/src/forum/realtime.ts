@@ -5,6 +5,7 @@ import { playNotificationSound } from "./utils/sound";
 import type Message from "../common/models/Message";
 import type Channel from "../common/models/Channel";
 import { NotificationLevel } from "../common/models/Channel";
+import type { RankBook, RankEntry } from "../common/models/Channel";
 
 /**
  * Wire event names. Must match Ramon\Chat\Realtime\BroadcastListener.
@@ -18,6 +19,7 @@ const EVENT_CHANNEL = "ramonChat.channel";
 const EVENT_MEMBERSHIP = "ramonChat.membership";
 const EVENT_MESSAGES_MOVED = "ramonChat.messagesMoved";
 const EVENT_FLAGS = "ramonChat.flags";
+const EVENT_RANKS = "ramonChat.ranks";
 const EVENT_TYPING = "ramonChat.typing";
 const EVENT_PONG = "ramonChat.pong";
 
@@ -75,6 +77,8 @@ interface MessagePayload {
   /** Who the message is addressed to. Drives the highlight and the sound. */
   mentionedUsers?: number[];
   mentionsChannelWide?: boolean;
+  /** The author's rank in the channel, inlined like the author. */
+  authorRank?: RankEntry | null;
 }
 
 /**
@@ -119,6 +123,7 @@ function bindTo(channel: any): void {
   on(EVENT_MEMBERSHIP, (data: any) => onMembership(data));
   on(EVENT_MESSAGES_MOVED, (data: any) => onMessagesMoved(data));
   on(EVENT_FLAGS, () => onFlags());
+  on(EVENT_RANKS, (data: any) => onRanks(data));
   on(EVENT_TYPING, (data: any) => onTyping(data));
   // Carries nothing: arriving at all is the proof `on()` records.
   on(EVENT_PONG, () => m.redraw());
@@ -1073,6 +1078,28 @@ function onMembership(data: MembershipPayload): void {
   m.redraw();
 }
 
+/**
+ * A channel's ranks changed: one was created, edited, removed or reordered,
+ * someone's ranks were set, or a moderator or the owner changed.
+ *
+ * The whole book comes with it, the same for every member, and goes onto the
+ * channel record — which is where every author line and an open members tab
+ * resolve ranks from, so they all redraw without a fetch. A channel this page
+ * has never loaded has nothing to update; its messages carry their own ranks.
+ */
+function onRanks(data: { channelId: number; rankBook: RankBook }): void {
+  const channel = app.store.getById<Channel>(
+    "chat-channels",
+    String(data.channelId),
+  );
+
+  if (!channel || !data.rankBook) return;
+
+  channel.pushAttributes({ rankBook: data.rankBook });
+
+  m.redraw();
+}
+
 interface MessagesMovedPayload {
   channelId: number;
   /** In the room the messages left: which rows to drop. */
@@ -1408,6 +1435,7 @@ function pushMessage(data: MessagePayload): Message | null {
             ? data.mentionedUsers
             : [],
           mentionsChannelWide: Boolean(data.mentionsChannelWide),
+          authorRank: data.authorRank ?? null,
           isBookmarked: false,
           // Capability flags default closed: the push payload cannot know them,
           // and offering an action the server would refuse is worse than

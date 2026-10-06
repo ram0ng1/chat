@@ -52,6 +52,16 @@ ramon-chat:
     not_a_member: That user is not in this channel.
     invite_not_found: There is no pending invitation to answer here.
 
+    # Channel ranks
+    rank_limit: "A channel can have at most {max} ranks."
+    rank_name_invalid: "Rank names must be 1 to {max} characters long."
+    rank_color_invalid: "Choose a colour in the form #RRGGBB."
+    rank_icon_invalid: The icon must be a Font Awesome class, such as fas fa-star.
+    rank_flag_invalid: That is not a valid on or off value.
+    rank_not_found: That rank does not exist in this channel.
+    rank_order_invalid: The new order must list every rank once.
+    rank_rate_limited: You are changing ranks too quickly. Try again in a minute.
+
     # Ownership transfers
     transfer_unavailable: This channel cannot change owner right now.
     transfer_target_is_owner: That member already owns this channel.
@@ -123,7 +133,7 @@ ramon-chat:
   ##
   lib:
     gdpr:
-      export_description: Your chat messages, their attachments' details, and the channels you belonged to.
+      export_description: Your chat messages, their attachments' details, the channels you belonged to and the ranks you held in them.
       anonymize_description: Your chat messages stay so the conversations remain readable, but are no longer attributed to you. Attachments, reactions, drafts and channel memberships are deleted.
       delete_description: Your chat messages and attachments are deleted, along with your reactions, drafts and channel memberships.
 
@@ -536,6 +546,47 @@ ramon-chat:
 
       no_members: No members match.
       save_failed: Could not save that change.
+
+
+    # Channel ranks: the tag before a name, and the editor for them.
+    ranks:
+      tab: Ranks
+      owner_default: Owner
+      moderator_default: Moderator
+      intro: Ranks show before a member's name in this channel. Someone with several shows the highest one in this list.
+      builtin_tag: Built in
+      name_color: Name colour
+      holders: "{count, plural, =0 {No members} one {# member} other {# members}}"
+      new: New rank
+      edit_title: Edit rank
+      edit: "Edit {name}"
+      delete: "Delete {name}"
+      reset: "Reset {name} to default"
+      delete_confirm: "Delete the rank {name}? Everyone who has it loses it."
+      reset_confirm: "Reset {name} to its default name and colour?"
+      move_up: "Move {name} up"
+      move_down: "Move {name} down"
+      name: Name
+      name_required: Give the rank a name.
+      color: Colour
+      color_theme: Use the theme colour
+      color_invalid: "Choose a colour in the form #RRGGBB."
+      icon: Icon
+      icon_help: A Font Awesome class, such as fas fa-star. Leave it empty for none.
+      show_badge: Show as a tag
+      show_badge_help_on: The rank shows as a coloured tag before the name.
+      show_badge_help_off: No tag. The member's name takes the rank's colour.
+      preview: Preview, light and dark
+      save: Save
+      cancel: Cancel
+      saved: Rank saved.
+      deleted: Rank deleted.
+      reset_done: Rank reset to default.
+      empty: No ranks of your own yet. Create one, then give it out from the Members tab.
+      limit: "You can create up to {max} ranks."
+      assign: "Ranks of {username}"
+      assign_empty: There are no ranks to give yet. Create them in the Ranks tab.
+      save_failed: Could not save the rank.
 
     selection:
       count: "{count} selected"

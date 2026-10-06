@@ -405,7 +405,13 @@ return [
         ->listen(Event\ChannelWasDeleted::class, Listener\CancelOwnershipTransfers::class.'@whenDeleted')
         ->listen(Event\ChannelWasArchived::class, Listener\CancelOwnershipTransfers::class.'@whenArchived')
         // A deleted account's channels pass to their oldest moderators first.
-        ->listen(\Flarum\User\Event\Deleting::class, Listener\HandOverOwnedChannels::class),
+        ->listen(\Flarum\User\Event\Deleting::class, Listener\HandOverOwnedChannels::class)
+        // The cached rank book follows who moderates, who owns and who is in
+        // the room. Before the realtime listeners, which read it rebuilt.
+        ->listen(Event\ChannelModeratorChanged::class, Listener\ForgetChannelRanks::class)
+        ->listen(Event\ChannelOwnershipTransferred::class, Listener\ForgetChannelRanks::class)
+        ->listen(Event\UserJoinedChannel::class, Listener\ForgetChannelRanks::class)
+        ->listen(Event\UserLeftChannel::class, Listener\ForgetChannelRanks::class),
 
     // ── Console ──────────────────────────────────────────────────────────────
     (new Extend\Console())
@@ -515,6 +521,8 @@ return [
                 ->listen(Event\ChannelOwnershipTransferred::class, Realtime\BroadcastListener::class.'@whenOwnershipTransferred')
                 ->listen(Event\OwnershipTransferRequested::class, Realtime\BroadcastListener::class.'@whenTransferRequested')
                 ->listen(Event\OwnershipTransferEnded::class, Realtime\BroadcastListener::class.'@whenTransferEnded')
+                // Ranks: author lines and members tabs redraw for everyone.
+                ->listen(Event\ChannelRanksChanged::class, Realtime\BroadcastListener::class.'@whenRanksChanged')
                 // The moderators' queue badge, recounted by each of them.
                 ->listen(Event\FlagsChanged::class, Realtime\BroadcastListener::class.'@whenFlagsChanged'),
         ]),

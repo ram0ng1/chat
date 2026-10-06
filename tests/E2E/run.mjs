@@ -25,6 +25,7 @@ const suites = [
   "live-state.mjs",
   "slow-mode-owner.mjs",
   "ownership-transfer.mjs",
+  "ranks.mjs",
   "admin-page.mjs",
   "permissions.mjs",
 ].filter((name) =>

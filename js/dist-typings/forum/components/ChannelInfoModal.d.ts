@@ -18,6 +18,8 @@ export interface ChannelInfoModalAttrs extends IInternalModalAttrs {
  */
 export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
     private tab;
+    /** Whose ranks are open for editing in the members tab, or null. */
+    private assigningUserId;
     private members;
     /**
      * Who holds the channel's moderator role, as of the last read of the member
@@ -53,7 +55,7 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
     className(): string;
     title(): Mithril.Children;
     content(): Mithril.Children;
-    protected tabButton(tab: "settings" | "members", key: string): Mithril.Children;
+    protected tabButton(tab: "settings" | "members" | "ranks", key: string): Mithril.Children;
     protected settings(): Mithril.Children;
     /**
      * How this member's own composer behaves.
@@ -93,8 +95,26 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
     protected cancelInvite(user: User): Promise<void>;
     protected isOwner(user: User): boolean;
     protected isModerator(user: User): boolean;
-    /** The owner's and channel moderators' labels, so the roles are visible to everyone. */
+    /** The rank shown for a member, from the channel's rank book. */
+    protected rankOf(user: User): import("../../common/models/Channel").RankEntry | null;
+    /**
+     * The member's rank, the way author lines draw it: a tag, or nothing here
+     * when the rank colours the name instead. Without a rank book — a direct
+     * conversation has none — the role labels the list always had.
+     */
     protected memberBadge(user: User): Mithril.Children;
+    /**
+     * Opens the member's ranks, for whoever manages them. Offered for oneself
+     * too: a chat moderator running another person's room may wear a rank there.
+     */
+    protected rankControl(user: User): Mithril.Children;
+    /**
+     * The owner's ranks as a checklist under the member's row. Each tick saves
+     * at once, the whole set: the server answers with the rank book, which
+     * redraws this list, the member's tag and every author line together.
+     */
+    protected rankPicker(user: User): Mithril.Children;
+    protected assignRanks(user: User, rankIds: number[]): Promise<void>;
     /**
      * Promote, demote and remove — each drawn only for people the actor may
      * actually act on, so no button is a promise the server refuses to keep.

@@ -1,6 +1,7 @@
 import Model from "flarum/common/Model";
 import type User from "flarum/common/models/User";
 import type Channel from "./Channel";
+import type { RankEntry } from "./Channel";
 import type Thread from "./Thread";
 import type Upload from "./Upload";
 /**
@@ -49,6 +50,11 @@ export default class Message extends Model {
     mentionedUsers: () => number[];
     mentionsChannelWide: () => boolean;
     isBookmarked: () => boolean;
+    /**
+     * The author's rank in this channel when the row was read. Superseded by
+     * the channel's `rankBook` once that is loaded, which realtime keeps current.
+     */
+    authorRank: () => RankEntry | null;
     /** Whether *this* reader has an open report against it. */
     isFlagged: () => boolean;
     /**

@@ -28,6 +28,11 @@ class ChatServiceProvider extends AbstractServiceProvider
         // per request in php-fpm; in a long-lived worker it survives, which is why
         // it keys on the User object rather than on the id — see VisibilityCache.
         $this->container->singleton(Access\VisibilityCache::class);
+
+        // One instance, so clearing a channel's rank book after a write also
+        // clears what any resource read of it earlier in the request. Its
+        // memo keys on the Channel object, which does not outlive the request.
+        $this->container->singleton(Service\ChannelRanks::class);
     }
 
     public function boot(): void

@@ -26,6 +26,7 @@ use Illuminate\Support\Arr;
 use Laminas\Diactoros\Response\EmptyResponse;
 use Ramon\Chat\Access\ScopeChannelVisibility;
 use Ramon\Chat\Channel;
+use Ramon\Chat\ChannelRank;
 use Ramon\Chat\ChannelUser;
 use Ramon\Chat\Event\ChannelModeratorChanged;
 use Ramon\Chat\Event\ChannelStatusChanged;
@@ -39,6 +40,7 @@ use Ramon\Chat\Event\UserWasInvited;
 use Ramon\Chat\Service\ActionThrottle;
 use Ramon\Chat\Service\ChannelArchiver;
 use Ramon\Chat\Service\ChannelOwnership;
+use Ramon\Chat\Service\ChannelRanks;
 use Ramon\Chat\Service\InvitationManager;
 use Ramon\Chat\Service\MembershipManager;
 use Ramon\Chat\Service\OwnershipTransfers;
@@ -62,6 +64,13 @@ class ChannelResource extends AbstractDatabaseResource
      */
     public const MEMBERSHIP_CHANGES_PER_MINUTE = 6;
 
+    /**
+     * Rank writes one non-administrator may make per minute. Each reaches every
+     * member's screen, so a script clicking through the editor would be a flood
+     * of pushes rather than of rows.
+     */
+    public const RANK_CHANGES_PER_MINUTE = 30;
+
     public function __construct(
         protected Translator $translator,
         protected Events $events,
@@ -74,7 +83,8 @@ class ChannelResource extends AbstractDatabaseResource
         protected SlowMode $slowMode,
         protected ActionThrottle $throttle,
         protected ExtensionManager $extensions,
-        protected OwnershipTransfers $transfers
+        protected OwnershipTransfers $transfers,
+        protected ChannelRanks $ranks
     ) {
     }
 
@@ -668,6 +678,70 @@ class ChannelResource extends AbstractDatabaseResource
                 })
                 ->defaultInclude(['participants']),
 
+            // The channel's ranks: the labels shown before members' names. Each
+            // answers with the channel, whose `rankBook` is the new state, so the
+            // editor redraws from the server's word. Who may call them is
+            // ChannelPolicy::manageRanks; what is accepted, Service\ChannelRanks.
+            Endpoint\Endpoint::make('createRank')
+                ->route('POST', '/{id}/ranks')
+                ->authenticated()
+                ->action(fn (Context $context) => $this->rankAction(
+                    $context,
+                    fn (Channel $channel, User $actor, array $attributes) => $this->ranks->create($channel, $actor, $attributes)
+                )),
+
+            // `rankId` is a rank's id, or `owner` / `moderator` for the two every
+            // channel has, which this customises.
+            Endpoint\Endpoint::make('updateRank')
+                ->route('POST', '/{id}/ranks/update')
+                ->authenticated()
+                ->action(fn (Context $context) => $this->rankAction(
+                    $context,
+                    fn (Channel $channel, User $actor, array $attributes) => $this->ranks->update($channel, $actor, $this->rankTarget($attributes), $attributes)
+                )),
+
+            // Deletes a rank and everyone's hold on it; on a built-in rank,
+            // restores its defaults.
+            Endpoint\Endpoint::make('deleteRank')
+                ->route('POST', '/{id}/ranks/delete')
+                ->authenticated()
+                ->action(fn (Context $context) => $this->rankAction(
+                    $context,
+                    fn (Channel $channel, User $actor, array $attributes) => $this->ranks->delete($channel, $actor, $this->rankTarget($attributes))
+                )),
+
+            Endpoint\Endpoint::make('reorderRanks')
+                ->route('POST', '/{id}/ranks/order')
+                ->authenticated()
+                ->action(fn (Context $context) => $this->rankAction(
+                    $context,
+                    fn (Channel $channel, User $actor, array $attributes) => $this->ranks->reorder($channel, $actor, (array) ($attributes['rankIds'] ?? []))
+                )),
+
+            // A member's ranks, all at once: the ones left out are taken away.
+            Endpoint\Endpoint::make('assignRanks')
+                ->route('POST', '/{id}/ranks/assign')
+                ->authenticated()
+                ->action(fn (Context $context) => $this->rankAction(
+                    $context,
+                    function (Channel $channel, User $actor, array $attributes) {
+                        $userId = (int) ($attributes['userId'] ?? 0);
+
+                        $user = $userId > 0
+                            // @phpstan-ignore method.notFound (Flarum model scope)
+                            ? User::query()->whereVisibleTo($actor)->whereKey($userId)->first()
+                            : null;
+
+                        if ($user === null) {
+                            throw new ValidationException([
+                                'userId' => $this->translator->trans('ramon-chat.api.not_a_member'),
+                            ]);
+                        }
+
+                        $this->ranks->assign($channel, $actor, $user, (array) ($attributes['rankIds'] ?? []));
+                    }
+                )),
+
             Endpoint\Endpoint::make('leave')
                 ->route('POST', '/{id}/leave')
                 ->authenticated()
@@ -1062,6 +1136,21 @@ class ChannelResource extends AbstractDatabaseResource
             Schema\Boolean::make('canManageModerators')
                 ->get(fn (Channel $c, Context $context) => $context->getActor()->can('manageModerators', $c)),
 
+            Schema\Boolean::make('canManageRanks')
+                ->get(fn (Channel $c, Context $context) => $context->getActor()->can('manageRanks', $c)),
+
+            // Every rank and who holds which, for the members tab, the ranks
+            // editor and resolving author lines live. The same for every reader,
+            // so it is served from a per-channel cache. Left out of the channel
+            // list entirely, where nobody reads it and fifty channels would cost
+            // fifty cache reads — omitted rather than null, so a list refresh
+            // does not wipe a book the client already holds. Messages carry
+            // their author's rank on their own.
+            Schema\Arr::make('rankBook')
+                ->nullable()
+                ->visible(fn (Channel $c, Context $context) => ! $context->listing())
+                ->get(fn (Channel $c) => $this->ranks->book($c)),
+
             Schema\Boolean::make('canTransferOwnership')
                 ->get(fn (Channel $c, Context $context) => $context->getActor()->can('transferOwnership', $c)),
 
@@ -1311,6 +1400,50 @@ class ChannelResource extends AbstractDatabaseResource
      * @var array<string, ChannelUser|null|false>
      */
     protected array $membershipCache = [];
+
+    /**
+     * Runs one rank write for an actor allowed to make it, and answers with the
+     * channel so the response carries the new `rankBook`.
+     *
+     * @param  callable(Channel, User, array<string, mixed>): mixed  $write
+     */
+    protected function rankAction(Context $context, callable $write): Channel
+    {
+        /** @var Channel $channel */
+        $channel = $context->model;
+        $actor = $context->getActor();
+
+        if (! $actor->can('manageRanks', $channel)) {
+            throw new ForbiddenException();
+        }
+
+        if (! $actor->isAdmin()
+            && ! $this->throttle->attempt('ranks.'.$actor->id, self::RANK_CHANGES_PER_MINUTE, 60)) {
+            throw new ValidationException([
+                'rankId' => $this->translator->trans('ramon-chat.api.rank_rate_limited'),
+            ]);
+        }
+
+        $attributes = Arr::get($context->body(), 'data.attributes', []);
+
+        $write($channel, $actor, is_array($attributes) ? $attributes : []);
+
+        return $channel;
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     */
+    protected function rankTarget(array $attributes): int|string
+    {
+        $target = $attributes['rankId'] ?? null;
+
+        if (is_string($target) && in_array($target, ChannelRank::builtins(), true)) {
+            return $target;
+        }
+
+        return is_numeric($target) ? (int) $target : 0;
+    }
 
     /**
      * Sets or clears the channel-moderator role on a current member.

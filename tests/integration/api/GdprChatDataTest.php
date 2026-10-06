@@ -121,6 +121,16 @@ class GdprChatDataTest extends TestCase
                 ['id' => 102, 'channel_id' => self::CH_PUBLIC, 'user_id' => null, 'type' => 'bot', 'system_key' => 'discussion_started', 'content' => '<t>new discussion</t>', 'system_data' => json_encode(['title' => 'Mine', 'username' => 'member', 'userId' => self::MEMBER]), 'created_at' => $now, 'updated_at' => $now],
                 ['id' => 103, 'channel_id' => self::CH_PUBLIC, 'user_id' => null, 'type' => 'system', 'system_key' => 'user_joined', 'system_data' => json_encode(['username' => 'other']), 'created_at' => $now, 'updated_at' => $now],
             ],
+            // A rank the channel's owner gave the member, and one given to
+            // someone else that must stay out of the member's export.
+            'chat_channel_ranks' => [
+                ['id' => 1, 'channel_id' => self::CH_PUBLIC, 'name' => 'Veteran', 'color' => '#336699', 'show_badge' => 1, 'position' => 1, 'created_at' => $now, 'updated_at' => $now],
+                ['id' => 2, 'channel_id' => self::CH_PUBLIC, 'name' => 'Helper', 'color' => '#993366', 'show_badge' => 1, 'position' => 2, 'created_at' => $now, 'updated_at' => $now],
+            ],
+            'chat_channel_rank_user' => [
+                ['rank_id' => 1, 'user_id' => self::MEMBER, 'channel_id' => self::CH_PUBLIC, 'created_at' => $now],
+                ['rank_id' => 2, 'user_id' => self::OTHER, 'channel_id' => self::CH_PUBLIC, 'created_at' => $now],
+            ],
             'chat_message_flags' => [
                 // A report the member filed, in their own words.
                 ['id' => 1, 'message_id' => 100, 'user_id' => self::MEMBER, 'reason' => 'spam', 'detail' => 'my own words about it', 'created_at' => $now],
@@ -167,6 +177,8 @@ class GdprChatDataTest extends TestCase
         $this->assertSame(1, $this->database()->table('chat_messages')->where('id', $messageId)->whereNull('user_id')->count());
         $this->assertFileDoesNotExist(self::$bucketRoot.'/'.$remote->path);
         $this->assertSame(0, $this->database()->table('chat_bookmarks')->where('user_id', self::MEMBER)->count());
+        $this->assertSame(0, $this->database()->table('chat_channel_rank_user')->where('user_id', self::MEMBER)->count(), 'a rank is a label on the person');
+        $this->assertSame(1, $this->database()->table('chat_channel_rank_user')->where('user_id', self::OTHER)->count());
 
         $flag = $this->database()->table('chat_message_flags')->where('id', 1)->first();
         $this->assertNotNull($flag, 'the report stays as a moderation record');
@@ -201,6 +213,7 @@ class GdprChatDataTest extends TestCase
 
         $this->assertSame('for later', $files['chat/bookmarks.json'][0]['name']);
         $this->assertSame('my own words about it', $files['chat/reports.json'][0]['detail']);
+        $this->assertSame([['channel' => 'open', 'rank' => 'Veteran']], array_map(fn ($rank) => array_intersect_key($rank, ['channel' => 1, 'rank' => 1]), $files['chat/ranks.json']), 'their own ranks, nobody else\'s');
 
         $this->assertSame(['content', 'revisions', 'file_name', 'name', 'detail'], ChatData::piiFields());
     }

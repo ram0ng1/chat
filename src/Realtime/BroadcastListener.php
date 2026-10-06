@@ -15,6 +15,7 @@ use Psr\Log\LoggerInterface;
 use Ramon\Chat\Channel;
 use Ramon\Chat\Event\ChannelModeratorChanged;
 use Ramon\Chat\Event\ChannelOwnershipTransferred;
+use Ramon\Chat\Event\ChannelRanksChanged;
 use Ramon\Chat\Event\ChannelStatusChanged;
 use Ramon\Chat\Event\ChannelWasArchived;
 use Ramon\Chat\Event\ChannelWasCreated;
@@ -38,7 +39,10 @@ use Ramon\Chat\Event\ThreadWasEdited;
 use Ramon\Chat\Event\UserJoinedChannel;
 use Ramon\Chat\Event\UserLeftChannel;
 use Ramon\Chat\Event\UserWasInvited;
+use Ramon\Chat\ChannelRankUser;
+use Ramon\Chat\ChannelUser;
 use Ramon\Chat\Message;
+use Ramon\Chat\Service\ChannelRanks;
 use Ramon\Chat\Thread;
 use Ramon\Chat\Upload;
 
@@ -88,6 +92,13 @@ class BroadcastListener
     public const EVENT_FLAGS = 'ramonChat.flags';
 
     /**
+     * A channel's rank book changed. Carries the whole book: it is channel
+     * configuration every member may read, small, and the same for all of them,
+     * so each author line and an open members tab redraw without a fetch.
+     */
+    public const EVENT_RANKS = 'ramonChat.ranks';
+
+    /**
      * Members at which a channel-wide push goes to the queue whatever the
      * forum's setting: an auto-join channel can hold every account, and
      * resolving that audience is not work for the request that created it.
@@ -96,7 +107,8 @@ class BroadcastListener
 
     public function __construct(
         protected ChatBroadcaster $broadcaster,
-        protected LoggerInterface $log
+        protected LoggerInterface $log,
+        protected ChannelRanks $ranks
     ) {
     }
 
@@ -361,6 +373,8 @@ class BroadcastListener
             $event->actor,
             tellMembers: true
         );
+
+        $this->pushRanks($event->channel);
     }
 
     /**
@@ -379,6 +393,8 @@ class BroadcastListener
             tellMembers: true,
             extra: ['previousOwnerId' => $event->previousOwner?->id !== null ? (int) $event->previousOwner->id : null]
         );
+
+        $this->pushRanks($event->channel);
     }
 
     /**
@@ -474,11 +490,57 @@ class BroadcastListener
     {
         // A hidden arrival is not the room's to know; the member's own tabs are.
         $this->membership($event->channel, $event->user, 'joined', $event->actor, tellMembers: ! $event->hidden);
+
+        if (! $event->hidden && $this->holdsRank($event->channel, $event->user)) {
+            $this->pushRanks($event->channel);
+        }
     }
 
     public function whenLeft(UserLeftChannel $event): void
     {
         $this->membership($event->channel, $event->user, 'left', $event->actor, tellMembers: ! $event->hidden);
+
+        if (! $event->hidden && $this->holdsRank($event->channel, $event->user)) {
+            $this->pushRanks($event->channel);
+        }
+    }
+
+    /**
+     * A rank created, edited, deleted or reordered, or a member's ranks set.
+     * Not excluded from the actor: their editor already redrew from the
+     * response, but their other tabs have not.
+     */
+    public function whenRanksChanged(ChannelRanksChanged $event): void
+    {
+        $this->pushRanks($event->channel);
+    }
+
+    protected function pushRanks(Channel $channel): void
+    {
+        $book = $this->ranks->book($channel);
+
+        if ($book === null) {
+            return;
+        }
+
+        $this->broadcaster->toChannelMembers($channel, self::EVENT_RANKS, [
+            'channelId' => (int) $channel->id,
+            'rankBook'  => $book,
+        ], null);
+    }
+
+    /**
+     * Whether a member coming or going changes the rank book: only someone
+     * shown with a rank does. The owner shows one whether present or not.
+     */
+    protected function holdsRank(Channel $channel, User $user): bool
+    {
+        if (! $channel->isCategory()) {
+            return false;
+        }
+
+        return ChannelRankUser::query()->where('channel_id', $channel->id)->where('user_id', $user->id)->exists()
+            || ChannelUser::query()->where('channel_id', $channel->id)->where('user_id', $user->id)->where('is_moderator', true)->exists();
     }
 
     public function whenInviteDeclined(InviteWasDeclined $event): void
@@ -657,6 +719,13 @@ class BroadcastListener
             // Sending the few fields the row actually uses costs a fraction of the
             // message body and removes the failure entirely.
             'user'        => $this->userPayload($message),
+
+            // The author's rank here, for the same reason: the row is drawn from
+            // this payload, and a recipient who has not loaded the channel's rank
+            // book has nothing else to read it from.
+            'authorRank'  => $message->user_id !== null && $message->channel !== null
+                ? $this->ranks->forUser($message->channel, (int) $message->user_id)
+                : null,
         ];
     }
 

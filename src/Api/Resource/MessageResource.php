@@ -39,6 +39,7 @@ use Ramon\Chat\Message;
 use Ramon\Chat\MessageReaction;
 use Ramon\Chat\MessageRevision;
 use Ramon\Chat\Service\ActionThrottle;
+use Ramon\Chat\Service\ChannelRanks;
 use Ramon\Chat\Service\MessageDispatcher;
 use Ramon\Chat\Thread;
 use Tobyz\JsonApiServer\Context as OriginalContext;
@@ -55,7 +56,8 @@ class MessageResource extends AbstractDatabaseResource
         protected MessageDispatcher $dispatcher,
         protected MentionResolver $mentions,
         protected LoggerInterface $log,
-        protected ActionThrottle $throttle
+        protected ActionThrottle $throttle,
+        protected ChannelRanks $ranks
     ) {
     }
 
@@ -195,7 +197,7 @@ class MessageResource extends AbstractDatabaseResource
                         throw new ForbiddenException();
                     }
 
-                    return $this->dispatcher->send(
+                    $message = $this->dispatcher->send(
                         channel: $channel,
                         actor: $actor,
                         content: (string) Arr::get($attributes, 'content', ''),
@@ -204,6 +206,12 @@ class MessageResource extends AbstractDatabaseResource
                         uploadIds: (array) Arr::get($attributes, 'uploadIds', []),
                         createThread: $createThread
                     );
+
+                    // So `authorRank` answers for the sender's own copy, which
+                    // reads it only off a loaded channel (see the field).
+                    $message->setRelation('channel', $channel);
+
+                    return $message;
                 })
                 ->defaultInclude(['user', 'user.groups', 'replyTo', 'replyTo.user', 'uploads', 'thread']),
 
@@ -633,6 +641,25 @@ class MessageResource extends AbstractDatabaseResource
 
             Schema\Boolean::make('mentionsChannelWide')
                 ->get(fn (Message $m) => $m->mentions->contains(fn ($mention) => $mention->isChannelWide())),
+
+            // The rank shown before the author's name in this channel: owner,
+            // moderator, or the highest of the ranks the owner gave them. Read
+            // from the channel's cached rank book, which every message of a page
+            // shares through the one eager-loaded channel, so a page costs one
+            // cache read. Only off a loaded channel: a message included elsewhere
+            // (a channel's last message, a thread's) does not draw an author
+            // line, and loading its channel to label it would be a query per row.
+            Schema\Arr::make('authorRank')
+                ->nullable()
+                ->get(function (Message $m) {
+                    if ($m->user_id === null || ! $m->relationLoaded('channel')) {
+                        return null;
+                    }
+
+                    $channel = $m->getRelation('channel');
+
+                    return $channel instanceof Channel ? $this->ranks->forUser($channel, (int) $m->user_id) : null;
+                }),
 
             Schema\Boolean::make('isBookmarked')
                 ->get(function (Message $m, Context $context) {

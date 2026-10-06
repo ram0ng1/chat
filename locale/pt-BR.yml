@@ -47,6 +47,16 @@ ramon-chat:
     not_a_member: Esse usuário não está neste canal.
     invite_not_found: Não há convite pendente para responder aqui.
 
+    # Cargos de canal
+    rank_limit: "Um canal pode ter no máximo {max} cargos."
+    rank_name_invalid: "O nome do cargo deve ter de 1 a {max} caracteres."
+    rank_color_invalid: "Escolha uma cor no formato #RRGGBB."
+    rank_icon_invalid: O ícone deve ser uma classe Font Awesome, como fas fa-star.
+    rank_flag_invalid: Esse não é um valor válido de ligado ou desligado.
+    rank_not_found: Esse cargo não existe neste canal.
+    rank_order_invalid: A nova ordem deve listar cada cargo uma vez.
+    rank_rate_limited: Você está mudando cargos rápido demais. Tente em um minuto.
+
     # Transferências de propriedade
     transfer_unavailable: Este canal não pode trocar de dono agora.
     transfer_target_is_owner: Esse membro já é o dono deste canal.
@@ -97,7 +107,7 @@ ramon-chat:
 
   lib:
     gdpr:
-      export_description: Suas mensagens de chat, os dados dos anexos e os canais dos quais você participou.
+      export_description: Suas mensagens de chat, os dados dos anexos, os canais em que você esteve e seus cargos neles.
       anonymize_description: Suas mensagens permanecem para que as conversas continuem legíveis, mas deixam de ser atribuídas a você. Anexos, reações, rascunhos e participações em canais são excluídos.
       delete_description: Suas mensagens e anexos são excluídos, junto com suas reações, rascunhos e participações em canais.
 
@@ -510,6 +520,47 @@ ramon-chat:
 
       no_members: Nenhum membro.
       save_failed: Falha ao salvar a alteração.
+
+
+    # Cargos de canal: a etiqueta antes do nome, e o editor deles.
+    ranks:
+      tab: Cargos
+      owner_default: Dono
+      moderator_default: Moderador
+      intro: Os cargos aparecem antes do nome do membro neste canal. Quem tem vários exibe o mais alto desta lista.
+      builtin_tag: Padrão
+      name_color: Cor do nome
+      holders: "{count, plural, =0 {Sem membros} one {# membro} other {# membros}}"
+      new: Novo cargo
+      edit_title: Editar cargo
+      edit: "Editar {name}"
+      delete: "Excluir {name}"
+      reset: "Restaurar o padrão de {name}"
+      delete_confirm: "Excluir o cargo {name}? Todos que o têm vão perdê-lo."
+      reset_confirm: "Restaurar o nome e a cor padrão de {name}?"
+      move_up: "Subir {name}"
+      move_down: "Descer {name}"
+      name: Nome
+      name_required: Dê um nome ao cargo.
+      color: Cor
+      color_theme: Usar a cor do tema
+      color_invalid: "Escolha uma cor no formato #RRGGBB."
+      icon: Ícone
+      icon_help: Uma classe Font Awesome, como fas fa-star. Deixe vazio para nenhum.
+      show_badge: Mostrar como etiqueta
+      show_badge_help_on: O cargo aparece como etiqueta colorida antes do nome.
+      show_badge_help_off: Sem etiqueta. O nome do membro fica na cor do cargo.
+      preview: Prévia, claro e escuro
+      save: Salvar
+      cancel: Cancelar
+      saved: Cargo salvo.
+      deleted: Cargo excluído.
+      reset_done: Cargo restaurado ao padrão.
+      empty: Você ainda não criou cargos. Crie um e distribua pela aba Membros.
+      limit: "Você pode criar até {max} cargos."
+      assign: "Cargos de {username}"
+      assign_empty: Ainda não há cargos para dar. Crie-os na aba Cargos.
+      save_failed: Não foi possível salvar o cargo.
 
     selection:
       count: "{count} selecionadas"

@@ -292,6 +292,24 @@ class ChannelPolicy extends AbstractPolicy
     }
 
     /**
+     * Creating, editing and handing out the channel's ranks: its owner and chat
+     * moderators, the same people who choose its moderators — a rank is a
+     * label the owner gives, and a channel moderator handing them out would be
+     * trust handed on a second time. Unlike the moderator role, ranks are only
+     * labels and grant nothing, so they work while channels are in
+     * administrators' hands too (`controls` then means chat moderators).
+     * Never on a direct channel, which has no owner to speak of.
+     */
+    public function manageRanks(User $actor, Channel $channel): ?bool
+    {
+        if (! $channel->isCategory() || $channel->isDeleted()) {
+            return false;
+        }
+
+        return $this->ownership->controls($actor, $channel) ? true : null;
+    }
+
+    /**
      * Handing the channel to another member: its owner, and administrators for
      * any channel, including one whose creator is gone. Not chat moderators:
      * who owns a room is between the owner and the person taking it over.
