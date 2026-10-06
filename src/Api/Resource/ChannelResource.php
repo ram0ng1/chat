@@ -798,6 +798,15 @@ class ChannelResource extends AbstractDatabaseResource
                     ? $this->slowMode->remainingFor($c, $context->getActor())
                     : 0),
 
+            // Whether slow mode applies to the actor here at all: the bypass
+            // permission, or running the room (its owner and the moderators they
+            // appointed). The composer restarts its own countdown after a send,
+            // and without this it locked an owner out for the whole window while
+            // the server would have taken the next message.
+            Schema\Boolean::make('bypassesSlowMode')
+                ->get(fn (Channel $c, Context $context) => $c->exists
+                    && $this->slowMode->isExempt($c, $context->getActor())),
+
             // Same gate as every other field on the form, deliberately: whoever may
             // create a channel fills in the whole form, and auto-join is part of it.
             //

@@ -50,6 +50,7 @@ export default class Channel extends Model {
    * is worse than one that shows the wait.
    */
   slowModeRemaining = Model.attribute<number>("slowModeRemaining");
+  bypassesSlowMode = Model.attribute<boolean>("bypassesSlowMode");
 
   /**
    * Longest message this channel accepts, or null to follow the forum setting.
@@ -104,6 +105,8 @@ export default class Channel extends Model {
   isHiddenMember = Model.attribute<boolean>("isHiddenMember");
   canClose = Model.attribute<boolean>("canClose");
   canArchive = Model.attribute<boolean>("canArchive");
+  /** May take the channel back out of the archive. */
+  canUnarchive = Model.attribute<boolean>("canUnarchive");
   canDelete = Model.attribute<boolean>("canDelete");
   canManageMembers = Model.attribute<boolean>("canManageMembers");
   /** May promote members to moderators of this channel — its owner, or chat moderators. */

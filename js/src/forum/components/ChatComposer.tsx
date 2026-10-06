@@ -1227,8 +1227,13 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
       // this one reads the channel's raw setting — without the same check, a
       // holder of `bypassSlowMode` sends once and is then locked out for the full
       // window by the interface alone, while the server would have taken the next
-      // message happily.
-      if (!editing && !app.forum.attribute("canBypassChatSlowMode")) {
+      // message happily. The channel says the same for its owner and the
+      // moderators they appointed, who are exempt here but not forum-wide.
+      if (
+        !editing &&
+        !app.forum.attribute("canBypassChatSlowMode") &&
+        !channel.bypassesSlowMode()
+      ) {
         this.startCooldown(Number(channel.slowModeSeconds() ?? 0));
       }
 
