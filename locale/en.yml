@@ -471,7 +471,6 @@ ramon-chat:
       auto_join: Automatically add all users
       auto_join_help: Every existing and future user will be added to this channel.
       auto_join_on_reply: Add users who reply in this category
-      auto_join_on_reply_help_none: Only does anything once the channel is bound to a category.
       auto_join_on_reply_help_bound: "A user joins the first time they reply to a discussion in {category}, and is not re-added if they later leave."
       post_discussions: Announce new discussions from this category
       post_discussions_help_bound: "Each new discussion started in {category} is announced in the channel."

@@ -479,26 +479,21 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
           ),
         )}
 
-        {/* Only meaningful for a tag-bound channel: it keys off replies in
-            that category. Shown regardless so the intent is discoverable — but
-            with the category named once there is one, because "requires a
-            category above" describes a state the reader may have already left. */}
-        {/* The three audience switches are offered only to whoever may change
-            them — ChannelResource refuses anyone else, because each one can pull
-            members in or publish into the channel. */}
-        {curates &&
-          this.toggle(
-            this.autoJoinOnReply,
-            "ramon-chat.forum.info.auto_join_on_reply",
-            tag
-              ? app.translator.trans(
-                  "ramon-chat.forum.info.auto_join_on_reply_help_bound",
-                  { category: tag.name() },
-                )
-              : app.translator.trans(
-                  "ramon-chat.forum.info.auto_join_on_reply_help_none",
-                ),
-          )}
+        {/* Only with a category chosen, like the announcements switch below: it
+            keys off replies in that category, so without one its label
+            describes something that does not exist. The audience switches are
+            also offered only to whoever may change them; ChannelResource
+            refuses anyone else, because each one can pull members in. */}
+        {tag && curates
+          ? this.toggle(
+              this.autoJoinOnReply,
+              "ramon-chat.forum.info.auto_join_on_reply",
+              app.translator.trans(
+                "ramon-chat.forum.info.auto_join_on_reply_help_bound",
+                { category: tag.name() },
+              ),
+            )
+          : null}
 
         {/* Only with a category chosen. The switch announces discussions *from
             that category*, so without one it is a control whose label describes
@@ -1256,7 +1251,14 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
   protected chooseTag(id: string): void {
     this.tagId(id);
 
-    if (!id) this.postDiscussions(false);
+    // Both switches only mean something with a category, so clearing it turns
+    // them off — for whoever may change them. Anyone else saving would have the
+    // change refused by ChannelResource, so for them the values are left as
+    // the curator set them.
+    if (!id && app.forum.attribute<boolean>("canCurateChatChannels")) {
+      this.postDiscussions(false);
+      this.autoJoinOnReply(false);
+    }
   }
 
   /** The category currently chosen in the picker, if any. */
