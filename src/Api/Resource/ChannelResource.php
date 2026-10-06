@@ -15,6 +15,7 @@ use Flarum\Api\Endpoint;
 use Flarum\Api\Resource\AbstractDatabaseResource;
 use Flarum\Api\Schema;
 use Flarum\Api\Sort\SortColumn;
+use Flarum\Extension\ExtensionManager;
 use Flarum\Foundation\ValidationException;
 use Flarum\Locale\Translator;
 use Flarum\Settings\SettingsRepositoryInterface;
@@ -34,6 +35,7 @@ use Ramon\Chat\Event\InviteWasCancelled;
 use Ramon\Chat\Event\UserJoinedChannel;
 use Ramon\Chat\Event\UserLeftChannel;
 use Ramon\Chat\Event\UserWasInvited;
+use Ramon\Chat\Service\ActionThrottle;
 use Ramon\Chat\Service\ChannelArchiver;
 use Ramon\Chat\Service\ChannelOwnership;
 use Ramon\Chat\Service\InvitationManager;
@@ -48,6 +50,16 @@ use Tobyz\JsonApiServer\Exception\ForbiddenException;
  */
 class ChannelResource extends AbstractDatabaseResource
 {
+    /**
+     * People one non-administrator may invite per hour, across every channel.
+     */
+    public const INVITES_PER_HOUR = 100;
+
+    /**
+     * Joins plus leaves one non-administrator may make in one channel per minute.
+     */
+    public const MEMBERSHIP_CHANGES_PER_MINUTE = 6;
+
     public function __construct(
         protected Translator $translator,
         protected Events $events,
@@ -57,7 +69,9 @@ class ChannelResource extends AbstractDatabaseResource
         protected ChannelOwnership $ownership,
         protected InvitationManager $invitations,
         protected SettingsRepositoryInterface $settings,
-        protected SlowMode $slowMode
+        protected SlowMode $slowMode,
+        protected ActionThrottle $throttle,
+        protected ExtensionManager $extensions
     ) {
     }
 
@@ -316,21 +330,28 @@ class ChannelResource extends AbstractDatabaseResource
                         throw new ForbiddenException();
                     }
 
+                    $this->assertNotTogglingMembership($channel, $actor);
+
                     // Accepting an invitation is joining. Consumed first, so the
                     // membership is created knowing it answers one, and the
                     // announcement can say who asked them in.
                     $invite = $this->invitations->accept($channel, $actor);
 
-                    $this->memberships->join($channel, $actor, hidden: $hidden);
+                    $membership = $this->memberships->join($channel, $actor, hidden: $hidden);
 
-                    $this->events->dispatch(new UserJoinedChannel(
-                        $channel,
-                        $actor,
-                        $actor,
-                        $hidden,
-                        acceptedInvite: $invite !== null,
-                        invitedBy: $invite?->inviter
-                    ));
+                    // Announced only when something changed. Joining a channel you
+                    // are already in is a no-op, and dispatching anyway wrote a
+                    // "joined" line into the room on every repeat of the request.
+                    if ($membership->wasRecentlyCreated || $membership->wasChanged(['left_at', 'hidden'])) {
+                        $this->events->dispatch(new UserJoinedChannel(
+                            $channel,
+                            $actor,
+                            $actor,
+                            $hidden,
+                            acceptedInvite: $invite !== null,
+                            invitedBy: $invite?->inviter
+                        ));
+                    }
 
                     // The record as it now stands, capability flags included. The
                     // client draws the composer from `canPostMessage`, and a bare
@@ -379,6 +400,20 @@ class ChannelResource extends AbstractDatabaseResource
                         ->whereVisibleTo($actor)
                         ->whereIn('id', $ids)
                         ->get();
+
+                    // Every invite is a notification in someone else's bell, so the
+                    // inviter is held to a budget per hour. Charged for everyone asked
+                    // rather than for the invites that end up created: deciding which
+                    // would be skipped is the work the budget is protecting.
+                    if (! $actor->isAdmin()) {
+                        foreach ($users as $ignored) {
+                            if (! $this->throttle->attempt('invite.'.$actor->id, self::INVITES_PER_HOUR, 3600)) {
+                                throw new ValidationException([
+                                    'userIds' => $this->translator->trans('ramon-chat.api.invite_rate_limited'),
+                                ]);
+                            }
+                        }
+                    }
 
                     // Members and people already invited are skipped inside, so a
                     // repeated request cannot pile up invites or re-notify anyone.
@@ -493,13 +528,21 @@ class ChannelResource extends AbstractDatabaseResource
                     // the channel — its owner, or a chat moderator — may.
                     $target = $channel->membershipFor($user);
 
+                    // A hidden member is, to anyone who cannot see hidden members,
+                    // not a member: every answer below is the one a stranger's id
+                    // gets, and nothing is removed. Otherwise an owner could find an
+                    // inspector by the difference in the reply, and evict them.
+                    if ($target !== null && $target->isHidden() && ! $this->ownership->seesHiddenMembers($actor)) {
+                        $target = null;
+                    }
+
                     if (! $this->ownership->controls($actor, $channel)
                         && ((int) $channel->creator_id === (int) $user->id
                             || ($target !== null && $target->isModerator()))) {
                         throw new ForbiddenException();
                     }
 
-                    $membership = $this->memberships->leave($channel, $user);
+                    $membership = $target !== null ? $this->memberships->leave($channel, $user) : null;
 
                     // Not a member — nothing to do, and reporting success on a no-op
                     // would tell the caller a removal happened that did not.
@@ -542,11 +585,17 @@ class ChannelResource extends AbstractDatabaseResource
                         throw new ForbiddenException();
                     }
 
+                    $this->assertNotTogglingMembership($channel, $actor);
+
                     $membership = $this->memberships->leave($channel, $actor);
 
-                    $this->events->dispatch(
-                        new UserLeftChannel($channel, $actor, $actor, (bool) $membership?->isHidden())
-                    );
+                    // Leaving a channel you are not in changes nothing, and must
+                    // not tell the room that it did.
+                    if ($membership !== null) {
+                        $this->events->dispatch(
+                            new UserLeftChannel($channel, $actor, $actor, $membership->isHidden())
+                        );
+                    }
                 })
                 ->response(fn () => new EmptyResponse(204)),
 
@@ -559,7 +608,10 @@ class ChannelResource extends AbstractDatabaseResource
                     $channel = $context->model;
                     $actor = $context->getActor();
 
-                    if (! $actor->can('view', $channel)) {
+                    // Preferences live on a membership, and setting one is not a way
+                    // in: it used to create the membership it needed, which let
+                    // anyone who could see a channel join it past the join policy.
+                    if (! $actor->can('view', $channel) || $channel->membershipFor($actor) === null) {
                         throw new ForbiddenException();
                     }
 
@@ -638,9 +690,14 @@ class ChannelResource extends AbstractDatabaseResource
     public function fields(): array
     {
         return [
+            // Only `category` is created through here. A direct channel is
+            // StartDirectController's to make: it is what checks the participants
+            // and links a restarted conversation to its history, and a `direct`
+            // row written here skipped all of that. Anything else is not a type.
             Schema\Str::make('type')
                 ->writableOnCreate()
-                ->requiredOnCreate(),
+                ->requiredOnCreate()
+                ->in([Channel::TYPE_CATEGORY]),
 
             Schema\Str::make('name')
                 ->nullable()
@@ -756,24 +813,41 @@ class ChannelResource extends AbstractDatabaseResource
             // The cost is real and accepted: creating a channel with this on adds
             // every eligible account at once (AutoJoinUsers, chunked at 500), so a
             // large forum pays for it in membership rows.
+            //
+            // Which is why *changing* it is not the creator's call. The field stays
+            // writable for the reason above, but a value different from the one
+            // stored is refused unless the actor curates channels forum-wide — see
+            // setAudienceFlag(). Otherwise any member allowed to open a room could
+            // put every account on the forum into it.
             Schema\Boolean::make('autoJoin')
-                ->writable(fn (Channel $c, Context $context) => $this->mayWriteCategoryField($c, $context)),
+                ->writable(fn (Channel $c, Context $context) => $this->mayWriteCategoryField($c, $context))
+                ->set(fn (Channel $c, $value, Context $context) => $this->setAudienceFlag($c, 'auto_join', 'autoJoin', $value, $context)),
+
+            // Carries the bound category's new discussions into the channel. Held
+            // to the same gate: it decides what forum content is copied into the
+            // room, and AnnounceDiscussions is only the second line.
+            Schema\Boolean::make('postDiscussions')
+                ->writable(fn (Channel $c, Context $context) => $this->mayWriteCategoryField($c, $context))
+                ->set(fn (Channel $c, $value, Context $context) => $this->setAudienceFlag($c, 'post_discussions', 'postDiscussions', $value, $context)),
 
             // Grows the channel from participation in its bound category, rather
-            // than adding every account up front like autoJoin does.
-            // Carries the bound category's new discussions into the channel.
-            Schema\Boolean::make('postDiscussions')
-                ->writable(fn (Channel $c, Context $context) => $this->mayWriteCategoryField($c, $context)),
-
+            // than adding every account up front like autoJoin does — but it still
+            // adds people who never asked, so it is gated the same way.
             Schema\Boolean::make('autoJoinOnReply')
-                ->writable(fn (Channel $c, Context $context) => $this->mayWriteCategoryField($c, $context)),
+                ->writable(fn (Channel $c, Context $context) => $this->mayWriteCategoryField($c, $context))
+                ->set(fn (Channel $c, $value, Context $context) => $this->setAudienceFlag($c, 'auto_join_on_reply', 'autoJoinOnReply', $value, $context)),
 
             Schema\Boolean::make('allowChannelWideMentions')
                 ->writable(fn (Channel $c, Context $context) => $this->mayWrite($c, $context)),
 
+            // Binding a category narrows who can see the channel, so it stays the
+            // creator's choice — but only among the categories they can see
+            // themselves. A tag id from outside that set is either one that does
+            // not exist or one they have no business knowing about.
             Schema\Integer::make('tagId')
                 ->nullable()
-                ->writable(fn (Channel $c, Context $context) => $this->mayWriteCategoryField($c, $context)),
+                ->writable(fn (Channel $c, Context $context) => $this->mayWriteCategoryField($c, $context))
+                ->set(fn (Channel $c, $value, Context $context) => $this->setTagId($c, $value, $context)),
 
             Schema\Integer::make('messagesCount'),
             Schema\Integer::make('userCount'),
@@ -973,6 +1047,88 @@ class ChannelResource extends AbstractDatabaseResource
         }
 
         return $this->mayWrite($channel, $context);
+    }
+
+    /**
+     * Writes one of the switches that reach past the room — adding accounts that
+     * never asked, copying forum content in — but only changes it for an actor who
+     * curates channels forum-wide: a chat moderator, `editChannel`, or an admin.
+     *
+     * The field cannot simply be non-writable for everyone else: the channel form
+     * sends all of them on every save, and json-api-server refuses a request that
+     * carries a field the actor may not write (see autoJoin). So the stored value
+     * coming back unchanged is accepted, and only a change is refused.
+     */
+    protected function setAudienceFlag(Channel $channel, string $column, string $field, mixed $value, Context $context): void
+    {
+        $value = (bool) $value;
+
+        if ($value === (bool) $channel->getAttribute($column)) {
+            return;
+        }
+
+        if (! $this->curatesChannels($context->getActor())) {
+            throw new ValidationException([
+                $field => $this->translator->trans('ramon-chat.api.channel_flag_not_allowed'),
+            ]);
+        }
+
+        $channel->setAttribute($column, $value);
+    }
+
+    /**
+     * Binds or unbinds the channel's category, refusing a category the actor
+     * cannot see — and any category at all while flarum/tags is off, when a bound
+     * channel would simply vanish (ScopeChannelVisibility fails closed).
+     */
+    protected function setTagId(Channel $channel, mixed $value, Context $context): void
+    {
+        $tagId = ($value === null || (int) $value <= 0) ? null : (int) $value;
+
+        if ($tagId === ($channel->tag_id === null ? null : (int) $channel->tag_id)) {
+            return;
+        }
+
+        if ($tagId !== null) {
+            $visible = $this->extensions->isEnabled('flarum-tags')
+                && \Flarum\Tags\Tag::query()
+                    // @phpstan-ignore method.notFound (Flarum model scope)
+                    ->whereVisibleTo($context->getActor())
+                    ->whereKey($tagId)
+                    ->exists();
+
+            if (! $visible) {
+                throw new ValidationException([
+                    'tagId' => $this->translator->trans('ramon-chat.api.channel_tag_not_found'),
+                ]);
+            }
+        }
+
+        $channel->tag_id = $tagId;
+    }
+
+    protected function curatesChannels(User $actor): bool
+    {
+        return $actor->hasPermission('ramon-chat.moderate')
+            || $actor->hasPermission('ramon-chat.editChannel');
+    }
+
+    /**
+     * Joining and leaving each write a line into the room, so going back and
+     * forth is a way to flood it. A handful per channel per minute is more than
+     * any real indecision needs. Administrators are exempt, as from RateLimiter.
+     */
+    protected function assertNotTogglingMembership(Channel $channel, User $actor): void
+    {
+        if ($actor->isAdmin()) {
+            return;
+        }
+
+        if (! $this->throttle->attempt('membership.'.$actor->id.'.'.$channel->id, self::MEMBERSHIP_CHANGES_PER_MINUTE, 60)) {
+            throw new ValidationException([
+                'channel' => $this->translator->trans('ramon-chat.api.membership_rate_limited'),
+            ]);
+        }
     }
 
     /**

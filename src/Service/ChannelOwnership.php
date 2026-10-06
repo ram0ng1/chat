@@ -126,6 +126,17 @@ class ChannelOwnership
         return $this->manages($actor, $channel) || $this->moderatesChannel($actor, $channel);
     }
 
+    /**
+     * Whether the actor may know that hidden members exist: the two grants that
+     * can join hidden themselves or oversee those who do. An owner is not one of
+     * them — a room's owner is exactly who an inspector is unseen by.
+     */
+    public function seesHiddenMembers(User $actor): bool
+    {
+        return $actor->hasPermission('ramon-chat.moderate')
+            || $actor->hasPermission('ramon-chat.inspectChannels');
+    }
+
     protected function owns(User $actor, Channel $channel): bool
     {
         return $this->membersOwnChannels() && $channel->isOwnedBy($actor);

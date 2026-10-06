@@ -11,6 +11,7 @@ namespace Ramon\Chat\Service;
 
 use Flarum\Extension\ExtensionManager;
 use Flarum\User\User;
+use Illuminate\Contracts\Cache\Repository as Cache;
 use Illuminate\Database\ConnectionInterface;
 use Ramon\Chat\Channel;
 use Ramon\Chat\ChannelInvite;
@@ -24,9 +25,18 @@ use Ramon\Chat\ChannelInvite;
  */
 class InvitationManager
 {
+    /**
+     * Quanto tempo uma recusa vale: nesse intervalo o mesmo canal não volta a
+     * convidar a mesma pessoa, e um "não" não vira uma fila de notificações.
+     * Administradores ficam de fora, como de todo limite do chat.
+     */
+    public const DECLINE_COOLDOWN_SECONDS = 86400;
+
     public function __construct(
         protected ConnectionInterface $db,
-        protected ExtensionManager $extensions
+        protected ExtensionManager $extensions,
+        protected ChannelOwnership $ownership,
+        protected Cache $cache
     ) {
     }
 
@@ -64,7 +74,12 @@ class InvitationManager
     }
 
     /**
-     * Convida quem ainda não é membro nem foi convidado.
+     * Convida quem ainda não é membro nem foi convidado, nem recusou há pouco.
+     *
+     * Um membro oculto conta como membro só para quem pode saber que ele existe
+     * (ChannelOwnership::seesHiddenMembers). Para os demais ele é convidado como
+     * qualquer outro: pular a pessoa revelaria a presença dela pela diferença na
+     * resposta, e o convite ela pode simplesmente recusar.
      *
      * @param  iterable<User>  $users
      * @return ChannelInvite[] Os convites criados, na ordem recebida.
@@ -74,11 +89,18 @@ class InvitationManager
         $created = [];
 
         foreach ($users as $user) {
-            if ($channel->membershipFor($user) !== null) {
+            $membership = $channel->membershipFor($user);
+
+            if ($membership !== null
+                && (! $membership->isHidden() || $this->ownership->seesHiddenMembers($inviter))) {
                 continue;
             }
 
             if ($channel->pendingInviteFor($user) !== null) {
+                continue;
+            }
+
+            if (! $inviter->isAdmin() && $this->cache->has($this->declineKey($channel, $user))) {
                 continue;
             }
 
@@ -111,7 +133,18 @@ class InvitationManager
 
     public function decline(Channel $channel, User $user): ?ChannelInvite
     {
-        return $this->remove($channel, $user);
+        $invite = $this->remove($channel, $user);
+
+        if ($invite !== null) {
+            $this->cache->put($this->declineKey($channel, $user), true, self::DECLINE_COOLDOWN_SECONDS);
+        }
+
+        return $invite;
+    }
+
+    protected function declineKey(Channel $channel, User $user): string
+    {
+        return 'ramon-chat.invite-declined.'.$channel->id.'.'.$user->id;
     }
 
     public function cancel(Channel $channel, User $user): ?ChannelInvite

@@ -211,13 +211,12 @@ class CreatePrivateChannelTest extends TestCase
         $this->assertSame(201, $response->getStatusCode(), (string) $response->getBody());
     }
 
-    public function test_create_channel_covers_auto_join_too(): void
+    public function test_a_creator_cannot_switch_auto_join_on(): void
     {
-        // Every field on the form belongs to whoever may create a channel — there
-        // is no attribute the modal offers and the API then refuses. Auto-join was
-        // the last exception and it is gone: it is asserted here rather than merely
-        // no longer denied, so bringing the carve-out back fails loudly instead of
-        // silently dropping the value.
+        // The field is still accepted — the form sends it on every save, with
+        // `false` — but turning it on puts every account on the forum into the
+        // room, which is not a creator's call. Refused rather than dropped, so the
+        // creator is told instead of finding the switch quietly off.
         $response = $this->send(
             $this->request('POST', '/api/chat-channels', [
                 'authenticatedAs' => self::CREATOR,
@@ -229,15 +228,8 @@ class CreatePrivateChannelTest extends TestCase
             ])
         );
 
-        $this->assertSame(201, $response->getStatusCode(), (string) $response->getBody());
-
-        $id = json_decode((string) $response->getBody(), true)['data']['id'];
-
-        $this->assertSame(
-            1,
-            (int) $this->database()->table('chat_channels')->where('id', $id)->value('auto_join'),
-            'the value the creator asked for is the value stored'
-        );
+        $this->assertSame(422, $response->getStatusCode(), (string) $response->getBody());
+        $this->assertSame(0, $this->database()->table('chat_channels')->where('name', 'default room for members')->count());
     }
 
     public function test_an_admin_can_switch_auto_join_on(): void

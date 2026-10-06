@@ -458,6 +458,7 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
   /** How the channel behaves once it exists. */
   protected behaviourSection(): Mithril.Children {
     const tag = this.selectedTag();
+    const curates = !!app.forum.attribute<boolean>("canCurateChatChannels");
 
     return this.section("ramon-chat.forum.new_channel.section_behaviour", [
       this.slowModeOptions(),
@@ -482,18 +483,22 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
             that category. Shown regardless so the intent is discoverable — but
             with the category named once there is one, because "requires a
             category above" describes a state the reader may have already left. */}
-        {this.toggle(
-          this.autoJoinOnReply,
-          "ramon-chat.forum.info.auto_join_on_reply",
-          tag
-            ? app.translator.trans(
-                "ramon-chat.forum.info.auto_join_on_reply_help_bound",
-                { category: tag.name() },
-              )
-            : app.translator.trans(
-                "ramon-chat.forum.info.auto_join_on_reply_help_none",
-              ),
-        )}
+        {/* The three audience switches are offered only to whoever may change
+            them — ChannelResource refuses anyone else, because each one can pull
+            members in or publish into the channel. */}
+        {curates &&
+          this.toggle(
+            this.autoJoinOnReply,
+            "ramon-chat.forum.info.auto_join_on_reply",
+            tag
+              ? app.translator.trans(
+                  "ramon-chat.forum.info.auto_join_on_reply_help_bound",
+                  { category: tag.name() },
+                )
+              : app.translator.trans(
+                  "ramon-chat.forum.info.auto_join_on_reply_help_none",
+                ),
+          )}
 
         {/* Only with a category chosen. The switch announces discussions *from
             that category*, so without one it is a control whose label describes
@@ -501,7 +506,7 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
             Choosing a category above brings it in; clearing the category takes it
             away and turns it off (see `chooseTag`), so a hidden switch is never
             left holding a value the reader cannot see. */}
-        {tag
+        {tag && curates
           ? this.toggle(
               this.postDiscussions,
               "ramon-chat.forum.info.post_discussions",
@@ -512,8 +517,8 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
             )
           : null}
 
-        {/* Auto-join is admin-only: it can add every account on the forum. */}
-        {app.session.user?.attribute<boolean>("isAdmin") !== false
+        {/* Auto-join can add every account on the forum. */}
+        {curates
           ? this.toggle(
               this.autoJoin,
               "ramon-chat.forum.info.auto_join",

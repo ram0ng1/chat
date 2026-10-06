@@ -36,6 +36,10 @@ class MembershipManager
      *                        member list, no change to `user_count`, and no join
      *                        announcement. For moderators reading a channel without
      *                        their presence changing how people talk in it.
+     *
+     * Whether anything changed is on the returned row: `wasRecentlyCreated`, or
+     * `wasChanged(['left_at', 'hidden'])`. A caller announcing the join reads that
+     * instead of assuming, so repeating the request is not a way to repeat the line.
      */
     public function join(
         Channel $channel,
@@ -145,17 +149,20 @@ class MembershipManager
         User $user,
         ?int $notificationLevel = null,
         ?bool $muted = null
-    ): ChannelUser {
+    ): ?ChannelUser {
         /** @var ChannelUser|null $membership */
         $membership = ChannelUser::query()
             ->where('channel_id', $channel->id)
             ->where('user_id', $user->id)
+            ->whereNull('left_at')
             ->first();
 
-        // Setting a preference on a channel you have not joined implies joining
-        // it — otherwise the preference would have nowhere to live.
+        // Only on a live membership. Setting a preference used to imply joining,
+        // and that made this a side door past the join policy: a closed channel,
+        // or a private one seen through an invitation, could be entered by
+        // choosing how loudly it should notify.
         if ($membership === null) {
-            $membership = $this->join($channel, $user);
+            return null;
         }
 
         if ($notificationLevel !== null && in_array($notificationLevel, ChannelUser::levels(), true)) {
