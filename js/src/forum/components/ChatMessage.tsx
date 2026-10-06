@@ -18,11 +18,10 @@ import { authorAvatar, authorLink } from "../utils/bot";
 import { safeFileUrl } from "../utils/url";
 import { jumpToMessage, revealAndJump } from "../utils/jumpToMessage";
 import { verifiedBadge } from "../utils/integrations";
-import FlagMessageModal from "./FlagMessageModal";
-import ImageLightbox from "./ImageLightbox";
 import { messagePreview } from "../../common/utils/preview";
 import { refreshMessageCapabilities } from "../realtime";
 import iconLabel from "../utils/iconLabel";
+import { loadFlagMessageModal, loadImageLightbox } from "../utils/lazy";
 
 export interface ChatMessageAttrs extends ComponentAttrs {
   message: Message;
@@ -380,7 +379,9 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
    * the message stream is `overflow: auto`, and a full-screen overlay inside it
    * would be clipped to the scroller.
    */
-  protected openLightbox(images: any[], index: number): void {
+  protected async openLightbox(images: any[], index: number): Promise<void> {
+    const ImageLightbox = (await loadImageLightbox()).default;
+
     const mount = document.createElement("div");
     document.body.appendChild(mount);
 
@@ -589,7 +590,9 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
               className="ChatUploads-imageButton"
               onclick={(e: Event) => {
                 e.stopPropagation();
-                this.openLightbox(images, images.indexOf(upload));
+                this.openLightbox(images, images.indexOf(upload)).catch(
+                  () => {},
+                );
               }}
               aria-label={upload.fileName() ?? ""}
             >
@@ -819,7 +822,7 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
               true,
             ),
           )}
-          onclick={() => app.modal.show(FlagMessageModal, { message })}
+          onclick={() => app.modal.show(loadFlagMessageModal, { message })}
         />,
       );
     }

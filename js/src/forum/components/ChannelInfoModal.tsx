@@ -18,8 +18,8 @@ import { isOnline } from "../utils/presence";
 import { MembersSkeleton } from "./Skeletons";
 import { channelIcon } from "../utils/channelIcon";
 import { sendKeyPreference, type SendKey } from "../utils/shortcuts";
-import AddMembersModal from "./AddMembersModal";
 import iconLabel from "../utils/iconLabel";
+import { loadAddMembersModal } from "../utils/lazy";
 
 export interface ChannelInfoModalAttrs extends IInternalModalAttrs {
   channel: Channel;
@@ -669,7 +669,7 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
    */
   protected openAddMembers(): void {
     app.modal.show(
-      AddMembersModal,
+      loadAddMembersModal,
       {
         channel: this.attrs.channel,
         // Both lists: the picker shows them marked rather than offering them,

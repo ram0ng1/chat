@@ -7,7 +7,6 @@ import type Mithril from "mithril";
 
 import type Channel from "../../common/models/Channel";
 import chatState from "../state/chat";
-import ChannelFormModal from "./ChannelFormModal";
 import { BrowseSkeleton } from "./Skeletons";
 import { channelIcon } from "../utils/channelIcon";
 import { mobileTitleControl } from "../utils/toolbar";
@@ -17,6 +16,7 @@ import {
   declineInvitation,
   invitationErrorText,
 } from "../utils/invitations";
+import { loadChannelFormModal } from "../utils/lazy";
 
 type BrowseFilter = "all" | "open" | "closed" | "archived" | "mine";
 
@@ -506,7 +506,7 @@ export default class BrowseChannelsPage<
   }
 
   protected create(): void {
-    app.modal.show(ChannelFormModal, {
+    app.modal.show(loadChannelFormModal, {
       onSaved: (channel: Channel) => this.open(channel),
     });
   }
@@ -514,7 +514,10 @@ export default class BrowseChannelsPage<
   protected edit(channel: Channel): void {
     // Reload after saving: a renamed or re-categorised channel may no longer
     // match the active filter or search.
-    app.modal.show(ChannelFormModal, { channel, onSaved: () => this.load() });
+    app.modal.show(loadChannelFormModal, {
+      channel,
+      onSaved: () => this.load(),
+    });
   }
 
   /**

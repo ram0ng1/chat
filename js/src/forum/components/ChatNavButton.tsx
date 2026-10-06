@@ -5,7 +5,7 @@ import Icon from "flarum/common/components/Icon";
 import classList from "flarum/common/utils/classList";
 import type Mithril from "mithril";
 
-import ChatDrawer from "./ChatDrawer";
+import ChatDrawer, { loadDrawerPanel } from "./ChatDrawer";
 import { rememberOrigin } from "../utils/morph";
 import chatState from "../state/chat";
 import { chatTitle, chatIcon } from "../utils/branding";
@@ -102,9 +102,11 @@ export default class ChatNavButton<
    *
    * Drafts come along because the drawer loads both together, and the composer
    * that would otherwise appear empty and then fill in is the same flash the
-   * channel list has.
+   * channel list has. The UI chunk too: the drawer and the page both live in it,
+   * so a hover is usually enough for the click to open without a spinner.
    */
   protected prefetch(): void {
+    loadDrawerPanel().catch(() => {});
     chatState.loadChannels().catch(() => {});
     chatState.loadDrafts().catch(() => {});
   }

@@ -16,7 +16,6 @@ import { messagePreview } from "../../common/utils/preview";
 import { humanDuration } from "../utils/duration";
 import { resolveMaxMessageLength } from "../utils/messageLimit";
 import { sendsOnCtrlEnter } from "../utils/shortcuts";
-import MessageTooLongModal from "./MessageTooLongModal";
 import { authorName } from "../utils/bot";
 import {
   acceptInvitation,
@@ -39,6 +38,7 @@ import {
   customEmojiImage,
 } from "../utils/flamoji";
 import iconLabel from "../utils/iconLabel";
+import { loadMessageTooLongModal } from "../utils/lazy";
 
 export interface ChatComposerAttrs extends ComponentAttrs {
   channel: Channel;
@@ -1073,7 +1073,7 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
 
     openStickerPicker(trigger as HTMLElement | null, (text: string) =>
       this.insertAtCursor(text),
-    );
+    ).catch(() => {});
   }
 
   /**
@@ -1163,7 +1163,7 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
     const max = resolveMaxMessageLength(channel);
 
     if (content.length > max) {
-      app.modal.show(MessageTooLongModal, { length: content.length, max });
+      app.modal.show(loadMessageTooLongModal, { length: content.length, max });
 
       return;
     }

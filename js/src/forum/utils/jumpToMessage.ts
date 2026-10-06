@@ -53,8 +53,7 @@ export function jumpToMessage(
   // segundos até a mensagem aparecer; um salto longo vai direto, como no Discord.
   scroller.scrollTo({
     top: Math.max(0, scroller.scrollTop + centred),
-    behavior:
-      Math.abs(centred) > scroller.clientHeight * 2 ? "auto" : "smooth",
+    behavior: Math.abs(centred) > scroller.clientHeight * 2 ? "auto" : "smooth",
   });
 
   highlight(node);
@@ -111,5 +110,8 @@ export async function revealAndJump(
 
   m.redraw.sync();
 
-  return jumpToMessage(id, document.querySelector<HTMLElement>(scrollerSelector));
+  return jumpToMessage(
+    id,
+    document.querySelector<HTMLElement>(scrollerSelector),
+  );
 }

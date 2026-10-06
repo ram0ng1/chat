@@ -519,12 +519,6 @@ ramon-chat:
       empty: No messages match.
       close: Close search
 
-    revisions:
-      title: Edit history
-      current: Current version
-      unknown_editor: Unknown
-      failed: The edit history could not be loaded.
-
     notifications:
       message_flagged: "{username} reported a message in {channel}"
       channel_invite: "{username} invited you to {channel}"

@@ -9,8 +9,9 @@ import type Mithril from "mithril";
 import type Channel from "../../common/models/Channel";
 import type ChatState from "../state/ChatState";
 import { SidebarSkeleton } from "./Skeletons";
-import ChannelFormModal from "./ChannelFormModal";
 import { channelIcon } from "../utils/channelIcon";
+import { loadChannelFormModal } from "../utils/lazy";
+import { isOnline } from "../utils/presence";
 
 export interface ChatSidebarAttrs extends ComponentAttrs {
   state: ChatState;
@@ -340,6 +341,8 @@ export default class ChatSidebar extends Component<ChatSidebarAttrs> {
         className={classList("ChatChannelRow", {
           "ChatChannelRow--active": active,
           "ChatChannelRow--muted": channel.isMuted(),
+          "ChatChannelRow--online":
+            channel.isDirect() && isOnline(channel.others()[0]),
         })}
         onclick={() => onSelect?.(channel)}
         // Hover intent, not hover: sweeping the pointer down the list to reach
@@ -441,7 +444,7 @@ export default class ChatSidebar extends Component<ChatSidebarAttrs> {
   }
 
   protected createChannel(): void {
-    app.modal.show(ChannelFormModal, {
+    app.modal.show(loadChannelFormModal, {
       onSaved: (channel: Channel) => {
         this.attrs.state.setActiveChannel(Number(channel.id()));
         m.route.set(app.route("chat.channel", { id: channel.id() }));

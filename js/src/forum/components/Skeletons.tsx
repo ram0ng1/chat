@@ -232,24 +232,3 @@ export function MembersSkeleton(rows = 6): Mithril.Children {
     </div>
   );
 }
-
-// ── Edit history ─────────────────────────────────────────────────────────────
-
-export function RevisionsSkeleton(rows = 3): Mithril.Children {
-  return (
-    <div className="ChatRevisions-list" aria-hidden="true">
-      {repeat(rows, (i) => (
-        <div className="ChatRevisions-entry ChatSkeleton" key={i}>
-          <div
-            className="ChatSkeleton-line ChatSkeleton-line--meta"
-            style={{ width: width(i, [35, 28, 42]) }}
-          />
-          <div
-            className="ChatSkeleton-line"
-            style={{ width: width(i, [80, 60, 90]) }}
-          />
-        </div>
-      ))}
-    </div>
-  );
-}

@@ -243,12 +243,15 @@ export default class ChannelView extends Component<ChannelViewAttrs> {
   protected jumpToPinned(pinned: Message): void {
     const channelId = Number(this.attrs.channel.id());
 
-    revealAndJump(this.attrs.state, channelId, pinned.id()!, this.scroller).then(
-      (found) => {
-        if (!found) this.attrs.state.togglePinned();
-        m.redraw();
-      },
-    );
+    revealAndJump(
+      this.attrs.state,
+      channelId,
+      pinned.id()!,
+      this.scroller,
+    ).then((found) => {
+      if (!found) this.attrs.state.togglePinned();
+      m.redraw();
+    });
   }
 
   /**

@@ -72,6 +72,12 @@
     overflow: hidden;
   }
 
+  // The box shown for the moment between opening and the UI chunk arriving.
+  &--loading {
+    align-items: center;
+    justify-content: center;
+  }
+
   &-header {
     .chat-flex-row(8px);
     flex-shrink: 0;
@@ -2005,45 +2011,6 @@ body.ChatFullPage {
   }
 }
 
-// ── Edit history ─────────────────────────────────────────────────────────────
-.ChatRevisions {
-  &-list {
-    display: grid;
-    gap: 10px;
-  }
-
-  &-entry {
-    padding: 10px 12px;
-    border-radius: @chat-radius-sm;
-    background: var(--avocado-surface-1);
-
-    // The live text, set apart so the list reads as "…and now this".
-    &--current {
-      background: var(--chat-pinned-bg);
-    }
-  }
-
-  &-meta {
-    .chat-flex-row(8px);
-    margin-bottom: 4px;
-    font-size: 11px;
-    color: var(--avocado-muted-label);
-  }
-
-  &-author {
-    font-weight: 800;
-    color: var(--avocado-text-dark);
-  }
-
-  &-content {
-    font-size: @chat-font-label;
-    // Revisions are shown as written, so newlines have to survive.
-    white-space: pre-wrap;
-    overflow-wrap: break-word;
-    color: var(--text-color);
-  }
-}
-
 // ── Selection bar target picker ───────────────────────────────────────────────
 // Positioning is decided here, not by core's auto-flip. Core measures the menu
 // against the window on open (Dropdown.oncreate) and, crucially, strips
@@ -2832,10 +2799,6 @@ body.ChatFullPage {
 // contents, so the grid does not reflow when the real cards arrive.
 .ChatBrowseCard.ChatSkeleton {
   padding: 14px 16px;
-}
-
-.ChatRevisions-entry.ChatSkeleton {
-  padding: 10px 12px;
 }
 
 @keyframes chat-pulse {

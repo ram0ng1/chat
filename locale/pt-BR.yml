@@ -493,12 +493,6 @@ ramon-chat:
       empty: Nenhuma mensagem corresponde.
       close: Fechar a busca
 
-    revisions:
-      title: Histórico de edições
-      current: Versão atual
-      unknown_editor: Desconhecido
-      failed: Não foi possível carregar o histórico.
-
     notifications:
       message_flagged: "{username} denunciou uma mensagem em {channel}"
       channel_invite: "{username} convidou você para {channel}"

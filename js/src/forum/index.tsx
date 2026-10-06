@@ -18,29 +18,10 @@ import MessageFlag from "../common/models/MessageFlag";
 import chatState from "./state/chat";
 import ChatState from "./state/ChatState";
 import ChatNavButton from "./components/ChatNavButton";
-import ChatDrawer from "./components/ChatDrawer";
-import ChatPage from "./components/ChatPage";
-import ChatSidebar from "./components/ChatSidebar";
-import ChannelView from "./components/ChannelView";
-import ThreadPanel from "./components/ThreadPanel";
-import PinnedPanel from "./components/PinnedPanel";
-import ThreadsList from "./components/ThreadsList";
-import ChatSearch from "./components/ChatSearch";
-import ChatMessage from "./components/ChatMessage";
-import ChatComposer from "./components/ChatComposer";
-import BrowseChannelsPage from "./components/BrowseChannelsPage";
-import ChannelFormModal from "./components/ChannelFormModal";
+import ChatDrawer, { loadDrawerPanel } from "./components/ChatDrawer";
 import ChannelInviteNotification from "./components/ChannelInviteNotification";
 import ChannelInviteDeclinedNotification from "./components/ChannelInviteDeclinedNotification";
 import MessageFlaggedNotification from "./components/MessageFlaggedNotification";
-import ChannelInfoModal from "./components/ChannelInfoModal";
-import AddMembersModal from "./components/AddMembersModal";
-import MessageTooLongModal from "./components/MessageTooLongModal";
-import ChatSelectionBar from "./components/ChatSelectionBar";
-import ChatAutocomplete from "./components/ChatAutocomplete";
-import RevisionsModal from "./components/RevisionsModal";
-import FlagMessageModal from "./components/FlagMessageModal";
-import FlaggedMessagesList from "./components/FlaggedMessagesList";
 import {
   bindRealtime,
   setPollingFallback,
@@ -54,6 +35,7 @@ import { shouldUseChatDrawer } from "./utils/surface";
 import { chatTitle, chatIcon } from "./utils/branding";
 import ChatPageResolver from "./resolvers/ChatPageResolver";
 import bindFlagsIntegration from "./utils/flagsIntegration";
+import { loadChatUi } from "./utils/lazy";
 
 export {
   Channel,
@@ -65,28 +47,9 @@ export {
   chatState,
   ChatNavButton,
   ChatDrawer,
-  ChatPage,
-  ChatSidebar,
-  ChannelView,
-  ThreadPanel,
-  PinnedPanel,
-  ThreadsList,
-  ChatSearch,
-  ChatMessage,
-  ChatComposer,
-  BrowseChannelsPage,
-  ChannelFormModal,
   ChannelInviteNotification,
   ChannelInviteDeclinedNotification,
   MessageFlaggedNotification,
-  ChannelInfoModal,
-  AddMembersModal,
-  MessageTooLongModal,
-  ChatSelectionBar,
-  ChatAutocomplete,
-  RevisionsModal,
-  FlagMessageModal,
-  FlaggedMessagesList,
   // Exported for diagnosis: in the console,
   //   flarum.extensions['ramon-chat'].realtimeBound()
   // tells you whether the chat is on the websocket or on the polling fallback.
@@ -192,7 +155,17 @@ app.initializers.add("ramon-chat", () => {
   // between them redraws instead of remounting — see ChatPageResolver. Without it
   // opening a thread or switching channel tore the page down and rebuilt it, which
   // reads as a full reload.
-  const chatPage = { component: ChatPage, resolverClass: ChatPageResolver };
+  //
+  // The page itself is code-split: everything it renders lives in the chatUi
+  // chunk, which the header button prefetches on hover and the app warms once
+  // idle. The resolver's constant key still holds, because the loader resolves
+  // to the same class every time.
+  const chatPage = {
+    component: () => loadChatUi().then((ui) => ({ default: ui.ChatPage })),
+    resolverClass: ChatPageResolver,
+  };
+  const browsePage = () =>
+    loadChatUi().then((ui) => ({ default: ui.BrowseChannelsPage }));
 
   app.routes["chat.index"] = { path: "/chat", ...chatPage };
   app.routes["chat.channel"] = { path: "/chat/c/:id", ...chatPage };
@@ -205,12 +178,21 @@ app.initializers.add("ramon-chat", () => {
   // A genuinely separate page, so it keeps the default resolver.
   app.routes["chat.browse"] = {
     path: "/chat/browse",
-    component: BrowseChannelsPage,
+    component: browsePage,
   };
   app.routes["chat.browse.filter"] = {
     path: "/chat/browse/:filter",
-    component: BrowseChannelsPage,
+    component: browsePage,
   };
+
+  // Warm the chat UI once the forum is idle, so the first open does not wait on
+  // the chunk. Checked at drain time, which is after mount, when the session is
+  // known: a guest or an opted-out member never downloads it.
+  app.prefetch?.add(
+    "ramon-chat-ui",
+    () => (canUseChat() ? loadChatUi() : Promise.resolve()),
+    -10,
+  );
 
   // ── Notifications ─────────────────────────────────────────────────────────
   // The component that renders the alert, and the row in the user's notification
@@ -405,6 +387,8 @@ app.initializers.add("ramon-chat", () => {
       // Reopen it if the last visit left it open. Dismissal is deliberate: only
       // the close button (and switching to the full-screen page) clears this.
       if (chatState.restoreDrawer()) {
+        loadDrawerPanel().catch(() => {});
+
         Promise.all([chatState.loadChannels(), chatState.loadDrafts()])
           .catch(() => {})
           .then(() => m.redraw());
