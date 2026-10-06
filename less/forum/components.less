@@ -4411,7 +4411,10 @@ body.ChatFullPage {
 // The chat's own panel over ramon/stickers' data. See components/StickerPicker.tsx
 // for why it does not reuse that extension's component.
 .ChatStickerPicker-wrapper {
-  z-index: var(--avocado-z-dropdown, 1000);
+  // Mounted on <body> and opened from the drawer's composer, so it must clear
+  // the drawer (composer layer + 5) and a composer brought forward (+ 6): the
+  // dropdown layer core uses for menus over the composer.
+  z-index: ~"calc(var(--zindex-composer, 1020) + 10)";
 }
 
 .ChatStickerPicker {
