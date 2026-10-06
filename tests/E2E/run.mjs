@@ -21,6 +21,7 @@ const suites = [
   "pinned-jump.mjs",
   "transitions.mjs",
   "channel-gone.mjs",
+  "channel-status.mjs",
   "admin-page.mjs",
   "permissions.mjs",
 ].filter((name) =>

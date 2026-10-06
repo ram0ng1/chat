@@ -2080,6 +2080,10 @@ export default class ChatState {
         method: "POST",
         url: `${app.forum.attribute("apiUrl")}/chat/typing`,
         body: { data: { attributes: { channelId, typing: true } } },
+        // Fire-and-forget: a refused signal (the channel was just closed, or the
+        // reader removed) is not worth an alert on every keystroke. The channel
+        // push or the next read settles what the composer should show.
+        errorHandler: () => {},
       })
       .catch(() => {});
   }

@@ -850,6 +850,7 @@ function onChannel(data: ChannelPayload): void {
 
   const before = channel.postPermission();
   const slowModeBefore = channel.slowModeSeconds();
+  const statusBefore = channel.status();
 
   channel.pushAttributes({
     status: data.status,
@@ -886,7 +887,23 @@ function onChannel(data: ChannelPayload): void {
     data.slowModeSeconds !== undefined &&
     data.slowModeSeconds !== slowModeBefore;
 
-  if (permissionMoved || slowModeMoved) {
+  // Closing is the one change every reader's answer follows the same way:
+  // nobody posts into a closed channel, administrators included (see
+  // ChannelPolicy::postMessage). So the composer goes at once, from the push
+  // alone, instead of staying open until a refetch lands. Reopening is not
+  // symmetric — whether this reader may post again depends on who they are — so
+  // that direction asks the server.
+  const statusMoved = data.status !== undefined && data.status !== statusBefore;
+
+  if (statusMoved && data.status !== "open") {
+    channel.pushAttributes({ canPostMessage: false });
+  }
+
+  if (
+    permissionMoved ||
+    slowModeMoved ||
+    (statusMoved && data.status === "open")
+  ) {
     refreshCapabilities(data.channelId);
   }
 
