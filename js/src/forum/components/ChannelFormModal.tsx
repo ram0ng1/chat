@@ -67,7 +67,7 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
    * one flag meant pressing Save spun Close, Archive and Delete along with it,
    * as though the dialog had started four things at once.
    */
-  private pending: "status" | "archive" | "delete" | null = null;
+  private pending: "status" | "archive" | "unarchive" | "delete" | null = null;
 
   /**
    * A picture chosen on the create form, held until the channel exists.
@@ -458,6 +458,7 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
   /** How the channel behaves once it exists. */
   protected behaviourSection(): Mithril.Children {
     const tag = this.selectedTag();
+    const curates = !!app.forum.attribute<boolean>("canCurateChatChannels");
 
     return this.section("ramon-chat.forum.new_channel.section_behaviour", [
       this.slowModeOptions(),
@@ -478,22 +479,21 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
           ),
         )}
 
-        {/* Only meaningful for a tag-bound channel: it keys off replies in
-            that category. Shown regardless so the intent is discoverable — but
-            with the category named once there is one, because "requires a
-            category above" describes a state the reader may have already left. */}
-        {this.toggle(
-          this.autoJoinOnReply,
-          "ramon-chat.forum.info.auto_join_on_reply",
-          tag
-            ? app.translator.trans(
+        {/* Only with a category chosen, like the announcements switch below: it
+            keys off replies in that category, so without one its label
+            describes something that does not exist. The audience switches are
+            also offered only to whoever may change them; ChannelResource
+            refuses anyone else, because each one can pull members in. */}
+        {tag && curates
+          ? this.toggle(
+              this.autoJoinOnReply,
+              "ramon-chat.forum.info.auto_join_on_reply",
+              app.translator.trans(
                 "ramon-chat.forum.info.auto_join_on_reply_help_bound",
                 { category: tag.name() },
-              )
-            : app.translator.trans(
-                "ramon-chat.forum.info.auto_join_on_reply_help_none",
               ),
-        )}
+            )
+          : null}
 
         {/* Only with a category chosen. The switch announces discussions *from
             that category*, so without one it is a control whose label describes
@@ -501,7 +501,7 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
             Choosing a category above brings it in; clearing the category takes it
             away and turns it off (see `chooseTag`), so a hidden switch is never
             left holding a value the reader cannot see. */}
-        {tag
+        {tag && curates
           ? this.toggle(
               this.postDiscussions,
               "ramon-chat.forum.info.post_discussions",
@@ -512,8 +512,8 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
             )
           : null}
 
-        {/* Auto-join is admin-only: it can add every account on the forum. */}
-        {app.session.user?.attribute<boolean>("isAdmin") !== false
+        {/* Auto-join can add every account on the forum. */}
+        {curates
           ? this.toggle(
               this.autoJoin,
               "ramon-chat.forum.info.auto_join",
@@ -958,7 +958,9 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
     if (!channel) return null;
 
     const closed = channel.status() === "closed";
-    const archived = Boolean(channel.archivedAt());
+
+    // The status, not `archivedAt`: see ChannelInfoModal::moderation().
+    const archived = channel.isArchived();
     const items: Mithril.Children[] = [];
 
     if (channel.canClose() && !archived) {
@@ -989,6 +991,20 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
           onclick={() => this.archive()}
         >
           {app.translator.trans("ramon-chat.forum.info.archive_channel")}
+        </Button>,
+      );
+    }
+
+    if (archived && channel.canUnarchive()) {
+      items.push(
+        <Button
+          className="Button"
+          icon="fas fa-box-open"
+          loading={this.pending === "unarchive"}
+          disabled={this.loading}
+          onclick={() => this.unarchive()}
+        >
+          {app.translator.trans("ramon-chat.forum.info.unarchive_channel")}
         </Button>,
       );
     }
@@ -1115,6 +1131,14 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
     );
   }
 
+  protected async unarchive(): Promise<void> {
+    await this.act(
+      "unarchive",
+      `/chat-channels/${this.attrs.channel!.id()}/unarchive`,
+      {},
+    );
+  }
+
   /**
    * Runs one immediate state change.
    *
@@ -1122,7 +1146,7 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
    * still gates the rest of the form, so nothing else can be started meanwhile.
    */
   protected async act(
-    action: "status" | "archive",
+    action: "status" | "archive" | "unarchive",
     path: string,
     attributes: Record<string, unknown>,
   ): Promise<void> {
@@ -1227,7 +1251,14 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
   protected chooseTag(id: string): void {
     this.tagId(id);
 
-    if (!id) this.postDiscussions(false);
+    // Both switches only mean something with a category, so clearing it turns
+    // them off — for whoever may change them. Anyone else saving would have the
+    // change refused by ChannelResource, so for them the values are left as
+    // the curator set them.
+    if (!id && app.forum.attribute<boolean>("canCurateChatChannels")) {
+      this.postDiscussions(false);
+      this.autoJoinOnReply(false);
+    }
   }
 
   /** The category currently chosen in the picker, if any. */

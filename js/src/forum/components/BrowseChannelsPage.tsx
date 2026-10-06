@@ -7,7 +7,6 @@ import type Mithril from "mithril";
 
 import type Channel from "../../common/models/Channel";
 import chatState from "../state/chat";
-import ChannelFormModal from "./ChannelFormModal";
 import { BrowseSkeleton } from "./Skeletons";
 import { channelIcon } from "../utils/channelIcon";
 import { mobileTitleControl } from "../utils/toolbar";
@@ -17,6 +16,7 @@ import {
   declineInvitation,
   invitationErrorText,
 } from "../utils/invitations";
+import { loadChannelFormModal } from "../utils/lazy";
 
 type BrowseFilter = "all" | "open" | "closed" | "archived" | "mine";
 
@@ -156,6 +156,11 @@ export default class BrowseChannelsPage<
                 {},
                 true,
               )}
+              aria-label={app.translator.trans(
+                "ramon-chat.forum.browse.search_placeholder",
+                {},
+                true,
+              )}
               value={this.query}
               oninput={(e: Event) =>
                 this.onSearch((e.target as HTMLInputElement).value)
@@ -170,6 +175,11 @@ export default class BrowseChannelsPage<
                 type="button"
                 className="ChatBrowse-search-clear"
                 title={app.translator.trans(
+                  "ramon-chat.forum.browse.clear_search",
+                  {},
+                  true,
+                )}
+                aria-label={app.translator.trans(
                   "ramon-chat.forum.browse.clear_search",
                   {},
                   true,
@@ -242,22 +252,45 @@ export default class BrowseChannelsPage<
   }
 
   protected card(channel: Channel): Mithril.Children {
+    const nameId = `ChatBrowseCard-name-${channel.id()}`;
+    const description = channel.description();
+
     return (
-      <div
+      <article
         className={classList("ChatBrowseCard", {
           "ChatBrowseCard--frozen": !channel.isOpen(),
         })}
         key={channel.id()}
+        aria-labelledby={nameId}
       >
         <div className="ChatBrowseCard-head">
           {channelIcon(channel, "ChatBrowseCard-icon")}
 
           <div className="ChatBrowseCard-headText">
-            <div className="ChatBrowseCard-name">
+            <h2 className="ChatBrowseCard-name" id={nameId}>
               <span>{channel.displayName()}</span>
-            </div>
+            </h2>
 
             <div className="ChatBrowseCard-badges">
+              {/* Membership is the one badge about the reader rather than the
+                  channel, so it comes first and is the one given a colour. */}
+              {channel.isFollowing() && channel.isHiddenMember() ? (
+                <span className="ChatBrowseCard-status ChatBrowseCard-status--joined ChatBrowseCard-status--inspecting">
+                  <i className="fas fa-user-secret" aria-hidden="true" />
+                  {app.translator.trans("ramon-chat.forum.browse.inspecting")}
+                </span>
+              ) : channel.isFollowing() ? (
+                <span className="ChatBrowseCard-status ChatBrowseCard-status--joined">
+                  <i className="fas fa-check" aria-hidden="true" />
+                  {app.translator.trans("ramon-chat.forum.browse.joined")}
+                </span>
+              ) : channel.isInvited() ? (
+                <span className="ChatBrowseCard-status ChatBrowseCard-status--invited">
+                  <i className="fas fa-envelope-open" aria-hidden="true" />
+                  {app.translator.trans("ramon-chat.forum.browse.invited")}
+                </span>
+              ) : null}
+
               {channel.isPrivate() ? (
                 <span className="ChatBrowseCard-status">
                   <i
@@ -298,33 +331,18 @@ export default class BrowseChannelsPage<
                   )}
                 </span>
               ) : null}
-
-              {/* Membership is the one badge that is about the reader rather
-                  than the channel, so it is the one worth colouring. */}
-              {channel.isFollowing() && channel.isHiddenMember() ? (
-                <span className="ChatBrowseCard-status ChatBrowseCard-status--joined">
-                  <i className="fas fa-user-secret" aria-hidden="true" />
-                  {app.translator.trans("ramon-chat.forum.browse.inspecting")}
-                </span>
-              ) : channel.isFollowing() ? (
-                <span className="ChatBrowseCard-status ChatBrowseCard-status--joined">
-                  <i className="fas fa-check" aria-hidden="true" />
-                  {app.translator.trans("ramon-chat.forum.browse.joined")}
-                </span>
-              ) : channel.isInvited() ? (
-                <span className="ChatBrowseCard-status ChatBrowseCard-status--invited">
-                  <i className="fas fa-envelope-open" aria-hidden="true" />
-                  {app.translator.trans("ramon-chat.forum.browse.invited")}
-                </span>
-              ) : null}
             </div>
           </div>
         </div>
 
-        <div className="ChatBrowseCard-description">
-          {channel.description() ||
+        <p
+          className={classList("ChatBrowseCard-description", {
+            "ChatBrowseCard-description--empty": !description,
+          })}
+        >
+          {description ||
             app.translator.trans("ramon-chat.forum.browse.no_description")}
-        </div>
+        </p>
 
         <div className="ChatBrowseCard-footer">
           <div className="ChatBrowseCard-meta">
@@ -344,20 +362,13 @@ export default class BrowseChannelsPage<
           </div>
 
           <div className="ChatBrowseCard-action">
-            {channel.canEdit() && channel.isCategory() ? (
-              <button
-                type="button"
-                className="ChatBrowseCard-iconButton"
-                title={app.translator.trans(
+            {channel.canEdit() && channel.isCategory()
+              ? this.iconButton(
+                  "fas fa-pen-to-square",
                   "ramon-chat.forum.channel.edit",
-                  {},
-                  true,
-                )}
-                onclick={() => this.edit(channel)}
-              >
-                <i className="fas fa-pen-to-square" aria-hidden="true" />
-              </button>
-            ) : null}
+                  () => this.edit(channel),
+                )
+              : null}
 
             {channel.isFollowing() ? (
               <Button
@@ -369,18 +380,12 @@ export default class BrowseChannelsPage<
               </Button>
             ) : channel.isInvited() ? (
               <>
-                <button
-                  type="button"
-                  className="ChatBrowseCard-iconButton"
-                  title={app.translator.trans(
-                    "ramon-chat.forum.channel.decline_invite",
-                    {},
-                    true,
-                  )}
-                  onclick={() => this.answerInvitation(channel, false)}
-                >
-                  <i className="fas fa-xmark" aria-hidden="true" />
-                </button>
+                {this.iconButton(
+                  "fas fa-xmark",
+                  "ramon-chat.forum.channel.decline_invite",
+                  () => this.answerInvitation(channel, false),
+                  true,
+                )}
                 <Button
                   className="Button Button--primary"
                   icon="fas fa-check"
@@ -397,20 +402,13 @@ export default class BrowseChannelsPage<
                     holds the permission. Beside the join rather than behind a
                     menu, since the card is the one place a channel not yet
                     opened can be acted on. */}
-                {channel.canJoinHidden() ? (
-                  <button
-                    type="button"
-                    className="ChatBrowseCard-iconButton"
-                    title={app.translator.trans(
+                {channel.canJoinHidden()
+                  ? this.iconButton(
+                      "fas fa-user-secret",
                       "ramon-chat.forum.channel.join_hidden",
-                      {},
-                      true,
-                    )}
-                    onclick={() => this.join(channel, true)}
-                  >
-                    <i className="fas fa-user-secret" aria-hidden="true" />
-                  </button>
-                ) : null}
+                      () => this.join(channel, true),
+                    )
+                  : null}
 
                 {channel.canJoin() ? (
                   <Button
@@ -424,7 +422,34 @@ export default class BrowseChannelsPage<
             )}
           </div>
         </div>
-      </div>
+      </article>
+    );
+  }
+
+  /**
+   * A round icon-only control on a card. The label is both the tooltip and
+   * the accessible name, since the glyph alone says nothing to a screen reader.
+   */
+  protected iconButton(
+    icon: string,
+    labelKey: string,
+    onclick: () => void,
+    danger = false,
+  ): Mithril.Children {
+    const label = app.translator.trans(labelKey, {}, true) as string;
+
+    return (
+      <button
+        type="button"
+        className={classList("ChatBrowseCard-iconButton", {
+          "ChatBrowseCard-iconButton--danger": danger,
+        })}
+        title={label}
+        aria-label={label}
+        onclick={onclick}
+      >
+        <i className={icon} aria-hidden="true" />
+      </button>
     );
   }
 
@@ -506,7 +531,7 @@ export default class BrowseChannelsPage<
   }
 
   protected create(): void {
-    app.modal.show(ChannelFormModal, {
+    app.modal.show(loadChannelFormModal, {
       onSaved: (channel: Channel) => this.open(channel),
     });
   }
@@ -514,7 +539,10 @@ export default class BrowseChannelsPage<
   protected edit(channel: Channel): void {
     // Reload after saving: a renamed or re-categorised channel may no longer
     // match the active filter or search.
-    app.modal.show(ChannelFormModal, { channel, onSaved: () => this.load() });
+    app.modal.show(loadChannelFormModal, {
+      channel,
+      onSaved: () => this.load(),
+    });
   }
 
   /**

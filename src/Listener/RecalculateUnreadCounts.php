@@ -9,18 +9,20 @@
 
 namespace Ramon\Chat\Listener;
 
-use Ramon\Chat\ChannelUser;
 use Ramon\Chat\Event\MessageWasDeleted;
 use Ramon\Chat\Event\MessageWasMoved;
 use Ramon\Chat\Service\UnreadTracker;
 
 /**
- * Rebuilds unread counters after a delete or move.
+ * Keeps unread counters right after a delete or move.
  *
- * These are the two operations where decrementing would drift: a deleted message
- * may already have been read by some members and not others, and a moved message
- * changes which channel it counts against. Recomputing from source is the only
- * way to stay correct, so it is done per affected membership rather than in bulk.
+ * One message changes, so only the memberships still counting it change, by
+ * one: a deleted message leaves the counters of the members who had not read
+ * past it, and a moved one leaves its old channel's and joins its new one's the
+ * same way. This used to recount every membership of the channel from source,
+ * two COUNTs per member per event, which on a large channel turned each delete
+ * into a burst of queries proportional to its size. See UnreadTracker for the
+ * targeted updates.
  */
 class RecalculateUnreadCounts
 {
@@ -31,23 +33,19 @@ class RecalculateUnreadCounts
 
     public function handle(MessageWasDeleted|MessageWasMoved $event): void
     {
-        $channelIds = [$event->message->channel_id];
+        $message = $event->message;
 
         if ($event instanceof MessageWasMoved) {
-            $channelIds[] = $event->from->id;
-            $channelIds[] = $event->to->id;
+            if ((int) $event->from->id === (int) $event->to->id) {
+                return;
+            }
+
+            $this->unread->forgetMessage($message, (int) $event->from->id);
+            $this->unread->addMovedMessage($message, (int) $event->to->id);
+
+            return;
         }
 
-        $channelIds = array_values(array_unique(array_filter($channelIds)));
-
-        ChannelUser::query()
-            ->whereIn('channel_id', $channelIds)
-            ->whereNull('left_at')
-            ->where('muted', false)
-            ->chunkById(200, function ($memberships) {
-                foreach ($memberships as $membership) {
-                    $this->unread->recalculate($membership)->save();
-                }
-            });
+        $this->unread->forgetMessage($message, (int) $message->channel_id);
     }
 }

@@ -7,6 +7,8 @@ import Avatar from "flarum/common/components/Avatar";
 import type User from "flarum/common/models/User";
 import type Mithril from "mithril";
 
+import { MessagePreview } from "./ChatPreview";
+
 /**
  * Who the chat posts as.
  *
@@ -36,7 +38,37 @@ export default class BotSettings extends Component<ComponentAttrs> {
         {announcer ? this.selectedUser(announcer) : this.botForm()}
 
         {announcer ? null : this.userPicker()}
+
+        {this.preview(announcer)}
       </div>
+    );
+  }
+
+  /**
+   * The announcement as it will land in a channel, from whichever half is live.
+   */
+  protected preview(announcer: User | null): Mithril.Children {
+    if (announcer) {
+      return (
+        <MessagePreview
+          name={announcer.displayName()}
+          avatarUrl={announcer.avatarUrl() ?? null}
+          isUser={true}
+        />
+      );
+    }
+
+    const path = this.setting("ramon-chat.bot_avatar_path");
+    const url = this.setting("ramon-chat.bot_avatar_url");
+
+    return (
+      <MessagePreview
+        name={this.setting("ramon-chat.bot_name")}
+        avatarUrl={
+          path ? `${app.forum.attribute("assetsBaseUrl")}/${path}` : url || null
+        }
+        isUser={false}
+      />
     );
   }
 

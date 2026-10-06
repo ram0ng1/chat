@@ -29,6 +29,9 @@ use Ramon\Chat\Channel;
  *    removes members, removes messages and manages threads there — but does
  *    not change the settings, archive or delete the room, or promote others.
  *
+ * The owner is whoever `creator_id` names, so handing a channel over
+ * (OwnershipTransfers) moves every right listed here in one write.
+ *
  * Owners and channel moderators are exempt from the channel's slow mode, the
  * way `bypassSlowMode` exempts globally. Chat moderators (`ramon-chat.moderate`)
  * keep every channel in both modes.
@@ -124,6 +127,17 @@ class ChannelOwnership
     public function exemptFromSlowMode(User $actor, Channel $channel): bool
     {
         return $this->manages($actor, $channel) || $this->moderatesChannel($actor, $channel);
+    }
+
+    /**
+     * Whether the actor may know that hidden members exist: the two grants that
+     * can join hidden themselves or oversee those who do. An owner is not one of
+     * them — a room's owner is exactly who an inspector is unseen by.
+     */
+    public function seesHiddenMembers(User $actor): bool
+    {
+        return $actor->hasPermission('ramon-chat.moderate')
+            || $actor->hasPermission('ramon-chat.inspectChannels');
     }
 
     protected function owns(User $actor, Channel $channel): bool

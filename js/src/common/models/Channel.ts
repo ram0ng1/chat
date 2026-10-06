@@ -12,6 +12,57 @@ export const enum NotificationLevel {
   Always = 2,
 }
 
+/**
+ * A pending ownership handover. Mirrors ChannelResource::transferState().
+ *
+ * `incoming` is true for the member it is offered to; `confirmed` is false
+ * while the owner has yet to enter the code mailed to them.
+ */
+export interface OwnershipTransferState {
+  id: number;
+  fromUserId: number;
+  toUserId: number;
+  confirmed: boolean;
+  incoming: boolean;
+  expiresAt: string;
+}
+
+/**
+ * One rank as the server describes it. Mirrors Ramon\Chat\Rank\RankBook.
+ *
+ * `builtin` names the two every channel has; their `name` and `color` are null
+ * until the owner customises them, meaning the translated default and the
+ * theme's colour. The three derived colours are null exactly when `color` is.
+ */
+export interface RankEntry {
+  key: string;
+  id: number | null;
+  builtin: "owner" | "moderator" | null;
+  name: string | null;
+  color: string | null;
+  icon: string | null;
+  showBadge: boolean;
+  position: number;
+  /** Text on the tag: white or near-black, whichever reads better. */
+  textColor: string | null;
+  /** The colour as a name on a light surface, darkened as far as needed. */
+  nameLight: string | null;
+  /** And on a dark one, lightened. */
+  nameDark: string | null;
+}
+
+/**
+ * A channel's ranks in priority order, and who holds what. `assignments` maps
+ * a user id to the ids of the custom ranks they hold; PHP sends an empty one
+ * as `[]`.
+ */
+export interface RankBook {
+  ranks: RankEntry[];
+  ownerId: number | null;
+  moderatorIds: number[];
+  assignments: Record<string, number[]> | [];
+}
+
 export default class Channel extends Model {
   // ── Identity ───────────────────────────────────────────────────────────────
   type = Model.attribute<string>("type");
@@ -50,6 +101,7 @@ export default class Channel extends Model {
    * is worse than one that shows the wait.
    */
   slowModeRemaining = Model.attribute<number>("slowModeRemaining");
+  bypassesSlowMode = Model.attribute<boolean>("bypassesSlowMode");
 
   /**
    * Longest message this channel accepts, or null to follow the forum setting.
@@ -104,11 +156,32 @@ export default class Channel extends Model {
   isHiddenMember = Model.attribute<boolean>("isHiddenMember");
   canClose = Model.attribute<boolean>("canClose");
   canArchive = Model.attribute<boolean>("canArchive");
+  /** May take the channel back out of the archive. */
+  canUnarchive = Model.attribute<boolean>("canUnarchive");
   canDelete = Model.attribute<boolean>("canDelete");
   canManageMembers = Model.attribute<boolean>("canManageMembers");
   /** May promote members to moderators of this channel — its owner, or chat moderators. */
   canManageModerators = Model.attribute<boolean>("canManageModerators");
+  /** May hand the channel to another member: its owner, or an administrator. */
+  canTransferOwnership = Model.attribute<boolean>("canTransferOwnership");
+  /**
+   * The pending handover, as this reader may see it, or null. Filled only when
+   * participants are loaded, like `moderatorIds`.
+   */
+  ownershipTransfer = Model.attribute<OwnershipTransferState | null>(
+    "ownershipTransfer",
+  );
   creatorId = Model.attribute<number | null>("creatorId");
+
+  /** May create, edit and hand out this channel's ranks. */
+  canManageRanks = Model.attribute<boolean>("canManageRanks");
+
+  /**
+   * Every rank here and who holds which. Absent from the channel list, where
+   * the server leaves it off; read it through `utils/ranks`, which falls back
+   * to the rank each message carries.
+   */
+  rankBook = Model.attribute<RankBook | null | undefined>("rankBook");
   /** Members holding the channel's own moderator role; filled when participants are loaded. */
   moderatorIds = Model.attribute<number[]>("moderatorIds");
   canMentionChannelWide = Model.attribute<boolean>("canMentionChannelWide");

@@ -14,7 +14,10 @@
     "build": "webpack --mode production",
     "analyze": "cross-env ANALYZER=true yarn run build",
     "format": "prettier --write src",
-    "build-typings": "tsc --declaration --declarationDir dist-typings --emitDeclarationOnly"
+    "format-check": "prettier --check src",
+    "clean-typings": "node -e \"require('fs').rmSync('dist-typings',{recursive:true,force:true})\"",
+    "build-typings": "npm run clean-typings && tsc -p .",
+    "check-typings": "tsc --noEmit --emitDeclarationOnly false -p ."
   },
   "devDependencies": {
     "emojibase-data": "^17.0.0",

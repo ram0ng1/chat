@@ -24,6 +24,8 @@
 @import "forum/variables";
 @import "forum/mixins";
 @import "forum/components";
+@import "forum/browse";
+@import "forum/ranks";
 
 // ── Channel roles in the members tab ─────────────────────────────────────────
 .ChatChannelInfo-member-badge {
@@ -42,6 +44,19 @@
 .ChatChannelInfo-member-badge--owner {
   background: var(--primary-color);
   color: var(--body-bg);
+}
+
+// The same pill as the owner's, in the primary colour's lighter tone: one
+// rank down, visibly the same family.
+.ChatChannelInfo-member-badge--moderator {
+  background: var(--control-bg);
+  color: var(--primary-color);
+  box-shadow: inset 0 0 0 1px var(--primary-color);
+
+  @supports (background: color-mix(in srgb, red, blue)) {
+    background: color-mix(in srgb, var(--primary-color) 16%, var(--body-bg));
+    box-shadow: none;
+  }
 }
 
 .ChatChannelInfo-moderatorHelp {

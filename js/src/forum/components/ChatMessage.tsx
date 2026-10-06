@@ -16,13 +16,13 @@ import { customEmoji, customEmojiImage } from "../utils/flamoji";
 import { isOnline } from "../utils/presence";
 import { authorAvatar, authorLink } from "../utils/bot";
 import { safeFileUrl } from "../utils/url";
-import { jumpToMessage } from "../utils/jumpToMessage";
+import { jumpToMessage, revealAndJump } from "../utils/jumpToMessage";
 import { verifiedBadge } from "../utils/integrations";
-import FlagMessageModal from "./FlagMessageModal";
-import ImageLightbox from "./ImageLightbox";
+import { messageRank, rankNameAttrs, rankTag } from "../utils/ranks";
 import { messagePreview } from "../../common/utils/preview";
 import { refreshMessageCapabilities } from "../realtime";
 import iconLabel from "../utils/iconLabel";
+import { loadFlagMessageModal, loadImageLightbox } from "../utils/lazy";
 
 export interface ChatMessageAttrs extends ComponentAttrs {
   message: Message;
@@ -66,6 +66,7 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
     const grouped = message.isGroupedWith(previous) && !message.isPinned();
     const deleted = Boolean(message.isDeleted());
     const selected = state.selected.has(Number(message.id()));
+    const rank = grouped ? null : messageRank(message);
 
     if (message.isSystem()) {
       return this.systemRow(message);
@@ -103,7 +104,20 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
         <div className="ChatMessage-body">
           {grouped ? null : (
             <div className="ChatMessage-meta">
-              <span className="ChatMessage-author">{authorLink(message)}</span>
+              {/* The author's rank in this room, before the name the way a
+                  forum rank sits before it. A rank set not to show as a tag
+                  colours the name instead. */}
+              {rank?.showBadge ? rankTag(rank, "ChatMessage-rank") : null}
+
+              <span
+                {...rankNameAttrs(rank)}
+                className={classList(
+                  "ChatMessage-author",
+                  rankNameAttrs(rank).className,
+                )}
+              >
+                {authorLink(message)}
+              </span>
 
               {/* ramon/verified, when installed. Placed where that extension puts
                   it on a post — right after the name — so a verified member is
@@ -380,7 +394,9 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
    * the message stream is `overflow: auto`, and a full-screen overlay inside it
    * would be clipped to the scroller.
    */
-  protected openLightbox(images: any[], index: number): void {
+  protected async openLightbox(images: any[], index: number): Promise<void> {
+    const ImageLightbox = (await loadImageLightbox()).default;
+
     const mount = document.createElement("div");
     document.body.appendChild(mount);
 
@@ -473,12 +489,25 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
 
           if ((e.target as HTMLElement | null)?.closest("a")) return;
 
-          if (!jumpToMessage(target.id()!, e.currentTarget as HTMLElement)) {
+          const from = e.currentTarget as HTMLElement;
+          const inThread = !!from.closest(".ChatThreadPanel-stream");
+          const jumped = inThread
+            ? Promise.resolve(jumpToMessage(target.id()!, from))
+            : revealAndJump(
+                this.attrs.state,
+                Number(message.channelId()),
+                target.id()!,
+                from,
+              );
+
+          jumped.then((found) => {
+            if (found) return;
+
             app.alerts.show(
               { type: "error" },
               app.translator.trans("ramon-chat.forum.message.reply_not_loaded"),
             );
-          }
+          });
         }}
       >
         <i className="fas fa-reply" aria-hidden="true" />
@@ -576,7 +605,9 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
               className="ChatUploads-imageButton"
               onclick={(e: Event) => {
                 e.stopPropagation();
-                this.openLightbox(images, images.indexOf(upload));
+                this.openLightbox(images, images.indexOf(upload)).catch(
+                  () => {},
+                );
               }}
               aria-label={upload.fileName() ?? ""}
             >
@@ -806,7 +837,7 @@ export default class ChatMessage extends Component<ChatMessageAttrs> {
               true,
             ),
           )}
-          onclick={() => app.modal.show(FlagMessageModal, { message })}
+          onclick={() => app.modal.show(loadFlagMessageModal, { message })}
         />,
       );
     }

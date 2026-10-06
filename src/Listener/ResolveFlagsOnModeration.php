@@ -10,6 +10,8 @@
 namespace Ramon\Chat\Listener;
 
 use Carbon\Carbon;
+use Illuminate\Contracts\Events\Dispatcher as Events;
+use Ramon\Chat\Event\FlagsChanged;
 use Ramon\Chat\Event\MessageWasDeleted;
 use Ramon\Chat\MessageFlag;
 
@@ -27,9 +29,14 @@ use Ramon\Chat\MessageFlag;
  */
 class ResolveFlagsOnModeration
 {
+    public function __construct(
+        protected Events $events
+    ) {
+    }
+
     public function handle(MessageWasDeleted $event): void
     {
-        MessageFlag::query()
+        $closed = MessageFlag::query()
             ->where('message_id', $event->message->id)
             ->whereNull('resolved_at')
             ->update([
@@ -39,5 +46,11 @@ class ResolveFlagsOnModeration
                 // has nobody to attribute the decision to.
                 'resolved_by_id' => $event->actor?->id,
             ]);
+
+        // Most deletions close nothing, and those must not cost every
+        // moderator a recount.
+        if ($closed > 0) {
+            $this->events->dispatch(new FlagsChanged($event->actor));
+        }
     }
 }

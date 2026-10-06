@@ -10,8 +10,8 @@
 namespace Ramon\Chat\Service;
 
 use Carbon\Carbon;
+use Flarum\Group\Group;
 use Flarum\User\User;
-use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Ramon\Chat\Channel;
 use Ramon\Chat\ChannelUser;
@@ -29,11 +29,6 @@ use Ramon\Chat\ThreadUser;
  */
 class UnreadTracker
 {
-    public function __construct(
-        protected ConnectionInterface $db
-    ) {
-    }
-
     /**
      * Increments unread counters for every member except the sender, and bumps
      * the mention counter for members this message actually mentions.
@@ -115,6 +110,91 @@ class UnreadTracker
     }
 
     /**
+     * Takes one message out of a channel's counters, for a deletion or a move
+     * away.
+     *
+     * Targeted rather than recounted. Only members who had not read past the
+     * message were ever counting it, so only their rows change, by one, in two
+     * UPDATEs whatever the size of the channel. Recounting every membership
+     * from source was two COUNTs per member on every delete, which made a
+     * moderator tidying a large channel the slowest thing on the forum.
+     *
+     * The `> 0` guards are the clamp: a counter already cleared by a mark-read
+     * that raced the delete stays at zero instead of going negative.
+     * `$channelId` is passed because a moved message's own column already names
+     * its destination.
+     */
+    public function forgetMessage(Message $message, int $channelId): void
+    {
+        if ($message->isDeleted() && ! $message->wasChanged('deleted_at')) {
+            return;
+        }
+
+        $this->unreadOf($message, $channelId)
+            ->where('muted', false)
+            ->where('unread_count', '>', 0)
+            ->decrement('unread_count');
+
+        $mentioned = $this->mentionedUserIds($message, $channelId);
+
+        if ($mentioned !== []) {
+            $this->unreadOf($message, $channelId)
+                ->whereIn('user_id', $mentioned)
+                ->where('unread_mentions_count', '>', 0)
+                ->decrement('unread_mentions_count');
+        }
+    }
+
+    /**
+     * The mirror of forgetMessage(), for a message moved into a channel: the
+     * same rule recordNewMessage() applies to a new one, restricted to members
+     * whose read marker is below the message, since markers are ids and a moved
+     * message keeps its id.
+     */
+    public function addMovedMessage(Message $message, int $channelId): void
+    {
+        if ($message->isDeleted()) {
+            return;
+        }
+
+        $this->unreadOf($message, $channelId)
+            ->where('muted', false)
+            ->increment('unread_count');
+
+        $mentioned = $this->mentionedUserIds($message, $channelId);
+
+        if ($mentioned !== []) {
+            $this->unreadOf($message, $channelId)
+                ->whereIn('user_id', $mentioned)
+                ->increment('unread_mentions_count');
+        }
+    }
+
+    /**
+     * Live memberships of a channel that have not read up to this message, and
+     * are not its author: exactly the rows whose counters include it.
+     *
+     * @return Builder<ChannelUser>
+     */
+    protected function unreadOf(Message $message, int $channelId): Builder
+    {
+        $query = ChannelUser::query();
+
+        $query->where('channel_id', $channelId);
+        $query->whereNull('left_at');
+        $query->where(function ($q) use ($message) {
+            $q->whereNull('last_read_message_id')
+                ->orWhere('last_read_message_id', '<', $message->id);
+        });
+
+        if ($message->user_id !== null) {
+            $query->where('user_id', '!=', $message->user_id);
+        }
+
+        return $query;
+    }
+
+    /**
      * Marks a channel read up to a message and returns the updated membership.
      * Passing null marks it read up to the channel's latest message.
      */
@@ -166,8 +246,10 @@ class UnreadTracker
      *
      * @return int[]
      */
-    public function mentionedUserIds(Message $message): array
+    public function mentionedUserIds(Message $message, ?int $channelId = null): array
     {
+        $channelId ??= (int) $message->channel_id;
+
         $mentions = $message->mentions;
 
         if ($mentions->isEmpty()) {
@@ -186,9 +268,25 @@ class UnreadTracker
             ->filter()
             ->all();
 
+        // A group mention reaches the group's members *in this channel*, not the
+        // group forum-wide: pinging a moderator who never joined the room pulled
+        // them into a conversation they had not opted into. The group is checked
+        // again here, not only when the row was written, so rows stored before
+        // hidden groups and guests/members were excluded cannot still expand.
         if ($groupIds !== []) {
-            $groupMemberIds = $this->db->table('group_user')
-                ->whereIn('group_id', $groupIds)
+            $groupIds = Group::query()
+                ->whereKey($groupIds)
+                ->where('is_hidden', false)
+                ->whereNotIn('id', [Group::GUEST_ID, Group::MEMBER_ID])
+                ->pluck('id')
+                ->all();
+        }
+
+        if ($groupIds !== []) {
+            $groupMemberIds = ChannelUser::query()
+                ->where('channel_id', $channelId)
+                ->whereNull('left_at')
+                ->whereIn('user_id', fn ($sub) => $sub->select('user_id')->from('group_user')->whereIn('group_id', $groupIds))
                 ->pluck('user_id')
                 ->all();
 
@@ -199,7 +297,7 @@ class UnreadTracker
 
         if ($channelWide) {
             $memberIds = ChannelUser::query()
-                ->where('channel_id', $message->channel_id)
+                ->where('channel_id', $channelId)
                 ->whereNull('left_at')
                 ->pluck('user_id')
                 ->all();

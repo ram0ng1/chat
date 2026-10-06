@@ -202,9 +202,15 @@ class ChannelPolicy extends AbstractPolicy
         return $actor->hasPermission('ramon-chat.moderate') ? true : null;
     }
 
+    /**
+     * Closing and reopening. Not on an archived channel: the status endpoint
+     * used to accept it there, and "reopening" an archive by status left the
+     * archive stamps behind, so the archive action never came back. Leaving an
+     * archive is `unarchive`'s job.
+     */
     public function close(User $actor, Channel $channel): ?bool
     {
-        if ($channel->isDirect()) {
+        if ($channel->isDirect() || $channel->isArchived()) {
             return false;
         }
 
@@ -223,6 +229,20 @@ class ChannelPolicy extends AbstractPolicy
         }
 
         if ($channel->isDirect() || ! $channel->isClosed()) {
+            return false;
+        }
+
+        return $this->ownership->controls($actor, $channel) ? true : null;
+    }
+
+    /**
+     * Undoing an archive, for whoever may archive. Not behind the archiving
+     * setting: turning archiving off should stop new archives, not strand the
+     * channels already frozen.
+     */
+    public function unarchive(User $actor, Channel $channel): ?bool
+    {
+        if ($channel->isDirect() || ! $channel->isArchived()) {
             return false;
         }
 
@@ -269,6 +289,47 @@ class ChannelPolicy extends AbstractPolicy
         }
 
         return $this->ownership->controls($actor, $channel) ? true : null;
+    }
+
+    /**
+     * Creating, editing and handing out the channel's ranks: its owner and chat
+     * moderators, the same people who choose its moderators — a rank is a
+     * label the owner gives, and a channel moderator handing them out would be
+     * trust handed on a second time. Unlike the moderator role, ranks are only
+     * labels and grant nothing, so they work while channels are in
+     * administrators' hands too (`controls` then means chat moderators).
+     * Never on a direct channel, which has no owner to speak of.
+     */
+    public function manageRanks(User $actor, Channel $channel): ?bool
+    {
+        if (! $channel->isCategory() || $channel->isDeleted()) {
+            return false;
+        }
+
+        return $this->ownership->controls($actor, $channel) ? true : null;
+    }
+
+    /**
+     * Handing the channel to another member: its owner, and administrators for
+     * any channel, including one whose creator is gone. Not chat moderators:
+     * who owns a room is between the owner and the person taking it over.
+     * Off while channels are in administrators' hands, and for a channel that
+     * is archived or deleted, where there is nothing left to run.
+     */
+    public function transferOwnership(User $actor, Channel $channel): ?bool
+    {
+        if (! $channel->isCategory()
+            || $channel->isArchived()
+            || $channel->isDeleted()
+            || ! $this->ownership->membersOwnChannels()) {
+            return false;
+        }
+
+        if ($actor->isAdmin()) {
+            return true;
+        }
+
+        return $this->ownership->manages($actor, $channel) ? true : null;
     }
 
     /**

@@ -1,7 +1,7 @@
 import app from "flarum/forum/app";
 import type Mithril from "mithril";
 
-import StickerPicker from "../components/StickerPicker";
+import { loadStickerPicker } from "./lazy";
 
 /**
  * Optional integration with ramon/stickers.
@@ -49,10 +49,14 @@ export function stickersAvailable(): boolean {
  * @param trigger The button that opened it, used to position the panel.
  * @param onInsert Receives the shortcode, e.g. `:wave:`.
  */
-export function openStickerPicker(
+export async function openStickerPicker(
   trigger: HTMLElement | null,
   onInsert: (text: string) => void,
-): void {
+): Promise<void> {
+  close();
+
+  const StickerPicker = (await loadStickerPicker()).default;
+
   close();
 
   const mount = document.createElement("div");

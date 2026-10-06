@@ -57,7 +57,8 @@ return [
 
     (new Extend\Frontend('admin'))
         ->js(__DIR__.'/js/dist/admin.js')
-        ->css(__DIR__.'/less/admin.less'),
+        ->css(__DIR__.'/less/admin.less')
+        ->content(Content\QueueDriver::class),
 
     new Extend\Locales(__DIR__.'/locale'),
 
@@ -139,6 +140,14 @@ return [
             Schema\Boolean::make('canModerateChat')
                 ->get(fn ($forum, Context $context) => $context->getActor()->hasPermission('ramon-chat.moderate')),
 
+            // The channel form's audience switches (auto-join, auto-join on reply,
+            // announcing discussions). ChannelResource refuses a change to them
+            // from anyone else, so offering them would only produce an error.
+            Schema\Boolean::make('canCurateChatChannels')
+                ->get(fn ($forum, Context $context) => $context->getActor()->isAdmin()
+                    || $context->getActor()->hasPermission('ramon-chat.moderate')
+                    || $context->getActor()->hasPermission('ramon-chat.editChannel')),
+
             // The paperclip is drawn from this. The permission was enforced only in
             // UploadController, so someone without it still saw the control and got
             // a 403 on use — the server was right and the interface was lying.
@@ -206,6 +215,14 @@ return [
         ->default('ramon-chat.message_edit_window_minutes', 0)
         ->default('ramon-chat.allow_uploads', true)
         ->default('ramon-chat.max_upload_size', 10485760)
+        // Where public attachments are stored: 'local' (the chat's own disk) or
+        // 'fof-upload' (fof/upload's configured storage, used only while that
+        // extension is enabled). Private attachments ignore this. The adapter is
+        // a fof/upload adapter key; empty follows fof/upload's own mime mapping.
+        // Neither is serialised to the forum: the client never needs them, and
+        // the adapter name says where the forum keeps its files.
+        ->default(Storage\UploadStorage::SETTING, 'local')
+        ->default('ramon-chat.fof_upload_adapter', '')
         ->default('ramon-chat.allow_archiving_channels', true)
         ->default('ramon-chat.threading_default', false)
         // Whether realtime pushes go through the queue instead of running in the
@@ -259,7 +276,10 @@ return [
         ->registerPreference('ramon-chat.enabled', 'boolVal', true)
         ->registerPreference('ramon-chat.allowChannelWideMentions', 'boolVal', true)
         ->registerPreference('ramon-chat.sound', 'strVal', 'default')
-        ->registerPreference('ramon-chat.emailNotifications', 'boolVal', false)
+        // Mention mail. Read in SendChatNotifications alongside core's
+        // `notify_chatMention_email`, and on by default like it, so the two never
+        // disagree about whether a member who touched neither gets the mail.
+        ->registerPreference('ramon-chat.emailNotifications', 'boolVal', true)
         ->registerPreference('ramon-chat.openInDrawer', 'boolVal', true)
 
         // Which keystroke sends, for this member. Three states, not two, and the
@@ -280,6 +300,8 @@ return [
         // by session cookie from the browser, by token from anything else.
         ->get('/chat/uploads/{id:\d+}/file', 'chat.uploads.file', Api\Controller\ServeUploadController::class)
         ->post('/chat/typing', 'chat.typing', Api\Controller\TypingController::class)
+        // Prova a ida e volta do websocket logo após a inscrição; ver RealtimePingController.
+        ->post('/chat/realtime/ping', 'chat.realtime.ping', Api\Controller\RealtimePingController::class)
         ->post('/chat/drafts', 'chat.drafts.store', Api\Controller\DraftController::class)
         ->get('/chat/drafts', 'chat.drafts.index', Api\Controller\ListDraftsController::class)
         ->post('/chat/direct', 'chat.direct.start', Api\Controller\StartDirectController::class)
@@ -332,7 +354,17 @@ return [
         // waiting to be found the next time someone opens the queue. Alert only:
         // a busy channel can produce a run of reports, and a mailbox is the wrong
         // place for a queue.
-        ->type(Notification\MessageFlaggedBlueprint::class, ['alert']),
+        ->type(Notification\MessageFlaggedBlueprint::class, ['alert'])
+
+        // Being made a moderator of a channel, and the two halves of handing a
+        // channel over: the offer, with accept and decline on the row, and the
+        // refusal that goes back to whoever offered. Alert only: none of them
+        // is worth an e-mail, and the code that is lives in its own mail.
+        ->type(Notification\ModeratorPromotedBlueprint::class, ['alert'])
+        ->type(Notification\OwnershipTransferBlueprint::class, ['alert'])
+        ->type(Notification\OwnershipTransferDeclinedBlueprint::class, ['alert'])
+        // The moderator who inherits a channel its owner left.
+        ->type(Notification\OwnershipInheritedBlueprint::class, ['alert']),
 
     // ── Domain listeners ─────────────────────────────────────────────────────
     (new Extend\Event())
@@ -363,7 +395,24 @@ return [
         ->listen(Event\UserWasInvited::class, Listener\NotifyInvitations::class.'@whenInvited')
         ->listen(Event\UserJoinedChannel::class, Listener\NotifyInvitations::class.'@whenJoined')
         ->listen(Event\InviteWasDeclined::class, Listener\NotifyInvitations::class.'@whenDeclined')
-        ->listen(Event\InviteWasCancelled::class, Listener\NotifyInvitations::class.'@whenCancelled'),
+        ->listen(Event\InviteWasCancelled::class, Listener\NotifyInvitations::class.'@whenCancelled')
+        ->listen(Event\ChannelModeratorChanged::class, Listener\NotifyModeratorChanges::class)
+        // Ownership handover: the offer and its answer in the bell, and the
+        // pending handover dropped when either side leaves or the room goes.
+        ->listen(Event\OwnershipTransferRequested::class, Listener\NotifyOwnershipTransfers::class.'@whenRequested')
+        ->listen(Event\OwnershipTransferEnded::class, Listener\NotifyOwnershipTransfers::class.'@whenEnded')
+        ->listen(Event\ChannelOwnershipTransferred::class, Listener\NotifyOwnershipTransfers::class.'@whenTransferred')
+        ->listen(Event\UserLeftChannel::class, Listener\CancelOwnershipTransfers::class.'@whenLeft')
+        ->listen(Event\ChannelWasDeleted::class, Listener\CancelOwnershipTransfers::class.'@whenDeleted')
+        ->listen(Event\ChannelWasArchived::class, Listener\CancelOwnershipTransfers::class.'@whenArchived')
+        // A deleted account's channels pass to their oldest moderators first.
+        ->listen(\Flarum\User\Event\Deleting::class, Listener\HandOverOwnedChannels::class)
+        // The cached rank book follows who moderates, who owns and who is in
+        // the room. Before the realtime listeners, which read it rebuilt.
+        ->listen(Event\ChannelModeratorChanged::class, Listener\ForgetChannelRanks::class)
+        ->listen(Event\ChannelOwnershipTransferred::class, Listener\ForgetChannelRanks::class)
+        ->listen(Event\UserJoinedChannel::class, Listener\ForgetChannelRanks::class)
+        ->listen(Event\UserLeftChannel::class, Listener\ForgetChannelRanks::class),
 
     // ── Console ──────────────────────────────────────────────────────────────
     (new Extend\Console())
@@ -372,6 +421,12 @@ return [
             // Retention is housekeeping: nightly is frequent enough, and 03:30
             // keeps a destructive job away from peak traffic.
             $event->daily()->at('03:30');
+        })
+        ->command(Console\PrivatizePendingUploadsCommand::class)
+        ->schedule(Console\PrivatizePendingUploadsCommand::class, function ($event) {
+            // A file that should be private and is not is a leak until the next
+            // run, so hourly; the command only queues, so it is cheap.
+            $event->hourly();
         }),
 
     // ── Search / filtering ───────────────────────────────────────────────────
@@ -441,8 +496,19 @@ return [
                 ->listen(Event\MessagePinToggled::class, Realtime\BroadcastListener::class.'@whenMessageChanged')
                 ->listen(Event\ReactionToggled::class, Realtime\BroadcastListener::class.'@whenReactionToggled')
                 ->listen(Event\ThreadWasCreated::class, Realtime\BroadcastListener::class.'@whenThreadChanged')
+                ->listen(Event\ThreadWasEdited::class, Realtime\BroadcastListener::class.'@whenThreadChanged')
+                // Once per move rather than once per message, and after the
+                // commit, so both rooms read the rows where they now are.
+                ->listen(Event\MessagesWereMoved::class, Realtime\BroadcastListener::class.'@whenMessagesMoved')
+                // Registered after AutoJoinUsers above, so the members it adds
+                // are already in the audience when this resolves it.
+                ->listen(Event\ChannelWasCreated::class, Realtime\BroadcastListener::class.'@whenChannelCreated')
                 ->listen(Event\ChannelStatusChanged::class, Realtime\BroadcastListener::class.'@whenChannelChanged')
                 ->listen(Event\ChannelWasEdited::class, Realtime\BroadcastListener::class.'@whenChannelChanged')
+                ->listen(Event\ChannelWasArchived::class, Realtime\BroadcastListener::class.'@whenChannelArchived')
+                // A deleted channel leaves every member's sidebar at once, instead
+                // of lingering as a row that answers with a 404.
+                ->listen(Event\ChannelWasDeleted::class, Realtime\BroadcastListener::class.'@whenChannelDeleted')
                 // Membership: who was invited, came in, or went out. What lets a
                 // channel appear in the sidebar the moment its invite is
                 // accepted, and disappear the moment someone is removed, without
@@ -451,7 +517,15 @@ return [
                 ->listen(Event\UserJoinedChannel::class, Realtime\BroadcastListener::class.'@whenJoined')
                 ->listen(Event\UserLeftChannel::class, Realtime\BroadcastListener::class.'@whenLeft')
                 ->listen(Event\InviteWasDeclined::class, Realtime\BroadcastListener::class.'@whenInviteDeclined')
-                ->listen(Event\InviteWasCancelled::class, Realtime\BroadcastListener::class.'@whenInviteCancelled'),
+                ->listen(Event\InviteWasCancelled::class, Realtime\BroadcastListener::class.'@whenInviteCancelled')
+                ->listen(Event\ChannelModeratorChanged::class, Realtime\BroadcastListener::class.'@whenModeratorChanged')
+                ->listen(Event\ChannelOwnershipTransferred::class, Realtime\BroadcastListener::class.'@whenOwnershipTransferred')
+                ->listen(Event\OwnershipTransferRequested::class, Realtime\BroadcastListener::class.'@whenTransferRequested')
+                ->listen(Event\OwnershipTransferEnded::class, Realtime\BroadcastListener::class.'@whenTransferEnded')
+                // Ranks: author lines and members tabs redraw for everyone.
+                ->listen(Event\ChannelRanksChanged::class, Realtime\BroadcastListener::class.'@whenRanksChanged')
+                // The moderators' queue badge, recounted by each of them.
+                ->listen(Event\FlagsChanged::class, Realtime\BroadcastListener::class.'@whenFlagsChanged'),
         ]),
 
     // ── Privacy and auditing ─────────────────────────────────────────────────
@@ -463,9 +537,26 @@ return [
             (new \Flarum\Gdpr\Extend\UserData())
                 ->addType(Gdpr\ChatData::class),
         ])
+        // A category that becomes restricted, or moves under one that is, takes
+        // its channels' attachments off the public disk. Eloquent's own event,
+        // because flarum/tags dispatches none after the save.
+        ->whenExtensionEnabled('flarum-tags', fn () => [
+            (new Extend\Event())
+                ->listen('eloquent.saved: '.\Flarum\Tags\Tag::class, Listener\KeepUploadsPrivate::class.'@whenTagSaved'),
+        ])
         ->whenExtensionEnabled('flarum-audit', fn () => [
             (new \Flarum\Audit\Extend\Audit())
                 ->group('ramon-chat')
                 ->using(new Audit\AuditIntegration()),
+        ]),
+
+    // ── Attachment storage through fof/upload ────────────────────────────────
+    // Only the admin dropdown needs wiring; the storage itself is picked at
+    // upload time by Storage\UploadStorage, which checks that fof/upload is
+    // enabled before touching any of its classes.
+    (new Extend\Conditional())
+        ->whenExtensionEnabled('fof-upload', fn () => [
+            (new Extend\Frontend('admin'))
+                ->content(Content\FofUploadAdapters::class),
         ]),
 ];

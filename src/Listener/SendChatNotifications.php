@@ -59,8 +59,19 @@ class SendChatNotifications
 
         $mentioned = $this->recipientsFor($message, $mentionedIds, isMention: true);
 
-        if ($mentioned !== []) {
-            $this->dispatch(new ChatMentionBlueprint($message), $mentioned);
+        // The mention blueprint is delivered by email alone, so this preference
+        // is the switch for it, on top of core's `notify_chatMention_email` that
+        // the notification grid shows. Both default to on; either one turned off
+        // stops the mail. Filtered here because the recipients are what
+        // NotificationSyncer is handed; the watchers below are still told apart
+        // from everyone mentioned, mailed or not.
+        $mailable = array_values(array_filter(
+            $mentioned,
+            fn (User $user) => (bool) $user->getPreference('ramon-chat.emailNotifications', true)
+        ));
+
+        if ($mailable !== []) {
+            $this->dispatch(new ChatMentionBlueprint($message), $mailable);
         }
 
         // Watchers, minus anyone already notified as a mention.

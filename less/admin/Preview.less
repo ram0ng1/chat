@@ -1,0 +1,204 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Live previews: the chat's name and icon (Appearance card) and an
+// announcement as it lands in a channel (Announcer card). Drawn from the
+// values still being edited.
+// ─────────────────────────────────────────────────────────────────────────────
+
+.ChatPreview {
+  margin: 18px 0 0;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--control-bg);
+  border-radius: 12px;
+  background: var(--control-body-bg-mix, var(--control-bg));
+
+  &-caption {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 10px;
+    color: var(--muted-color);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  &-stage {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 14px 22px;
+  }
+
+  &-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+
+    &--grow {
+      flex: 1 1 220px;
+      min-width: 0;
+    }
+  }
+
+  &-itemLabel {
+    color: var(--muted-color);
+    font-size: 12px;
+  }
+
+  // The header button: a round icon, or the name when the icon is off.
+  &-headerButton {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: var(--body-bg);
+    color: var(--control-color);
+    font-size: 16px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+
+    &--text {
+      width: auto;
+      max-width: 180px;
+      padding: 0 14px;
+      border-radius: 19px;
+      overflow: hidden;
+      font-size: 13px;
+      font-weight: 600;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  &-badge {
+    position: absolute;
+    top: -4px;
+    right: -6px;
+    min-width: 18px;
+    padding: 1px 5px;
+    border-radius: 999px;
+    background: var(--primary-color);
+    color: var(--button-primary-color, #fff);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 16px;
+    text-align: center;
+  }
+
+  // The drawer's title bar, top corners rounded like the docked drawer.
+  &-drawer {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 42px;
+    padding: 0 14px;
+    border-radius: 12px 12px 0 0;
+    background: var(--body-bg);
+    color: var(--heading-color);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+
+    > i:first-child {
+      color: color-mix(in srgb, var(--primary-color) 70%, var(--heading-color));
+    }
+  }
+
+  &-drawerTitle {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 14px;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &-drawerChevron {
+    color: var(--muted-color);
+    font-size: 12px;
+  }
+
+  // An announcement in the stream.
+  &-message {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  &-avatar {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: var(--primary-color);
+    color: var(--button-primary-color, #fff);
+    font-size: 15px;
+    font-weight: 800;
+
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+  }
+
+  &-messageBody {
+    min-width: 0;
+  }
+
+  &-messageMeta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    color: var(--heading-color);
+    font-size: 13px;
+  }
+
+  &-botTag {
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--primary-color) 16%, var(--body-bg));
+    color: var(--heading-color);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  &-time {
+    color: var(--muted-color);
+    font-size: 11px;
+  }
+
+  // Tail at the top left, pointing at the avatar.
+  &-bubble {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 8px;
+    margin: 4px 0 0;
+    padding: 8px 12px;
+    border-radius: 4px 14px 14px 14px;
+    background: var(--body-bg);
+    color: var(--text-color);
+    font-size: 13px;
+    line-height: 1.45;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+
+    > i {
+      color: color-mix(in srgb, var(--primary-color) 70%, var(--heading-color));
+    }
+  }
+}
+
+// The announcer card's preview sits under its form, separated like the rest.
+.ChatBotSettings .ChatPreview {
+  margin-top: 20px;
+}

@@ -12,6 +12,7 @@ namespace Ramon\Chat\Api\Controller;
 use Flarum\Foundation\ValidationException;
 use Flarum\Http\RequestUtil;
 use Illuminate\Contracts\Container\Container;
+use Illuminate\Contracts\Events\Dispatcher as Events;
 use Illuminate\Contracts\Filesystem\Factory;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Support\Arr;
@@ -22,6 +23,7 @@ use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
 use Ramon\Chat\Channel;
+use Ramon\Chat\Event\ChannelWasEdited;
 use Tobyz\JsonApiServer\Exception\ForbiddenException;
 
 /**
@@ -47,6 +49,7 @@ class ChannelImageController implements RequestHandlerInterface
     public function __construct(
         protected ImageManager $imageManager,
         protected Container $container,
+        protected Events $events,
         Factory $filesystemFactory
     ) {
         $this->uploadDir = $filesystemFactory->disk('flarum-assets');
@@ -63,7 +66,7 @@ class ChannelImageController implements RequestHandlerInterface
         // answer the same way whether or not it exists.
         $channel = Channel::whereVisibleTo($actor)->find($id);
 
-        if ($channel === null) {
+        if (! $channel instanceof Channel) {
             throw new ForbiddenException();
         }
 
@@ -78,6 +81,10 @@ class ChannelImageController implements RequestHandlerInterface
             $channel->save();
 
             $this->discard($previous);
+
+            // An edit like any other, so members' sidebars and headers drop the
+            // picture without a reload.
+            $this->events->dispatch(new ChannelWasEdited($channel, $actor));
 
             return new JsonResponse(['data' => ['imageUrl' => null]]);
         }
@@ -109,6 +116,8 @@ class ChannelImageController implements RequestHandlerInterface
         // Only after the new one is safely stored — a failed write must not leave
         // the channel with neither.
         $this->discard($previous);
+
+        $this->events->dispatch(new ChannelWasEdited($channel, $actor));
 
         return new JsonResponse(['data' => [
             'id'       => (int) $channel->id,

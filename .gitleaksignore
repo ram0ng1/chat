@@ -1,0 +1,4 @@
+# Test fixture, not a credential: a made-up webhook key in an integration test,
+# already replaced by a constant built at runtime. Listed by fingerprint so the
+# historical commit stops failing the scan.
+cb424bbc30f52112ad3dd87cf07edc91c577e179:tests/integration/api/SideActionLimitsTest.php:generic-api-key:68

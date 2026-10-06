@@ -2,14 +2,14 @@ import app from "flarum/forum/app";
 
 import type Channel from "../../common/models/Channel";
 import type ChatState from "../state/ChatState";
-import ChannelFormModal from "../components/ChannelFormModal";
-import ChannelInfoModal from "../components/ChannelInfoModal";
 import {
   acceptInvitation,
   adoptChannelPayload,
   declineInvitation,
   invitationErrorText,
 } from "./invitations";
+import { loadChannelFormModal } from "./lazy";
+import { loadChannelInfoModal } from "./lazy";
 
 /**
  * One thing the actor can do to a channel from its header.
@@ -81,7 +81,7 @@ export function channelActions(
       key: "edit",
       icon: "fas fa-pen-to-square",
       label: trans("edit"),
-      onclick: () => app.modal.show(ChannelFormModal, { channel }),
+      onclick: () => app.modal.show(loadChannelFormModal, { channel }),
     });
   }
 
@@ -199,7 +199,7 @@ export function channelActions(
  * the actor is allowed. Available to every member, unlike the settings form.
  */
 export function openChannelInfo(channel: Channel): void {
-  app.modal.show(ChannelInfoModal, { channel });
+  app.modal.show(loadChannelInfoModal, { channel });
 }
 
 async function joinChannel(

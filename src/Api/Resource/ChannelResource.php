@@ -15,6 +15,7 @@ use Flarum\Api\Endpoint;
 use Flarum\Api\Resource\AbstractDatabaseResource;
 use Flarum\Api\Schema;
 use Flarum\Api\Sort\SortColumn;
+use Flarum\Extension\ExtensionManager;
 use Flarum\Foundation\ValidationException;
 use Flarum\Locale\Translator;
 use Flarum\Settings\SettingsRepositoryInterface;
@@ -25,7 +26,9 @@ use Illuminate\Support\Arr;
 use Laminas\Diactoros\Response\EmptyResponse;
 use Ramon\Chat\Access\ScopeChannelVisibility;
 use Ramon\Chat\Channel;
+use Ramon\Chat\ChannelRank;
 use Ramon\Chat\ChannelUser;
+use Ramon\Chat\Event\ChannelModeratorChanged;
 use Ramon\Chat\Event\ChannelStatusChanged;
 use Ramon\Chat\Event\ChannelWasCreated;
 use Ramon\Chat\Event\ChannelWasDeleted;
@@ -34,10 +37,13 @@ use Ramon\Chat\Event\InviteWasCancelled;
 use Ramon\Chat\Event\UserJoinedChannel;
 use Ramon\Chat\Event\UserLeftChannel;
 use Ramon\Chat\Event\UserWasInvited;
+use Ramon\Chat\Service\ActionThrottle;
 use Ramon\Chat\Service\ChannelArchiver;
 use Ramon\Chat\Service\ChannelOwnership;
+use Ramon\Chat\Service\ChannelRanks;
 use Ramon\Chat\Service\InvitationManager;
 use Ramon\Chat\Service\MembershipManager;
+use Ramon\Chat\Service\OwnershipTransfers;
 use Ramon\Chat\Service\SlowMode;
 use Ramon\Chat\Service\UnreadTracker;
 use Tobyz\JsonApiServer\Context as OriginalContext;
@@ -48,6 +54,23 @@ use Tobyz\JsonApiServer\Exception\ForbiddenException;
  */
 class ChannelResource extends AbstractDatabaseResource
 {
+    /**
+     * People one non-administrator may invite per hour, across every channel.
+     */
+    public const INVITES_PER_HOUR = 100;
+
+    /**
+     * Joins plus leaves one non-administrator may make in one channel per minute.
+     */
+    public const MEMBERSHIP_CHANGES_PER_MINUTE = 6;
+
+    /**
+     * Rank writes one non-administrator may make per minute. Each reaches every
+     * member's screen, so a script clicking through the editor would be a flood
+     * of pushes rather than of rows.
+     */
+    public const RANK_CHANGES_PER_MINUTE = 30;
+
     public function __construct(
         protected Translator $translator,
         protected Events $events,
@@ -57,7 +80,11 @@ class ChannelResource extends AbstractDatabaseResource
         protected ChannelOwnership $ownership,
         protected InvitationManager $invitations,
         protected SettingsRepositoryInterface $settings,
-        protected SlowMode $slowMode
+        protected SlowMode $slowMode,
+        protected ActionThrottle $throttle,
+        protected ExtensionManager $extensions,
+        protected OwnershipTransfers $transfers,
+        protected ChannelRanks $ranks
     ) {
     }
 
@@ -316,21 +343,28 @@ class ChannelResource extends AbstractDatabaseResource
                         throw new ForbiddenException();
                     }
 
+                    $this->assertNotTogglingMembership($channel, $actor);
+
                     // Accepting an invitation is joining. Consumed first, so the
                     // membership is created knowing it answers one, and the
                     // announcement can say who asked them in.
                     $invite = $this->invitations->accept($channel, $actor);
 
-                    $this->memberships->join($channel, $actor, hidden: $hidden);
+                    $membership = $this->memberships->join($channel, $actor, hidden: $hidden);
 
-                    $this->events->dispatch(new UserJoinedChannel(
-                        $channel,
-                        $actor,
-                        $actor,
-                        $hidden,
-                        acceptedInvite: $invite !== null,
-                        invitedBy: $invite?->inviter
-                    ));
+                    // Announced only when something changed. Joining a channel you
+                    // are already in is a no-op, and dispatching anyway wrote a
+                    // "joined" line into the room on every repeat of the request.
+                    if ($membership->wasRecentlyCreated || $membership->wasChanged(['left_at', 'hidden'])) {
+                        $this->events->dispatch(new UserJoinedChannel(
+                            $channel,
+                            $actor,
+                            $actor,
+                            $hidden,
+                            acceptedInvite: $invite !== null,
+                            invitedBy: $invite?->inviter
+                        ));
+                    }
 
                     // The record as it now stands, capability flags included. The
                     // client draws the composer from `canPostMessage`, and a bare
@@ -380,6 +414,20 @@ class ChannelResource extends AbstractDatabaseResource
                         ->whereIn('id', $ids)
                         ->get();
 
+                    // Every invite is a notification in someone else's bell, so the
+                    // inviter is held to a budget per hour. Charged for everyone asked
+                    // rather than for the invites that end up created: deciding which
+                    // would be skipped is the work the budget is protecting.
+                    if (! $actor->isAdmin()) {
+                        foreach ($users as $ignored) {
+                            if (! $this->throttle->attempt('invite.'.$actor->id, self::INVITES_PER_HOUR, 3600)) {
+                                throw new ValidationException([
+                                    'userIds' => $this->translator->trans('ramon-chat.api.invite_rate_limited'),
+                                ]);
+                            }
+                        }
+                    }
+
                     // Members and people already invited are skipped inside, so a
                     // repeated request cannot pile up invites or re-notify anyone.
                     $invited = $this->invitations->invite($channel, $users, $actor);
@@ -390,7 +438,7 @@ class ChannelResource extends AbstractDatabaseResource
 
                     $channel->unsetRelation('invitedUsers');
 
-                    return $channel;
+                    return $this->withMembers($channel);
                 })
                 ->defaultInclude(['participants', 'invitedUsers']),
 
@@ -436,7 +484,7 @@ class ChannelResource extends AbstractDatabaseResource
 
                     $channel->unsetRelation('invitedUsers');
 
-                    return $channel;
+                    return $this->withMembers($channel);
                 })
                 ->defaultInclude(['participants', 'invitedUsers']),
 
@@ -493,13 +541,21 @@ class ChannelResource extends AbstractDatabaseResource
                     // the channel — its owner, or a chat moderator — may.
                     $target = $channel->membershipFor($user);
 
+                    // A hidden member is, to anyone who cannot see hidden members,
+                    // not a member: every answer below is the one a stranger's id
+                    // gets, and nothing is removed. Otherwise an owner could find an
+                    // inspector by the difference in the reply, and evict them.
+                    if ($target !== null && $target->isHidden() && ! $this->ownership->seesHiddenMembers($actor)) {
+                        $target = null;
+                    }
+
                     if (! $this->ownership->controls($actor, $channel)
                         && ((int) $channel->creator_id === (int) $user->id
                             || ($target !== null && $target->isModerator()))) {
                         throw new ForbiddenException();
                     }
 
-                    $membership = $this->memberships->leave($channel, $user);
+                    $membership = $target !== null ? $this->memberships->leave($channel, $user, $actor) : null;
 
                     // Not a member — nothing to do, and reporting success on a no-op
                     // would tell the caller a removal happened that did not.
@@ -511,7 +567,7 @@ class ChannelResource extends AbstractDatabaseResource
 
                     $this->events->dispatch(new UserLeftChannel($channel, $user, $actor, $membership->isHidden()));
 
-                    return $channel;
+                    return $this->withMembers($channel);
                 })
                 ->defaultInclude(['participants']),
 
@@ -530,6 +586,162 @@ class ChannelResource extends AbstractDatabaseResource
                 ->action(fn (Context $context) => $this->setModerator($context, false))
                 ->defaultInclude(['participants']),
 
+            // Handing the channel to another member, in three steps: the owner
+            // picks someone and gets a code by e-mail, enters it, and the member
+            // accepts or declines. Every step answers with the channel and its
+            // members, so the members tab redraws from the server's word. See
+            // Service\OwnershipTransfers for the rules of each step.
+            Endpoint\Endpoint::make('startTransfer')
+                ->route('POST', '/{id}/transfer')
+                ->authenticated()
+                ->action(function (Context $context) {
+                    /** @var Channel $channel */
+                    $channel = $context->model;
+                    $actor = $context->getActor();
+
+                    if (! $actor->can('transferOwnership', $channel)) {
+                        throw new ForbiddenException();
+                    }
+
+                    $userId = (int) Arr::get($context->body(), 'data.attributes.userId', 0);
+
+                    $user = $userId > 0
+                        // @phpstan-ignore method.notFound (Flarum model scope)
+                        ? User::query()->whereVisibleTo($actor)->whereKey($userId)->first()
+                        : null;
+
+                    if ($user === null) {
+                        throw new ValidationException([
+                            'userId' => $this->translator->trans('ramon-chat.api.not_a_member'),
+                        ]);
+                    }
+
+                    $this->transfers->start($channel, $actor, $user);
+
+                    return $this->withMembers($channel);
+                })
+                ->defaultInclude(['participants']),
+
+            Endpoint\Endpoint::make('confirmTransfer')
+                ->route('POST', '/{id}/transfer/confirm')
+                ->authenticated()
+                ->action(function (Context $context) {
+                    /** @var Channel $channel */
+                    $channel = $context->model;
+
+                    $this->transfers->confirm(
+                        $channel,
+                        $context->getActor(),
+                        (string) Arr::get($context->body(), 'data.attributes.code', '')
+                    );
+
+                    return $this->withMembers($channel);
+                })
+                ->defaultInclude(['participants']),
+
+            Endpoint\Endpoint::make('cancelTransfer')
+                ->route('POST', '/{id}/transfer/cancel')
+                ->authenticated()
+                ->action(function (Context $context) {
+                    /** @var Channel $channel */
+                    $channel = $context->model;
+
+                    $this->transfers->cancel($channel, $context->getActor());
+
+                    return $this->withMembers($channel);
+                })
+                ->defaultInclude(['participants']),
+
+            Endpoint\Endpoint::make('acceptTransfer')
+                ->route('POST', '/{id}/transfer/accept')
+                ->authenticated()
+                ->action(function (Context $context) {
+                    /** @var Channel $channel */
+                    $channel = $context->model;
+
+                    $this->transfers->accept($channel, $context->getActor());
+
+                    return $this->withMembers($channel);
+                })
+                ->defaultInclude(['participants']),
+
+            Endpoint\Endpoint::make('declineTransfer')
+                ->route('POST', '/{id}/transfer/decline')
+                ->authenticated()
+                ->action(function (Context $context) {
+                    /** @var Channel $channel */
+                    $channel = $context->model;
+
+                    $this->transfers->decline($channel, $context->getActor());
+
+                    return $this->withMembers($channel);
+                })
+                ->defaultInclude(['participants']),
+
+            // The channel's ranks: the labels shown before members' names. Each
+            // answers with the channel, whose `rankBook` is the new state, so the
+            // editor redraws from the server's word. Who may call them is
+            // ChannelPolicy::manageRanks; what is accepted, Service\ChannelRanks.
+            Endpoint\Endpoint::make('createRank')
+                ->route('POST', '/{id}/ranks')
+                ->authenticated()
+                ->action(fn (Context $context) => $this->rankAction(
+                    $context,
+                    fn (Channel $channel, User $actor, array $attributes) => $this->ranks->create($channel, $actor, $attributes)
+                )),
+
+            // `rankId` is a rank's id, or `owner` / `moderator` for the two every
+            // channel has, which this customises.
+            Endpoint\Endpoint::make('updateRank')
+                ->route('POST', '/{id}/ranks/update')
+                ->authenticated()
+                ->action(fn (Context $context) => $this->rankAction(
+                    $context,
+                    fn (Channel $channel, User $actor, array $attributes) => $this->ranks->update($channel, $actor, $this->rankTarget($attributes), $attributes)
+                )),
+
+            // Deletes a rank and everyone's hold on it; on a built-in rank,
+            // restores its defaults.
+            Endpoint\Endpoint::make('deleteRank')
+                ->route('POST', '/{id}/ranks/delete')
+                ->authenticated()
+                ->action(fn (Context $context) => $this->rankAction(
+                    $context,
+                    fn (Channel $channel, User $actor, array $attributes) => $this->ranks->delete($channel, $actor, $this->rankTarget($attributes))
+                )),
+
+            Endpoint\Endpoint::make('reorderRanks')
+                ->route('POST', '/{id}/ranks/order')
+                ->authenticated()
+                ->action(fn (Context $context) => $this->rankAction(
+                    $context,
+                    fn (Channel $channel, User $actor, array $attributes) => $this->ranks->reorder($channel, $actor, (array) ($attributes['rankIds'] ?? []))
+                )),
+
+            // A member's ranks, all at once: the ones left out are taken away.
+            Endpoint\Endpoint::make('assignRanks')
+                ->route('POST', '/{id}/ranks/assign')
+                ->authenticated()
+                ->action(fn (Context $context) => $this->rankAction(
+                    $context,
+                    function (Channel $channel, User $actor, array $attributes) {
+                        $userId = (int) ($attributes['userId'] ?? 0);
+
+                        $user = $userId > 0
+                            // @phpstan-ignore method.notFound (Flarum model scope)
+                            ? User::query()->whereVisibleTo($actor)->whereKey($userId)->first()
+                            : null;
+
+                        if ($user === null) {
+                            throw new ValidationException([
+                                'userId' => $this->translator->trans('ramon-chat.api.not_a_member'),
+                            ]);
+                        }
+
+                        $this->ranks->assign($channel, $actor, $user, (array) ($attributes['rankIds'] ?? []));
+                    }
+                )),
+
             Endpoint\Endpoint::make('leave')
                 ->route('POST', '/{id}/leave')
                 ->authenticated()
@@ -542,11 +754,17 @@ class ChannelResource extends AbstractDatabaseResource
                         throw new ForbiddenException();
                     }
 
-                    $membership = $this->memberships->leave($channel, $actor);
+                    $this->assertNotTogglingMembership($channel, $actor);
 
-                    $this->events->dispatch(
-                        new UserLeftChannel($channel, $actor, $actor, (bool) $membership?->isHidden())
-                    );
+                    $membership = $this->memberships->leave($channel, $actor, $actor);
+
+                    // Leaving a channel you are not in changes nothing, and must
+                    // not tell the room that it did.
+                    if ($membership !== null) {
+                        $this->events->dispatch(
+                            new UserLeftChannel($channel, $actor, $actor, $membership->isHidden())
+                        );
+                    }
                 })
                 ->response(fn () => new EmptyResponse(204)),
 
@@ -559,7 +777,10 @@ class ChannelResource extends AbstractDatabaseResource
                     $channel = $context->model;
                     $actor = $context->getActor();
 
-                    if (! $actor->can('view', $channel)) {
+                    // Preferences live on a membership, and setting one is not a way
+                    // in: it used to create the membership it needed, which let
+                    // anyone who could see a channel join it past the join policy.
+                    if (! $actor->can('view', $channel) || $channel->membershipFor($actor) === null) {
                         throw new ForbiddenException();
                     }
 
@@ -591,6 +812,15 @@ class ChannelResource extends AbstractDatabaseResource
                     if (! in_array($status, [Channel::STATUS_OPEN, Channel::STATUS_CLOSED], true)) {
                         throw new ValidationException([
                             'status' => $this->translator->trans('ramon-chat.api.invalid_channel_status'),
+                        ]);
+                    }
+
+                    // Asked before the ability, which an archived channel fails
+                    // too: a 403 would tell an owner they may not do what they
+                    // may, only not this way.
+                    if ($channel->isArchived()) {
+                        throw new ValidationException([
+                            'status' => $this->translator->trans('ramon-chat.api.channel_archived_status'),
                         ]);
                     }
 
@@ -632,15 +862,37 @@ class ChannelResource extends AbstractDatabaseResource
 
                     return $channel;
                 }),
+
+            // Back out of the archive, closed. The realtime path is the status
+            // change's, which already takes members' composers through it.
+            Endpoint\Endpoint::make('unarchive')
+                ->route('POST', '/{id}/unarchive')
+                ->authenticated()
+                ->action(function (Context $context) {
+                    /** @var Channel $channel */
+                    $channel = $context->model;
+                    $actor = $context->getActor();
+
+                    if (! $actor->can('unarchive', $channel)) {
+                        throw new ForbiddenException();
+                    }
+
+                    return $this->archiver->unarchive($channel, $actor);
+                }),
         ];
     }
 
     public function fields(): array
     {
         return [
+            // Only `category` is created through here. A direct channel is
+            // StartDirectController's to make: it is what checks the participants
+            // and links a restarted conversation to its history, and a `direct`
+            // row written here skipped all of that. Anything else is not a type.
             Schema\Str::make('type')
                 ->writableOnCreate()
-                ->requiredOnCreate(),
+                ->requiredOnCreate()
+                ->in([Channel::TYPE_CATEGORY]),
 
             Schema\Str::make('name')
                 ->nullable()
@@ -741,6 +993,15 @@ class ChannelResource extends AbstractDatabaseResource
                     ? $this->slowMode->remainingFor($c, $context->getActor())
                     : 0),
 
+            // Whether slow mode applies to the actor here at all: the bypass
+            // permission, or running the room (its owner and the moderators they
+            // appointed). The composer restarts its own countdown after a send,
+            // and without this it locked an owner out for the whole window while
+            // the server would have taken the next message.
+            Schema\Boolean::make('bypassesSlowMode')
+                ->get(fn (Channel $c, Context $context) => $c->exists
+                    && $this->slowMode->isExempt($c, $context->getActor())),
+
             // Same gate as every other field on the form, deliberately: whoever may
             // create a channel fills in the whole form, and auto-join is part of it.
             //
@@ -756,24 +1017,41 @@ class ChannelResource extends AbstractDatabaseResource
             // The cost is real and accepted: creating a channel with this on adds
             // every eligible account at once (AutoJoinUsers, chunked at 500), so a
             // large forum pays for it in membership rows.
+            //
+            // Which is why *changing* it is not the creator's call. The field stays
+            // writable for the reason above, but a value different from the one
+            // stored is refused unless the actor curates channels forum-wide — see
+            // setAudienceFlag(). Otherwise any member allowed to open a room could
+            // put every account on the forum into it.
             Schema\Boolean::make('autoJoin')
-                ->writable(fn (Channel $c, Context $context) => $this->mayWriteCategoryField($c, $context)),
+                ->writable(fn (Channel $c, Context $context) => $this->mayWriteCategoryField($c, $context))
+                ->set(fn (Channel $c, $value, Context $context) => $this->setAudienceFlag($c, 'auto_join', 'autoJoin', $value, $context)),
+
+            // Carries the bound category's new discussions into the channel. Held
+            // to the same gate: it decides what forum content is copied into the
+            // room, and AnnounceDiscussions is only the second line.
+            Schema\Boolean::make('postDiscussions')
+                ->writable(fn (Channel $c, Context $context) => $this->mayWriteCategoryField($c, $context))
+                ->set(fn (Channel $c, $value, Context $context) => $this->setAudienceFlag($c, 'post_discussions', 'postDiscussions', $value, $context)),
 
             // Grows the channel from participation in its bound category, rather
-            // than adding every account up front like autoJoin does.
-            // Carries the bound category's new discussions into the channel.
-            Schema\Boolean::make('postDiscussions')
-                ->writable(fn (Channel $c, Context $context) => $this->mayWriteCategoryField($c, $context)),
-
+            // than adding every account up front like autoJoin does — but it still
+            // adds people who never asked, so it is gated the same way.
             Schema\Boolean::make('autoJoinOnReply')
-                ->writable(fn (Channel $c, Context $context) => $this->mayWriteCategoryField($c, $context)),
+                ->writable(fn (Channel $c, Context $context) => $this->mayWriteCategoryField($c, $context))
+                ->set(fn (Channel $c, $value, Context $context) => $this->setAudienceFlag($c, 'auto_join_on_reply', 'autoJoinOnReply', $value, $context)),
 
             Schema\Boolean::make('allowChannelWideMentions')
                 ->writable(fn (Channel $c, Context $context) => $this->mayWrite($c, $context)),
 
+            // Binding a category narrows who can see the channel, so it stays the
+            // creator's choice — but only among the categories they can see
+            // themselves. A tag id from outside that set is either one that does
+            // not exist or one they have no business knowing about.
             Schema\Integer::make('tagId')
                 ->nullable()
-                ->writable(fn (Channel $c, Context $context) => $this->mayWriteCategoryField($c, $context)),
+                ->writable(fn (Channel $c, Context $context) => $this->mayWriteCategoryField($c, $context))
+                ->set(fn (Channel $c, $value, Context $context) => $this->setTagId($c, $value, $context)),
 
             Schema\Integer::make('messagesCount'),
             Schema\Integer::make('userCount'),
@@ -846,6 +1124,9 @@ class ChannelResource extends AbstractDatabaseResource
             Schema\Boolean::make('canArchive')
                 ->get(fn (Channel $c, Context $context) => $context->getActor()->can('archive', $c)),
 
+            Schema\Boolean::make('canUnarchive')
+                ->get(fn (Channel $c, Context $context) => $context->getActor()->can('unarchive', $c)),
+
             Schema\Boolean::make('canDelete')
                 ->get(fn (Channel $c, Context $context) => $context->getActor()->can('delete', $c)),
 
@@ -855,18 +1136,66 @@ class ChannelResource extends AbstractDatabaseResource
             Schema\Boolean::make('canManageModerators')
                 ->get(fn (Channel $c, Context $context) => $context->getActor()->can('manageModerators', $c)),
 
+            Schema\Boolean::make('canManageRanks')
+                ->get(fn (Channel $c, Context $context) => $context->getActor()->can('manageRanks', $c)),
+
+            // Every rank and who holds which, for the members tab, the ranks
+            // editor and resolving author lines live. The same for every reader,
+            // so it is served from a per-channel cache. Left out of the channel
+            // list entirely, where nobody reads it and fifty channels would cost
+            // fifty cache reads — omitted rather than null, so a list refresh
+            // does not wipe a book the client already holds. Messages carry
+            // their author's rank on their own.
+            Schema\Arr::make('rankBook')
+                ->nullable()
+                ->visible(fn (Channel $c, Context $context) => ! $context->listing())
+                ->get(fn (Channel $c) => $this->ranks->book($c)),
+
+            Schema\Boolean::make('canTransferOwnership')
+                ->get(fn (Channel $c, Context $context) => $context->getActor()->can('transferOwnership', $c)),
+
+            // The pending handover, as the reader is allowed to see it: whoever
+            // started it, or may start one, sees it from the code onwards; the
+            // member it is offered to sees it once the code has been entered,
+            // and nobody else sees it at all. Read only where the member list
+            // is, like `moderatorIds`, so the channel list pays no query per row.
+            Schema\Arr::make('ownershipTransfer')
+                ->nullable()
+                ->get(fn (Channel $c, Context $context) => $this->transferState($c, $context)),
+
             // So the members tab can label the owner without loading the creator.
             Schema\Integer::make('creatorId')
                 ->property('creator_id')
                 ->nullable(),
 
-            // Which members hold the channel's own moderator role. Read off the
-            // participants relation when it is loaded — the members tab asks for
-            // it — and empty otherwise, so the channel list pays no query per row.
+            // Which members hold the channel's own moderator role, whenever the
+            // member list is part of the response — the members tab asks for it,
+            // and the promote and demote endpoints include it — and empty
+            // otherwise, so the channel list pays no query per row.
+            //
+            // Not only off a loaded relation. The serializer computes attributes
+            // before it resolves an included relationship, so the relation was
+            // not loaded yet when this ran: it answered empty on every read, and
+            // the owner who had just promoted somebody saw the row unchanged and
+            // clicked again. The member endpoints load the relation themselves
+            // (see withMembers()); a read that asks for it is answered here.
             Schema\Arr::make('moderatorIds')
-                ->get(function (Channel $c) {
+                ->get(function (Channel $c, Context $context) {
                     if (! $c->relationLoaded('participants')) {
-                        return [];
+                        $include = explode(',', (string) ($context->request->getQueryParams()['include'] ?? ''));
+
+                        if (! in_array('participants', array_map('trim', $include), true)) {
+                            return [];
+                        }
+
+                        return $c->memberships()
+                            ->whereNull('left_at')
+                            ->where('hidden', false)
+                            ->where('is_moderator', true)
+                            ->pluck('user_id')
+                            ->map(fn ($id) => (int) $id)
+                            ->values()
+                            ->all();
                     }
 
                     return $c->participants
@@ -976,6 +1305,88 @@ class ChannelResource extends AbstractDatabaseResource
     }
 
     /**
+     * Writes one of the switches that reach past the room — adding accounts that
+     * never asked, copying forum content in — but only changes it for an actor who
+     * curates channels forum-wide: a chat moderator, `editChannel`, or an admin.
+     *
+     * The field cannot simply be non-writable for everyone else: the channel form
+     * sends all of them on every save, and json-api-server refuses a request that
+     * carries a field the actor may not write (see autoJoin). So the stored value
+     * coming back unchanged is accepted, and only a change is refused.
+     */
+    protected function setAudienceFlag(Channel $channel, string $column, string $field, mixed $value, Context $context): void
+    {
+        $value = (bool) $value;
+
+        if ($value === (bool) $channel->getAttribute($column)) {
+            return;
+        }
+
+        if (! $this->curatesChannels($context->getActor())) {
+            throw new ValidationException([
+                $field => $this->translator->trans('ramon-chat.api.channel_flag_not_allowed'),
+            ]);
+        }
+
+        $channel->setAttribute($column, $value);
+    }
+
+    /**
+     * Binds or unbinds the channel's category, refusing a category the actor
+     * cannot see — and any category at all while flarum/tags is off, when a bound
+     * channel would simply vanish (ScopeChannelVisibility fails closed).
+     */
+    protected function setTagId(Channel $channel, mixed $value, Context $context): void
+    {
+        $tagId = ($value === null || (int) $value <= 0) ? null : (int) $value;
+
+        if ($tagId === ($channel->tag_id === null ? null : (int) $channel->tag_id)) {
+            return;
+        }
+
+        if ($tagId !== null) {
+            $visible = $this->extensions->isEnabled('flarum-tags')
+                && \Flarum\Tags\Tag::query()
+                    // @phpstan-ignore method.notFound (Flarum model scope)
+                    ->whereVisibleTo($context->getActor())
+                    ->whereKey($tagId)
+                    ->exists();
+
+            if (! $visible) {
+                throw new ValidationException([
+                    'tagId' => $this->translator->trans('ramon-chat.api.channel_tag_not_found'),
+                ]);
+            }
+        }
+
+        $channel->tag_id = $tagId;
+    }
+
+    protected function curatesChannels(User $actor): bool
+    {
+        return $actor->hasPermission('ramon-chat.moderate')
+            || $actor->hasPermission('ramon-chat.editChannel');
+    }
+
+    /**
+     * Joining and leaving each write a line into the room, so going back and
+     * forth is a way to flood it. A handful per channel per minute is more than
+     * any real indecision needs. Administrators are exempt, as from RateLimiter.
+     */
+    protected function assertNotTogglingMembership(Channel $channel, User $actor): void
+    {
+        if ($actor->isAdmin()) {
+            return;
+        }
+
+        if (! $this->throttle->attempt('membership.'.$actor->id.'.'.$channel->id, self::MEMBERSHIP_CHANGES_PER_MINUTE, 60)) {
+            throw new ValidationException([
+                'channel' => $this->translator->trans('ramon-chat.api.membership_rate_limited'),
+            ]);
+        }
+    }
+
+    /**
      * Memoises the actor's membership: the channel list serialises several
      * membership-backed fields per row, and each would otherwise be its own query.
      *
@@ -989,6 +1400,50 @@ class ChannelResource extends AbstractDatabaseResource
      * @var array<string, ChannelUser|null|false>
      */
     protected array $membershipCache = [];
+
+    /**
+     * Runs one rank write for an actor allowed to make it, and answers with the
+     * channel so the response carries the new `rankBook`.
+     *
+     * @param  callable(Channel, User, array<string, mixed>): mixed  $write
+     */
+    protected function rankAction(Context $context, callable $write): Channel
+    {
+        /** @var Channel $channel */
+        $channel = $context->model;
+        $actor = $context->getActor();
+
+        if (! $actor->can('manageRanks', $channel)) {
+            throw new ForbiddenException();
+        }
+
+        if (! $actor->isAdmin()
+            && ! $this->throttle->attempt('ranks.'.$actor->id, self::RANK_CHANGES_PER_MINUTE, 60)) {
+            throw new ValidationException([
+                'rankId' => $this->translator->trans('ramon-chat.api.rank_rate_limited'),
+            ]);
+        }
+
+        $attributes = Arr::get($context->body(), 'data.attributes', []);
+
+        $write($channel, $actor, is_array($attributes) ? $attributes : []);
+
+        return $channel;
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     */
+    protected function rankTarget(array $attributes): int|string
+    {
+        $target = $attributes['rankId'] ?? null;
+
+        if (is_string($target) && in_array($target, ChannelRank::builtins(), true)) {
+            return $target;
+        }
+
+        return is_numeric($target) ? (int) $target : 0;
+    }
 
     /**
      * Sets or clears the channel-moderator role on a current member.
@@ -1029,14 +1484,67 @@ class ChannelResource extends AbstractDatabaseResource
 
         if ($membership->isModerator() !== $moderator) {
             $membership->is_moderator = $moderator;
+            // When the role was given, which decides who inherits the
+            // channel if its owner leaves (OwnershipSuccession).
+            $membership->moderator_since = $moderator ? Carbon::now() : null;
             $membership->save();
+
+            $this->events->dispatch(new ChannelModeratorChanged($channel, $user, $moderator, $actor));
         }
 
-        // The response includes participants; a copy loaded before the change
-        // would carry the old role on its pivot.
-        $channel->unsetRelation('participants');
+        return $this->withMembers($channel);
+    }
 
-        return $channel;
+    /**
+     * @return array<string, mixed>|null
+     */
+    protected function transferState(Channel $channel, Context $context): ?array
+    {
+        if (! $channel->exists || ! $channel->isCategory()) {
+            return null;
+        }
+
+        if (! $channel->relationLoaded('participants')) {
+            $include = explode(',', (string) ($context->request->getQueryParams()['include'] ?? ''));
+
+            if (! in_array('participants', array_map('trim', $include), true)) {
+                return null;
+            }
+        }
+
+        $transfer = $this->transfers->pending($channel);
+
+        if ($transfer === null) {
+            return null;
+        }
+
+        $actor = $context->getActor();
+        $actorId = (int) $actor->id;
+        $outgoing = (int) $transfer->from_user_id === $actorId || $actor->can('transferOwnership', $channel);
+
+        if (! $outgoing && ((int) $transfer->to_user_id !== $actorId || ! $transfer->isConfirmed())) {
+            return null;
+        }
+
+        return [
+            'id'         => (int) $transfer->id,
+            'fromUserId' => (int) $transfer->from_user_id,
+            'toUserId'   => (int) $transfer->to_user_id,
+            'confirmed'  => $transfer->isConfirmed(),
+            'incoming'   => ! $outgoing,
+            'expiresAt'  => $transfer->expires_at->toIso8601String(),
+        ];
+    }
+
+    /**
+     * The channel with its member list loaded fresh, for the endpoints that
+     * answer with it. Fresh because a copy loaded before the change would
+     * carry the old roles on its pivots; loaded here because the serializer
+     * reads `moderatorIds` before it gets to the included relation.
+     */
+    protected function withMembers(Channel $channel): Channel
+    {
+        return $channel->load('participants');
     }
 
     protected function membership(Channel $channel, User $actor): ?ChannelUser

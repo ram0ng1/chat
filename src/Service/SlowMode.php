@@ -120,7 +120,7 @@ class SlowMode
      * they appointed. They are the ones answering in it, and a cooldown on them
      * slows the room down rather than calming it.
      */
-    protected function isExempt(Channel $channel, User $actor): bool
+    public function isExempt(Channel $channel, User $actor): bool
     {
         return $actor->hasPermission('ramon-chat.bypassSlowMode')
             || $this->ownership->exemptFromSlowMode($actor, $channel);

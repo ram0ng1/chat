@@ -65,6 +65,13 @@ class ThreadResource extends AbstractDatabaseResource
      * The root message is the costly one: it is serialised by MessageResource,
      * which resolves nine capability flags and four relation-backed summaries,
      * so an unloaded root cost another seven or so queries per thread on its own.
+     *
+     * The two message relations themselves are loaded by `scopedMessages()`
+     * rather than here. A relation `eagerLoad` brings in is already loaded when
+     * the include is serialised, so core's relationship buffer skips it, and the
+     * buffer is the only place MessageResource's scope is applied. A thread's
+     * root or last reply moved into a private channel was therefore handed in
+     * `included` to anyone who could see the thread.
      */
     protected const EAGER_LOAD = [
         'channel',
@@ -91,6 +98,8 @@ class ThreadResource extends AbstractDatabaseResource
                 // `channel` because every policy on a thread reads it, visibility
                 // included — the Index already loads it for the same reason.
                 ->eagerLoad(self::EAGER_LOAD)
+                ->eagerLoadWhere('originalMessage', $this->scopedMessages(...))
+                ->eagerLoadWhere('lastMessage', $this->scopedMessages(...))
                 ->eagerLoadWhere(
                     'actorMembership',
                     fn ($query, Context $context) => $query->where('user_id', $context->getActor()->id)
@@ -105,6 +114,8 @@ class ThreadResource extends AbstractDatabaseResource
                 ->defaultSort('-lastMessageAt')
                 ->defaultInclude(['creator', 'originalMessage', 'originalMessage.user'])
                 ->eagerLoad(self::EAGER_LOAD)
+                ->eagerLoadWhere('originalMessage', $this->scopedMessages(...))
+                ->eagerLoadWhere('lastMessage', $this->scopedMessages(...))
                 // Four fields on every row read the actor's membership, and the
                 // renaming, posting and closing policies read it again. Loaded
                 // once for the page instead of once per thread —
@@ -124,12 +135,17 @@ class ThreadResource extends AbstractDatabaseResource
             // $context->model, which is what core does for model-scoped endpoints.
             Endpoint\Update::make()
                 ->authenticated()
-                ->can('rename')
-                ->action(function (Context $context) {
-                    /** @var Thread $thread */
-                    $thread = $context->model;
-
-                    $this->events->dispatch(new ThreadWasEdited($thread, $context->getActor()));
+                // A closure, not the bare string. Flarum treats a callable
+                // ability as a resolver and calls it — and 'rename' is PHP's
+                // rename(), so every rename answered with a 500.
+                ->can(fn () => 'rename')
+                // An `after` hook, not `action()`. Update's action is the one
+                // that fills and saves the model, and replacing it left a
+                // rename that answered 200, announced itself, and wrote nothing.
+                ->after(function (Context $context, Thread $thread) {
+                    if ($thread->wasChanged()) {
+                        $this->events->dispatch(new ThreadWasEdited($thread, $context->getActor()));
+                    }
 
                     return $thread;
                 }),
@@ -258,6 +274,18 @@ class ThreadResource extends AbstractDatabaseResource
         ];
     }
 
+
+    /**
+     * Narrows an eager-loaded message relation to what the actor may read.
+     *
+     * Registered before the nested `originalMessage.*` paths on purpose: those
+     * are loaded with `loadMissing()`, which loads a missing first segment
+     * unconstrained, and the where-loads run before the plain ones.
+     */
+    protected function scopedMessages(mixed $query, Context $context): void
+    {
+        $query->whereVisibleTo($context->getActor());
+    }
 
     /** @var array<int, ThreadUser|null|false> */
     protected array $membershipCache = [];

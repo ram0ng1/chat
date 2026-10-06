@@ -45,7 +45,7 @@ class ScopeMessageVisibility
             return false;
         }
 
-        if ($actor->can('ramon-chat.moderate')) {
+        if ($actor->hasPermission('ramon-chat.moderate')) {
             return true;
         }
 
@@ -67,7 +67,7 @@ class ScopeMessageVisibility
             ScopeChannelVisibility::restrictContents($channels, $actor);
         });
 
-        if ($actor->can('ramon-chat.moderate')) {
+        if ($actor->hasPermission('ramon-chat.moderate')) {
             return;
         }
 

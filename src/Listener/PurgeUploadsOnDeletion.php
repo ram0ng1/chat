@@ -9,9 +9,8 @@
 
 namespace Ramon\Chat\Listener;
 
-use Illuminate\Contracts\Filesystem\Factory as Filesystem;
-use Psr\Log\LoggerInterface;
 use Ramon\Chat\Event\MessageWasDeleted;
+use Ramon\Chat\Storage\UploadStorage;
 use Ramon\Chat\Upload;
 
 /**
@@ -35,8 +34,7 @@ use Ramon\Chat\Upload;
 class PurgeUploadsOnDeletion
 {
     public function __construct(
-        protected Filesystem $filesystem,
-        protected LoggerInterface $log
+        protected UploadStorage $storage
     ) {
     }
 
@@ -50,19 +48,11 @@ class PurgeUploadsOnDeletion
             return;
         }
 
+        // Best effort per file, wherever it is stored: the row still has to go,
+        // and refusing to continue would leave the rest of the message's
+        // attachments published. A failure is logged by the resolver.
         foreach ($uploads as $upload) {
-            try {
-                $this->filesystem->disk($upload->diskName())->delete($upload->path);
-            } catch (\Throwable $e) {
-                // A file already gone is not a failure — the row still has to go,
-                // and refusing to continue would leave the rest of the message's
-                // attachments published.
-                $this->log->warning('[ramon-chat] could not delete a deleted message\'s upload', [
-                    'upload'  => $upload->id,
-                    'message' => $event->message->id,
-                    'error'   => $e->getMessage(),
-                ]);
-            }
+            $this->storage->delete($upload);
         }
 
         Upload::query()->whereIn('id', $uploads->pluck('id')->all())->delete();

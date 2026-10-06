@@ -9,10 +9,13 @@
 
 namespace Ramon\Chat\Listener;
 
+use Flarum\Discussion\Discussion;
 use Flarum\Post\Event\Posted;
 use Flarum\Settings\SettingsRepositoryInterface;
+use Flarum\Tags\Tag;
 use Flarum\User\User;
 use Illuminate\Contracts\Events\Dispatcher as Events;
+use Ramon\Chat\Access\AudienceProbe;
 use Ramon\Chat\Channel;
 use Ramon\Chat\Event\MessageWasSent;
 use Ramon\Chat\Message;
@@ -41,6 +44,15 @@ use Ramon\Chat\Message;
  * An admin can instead nominate a real account to announce as, in which case this
  * posts a completely ordinary message from that user and no bot exists in the
  * conversation at all.
+ *
+ * ## Who may read it
+ *
+ * The announcement copies the title, an excerpt and the first image out of the
+ * forum and into a room with its own audience, so it is only posted where every
+ * reader of that room could already open the discussion. `Posted` fires for a
+ * discussion still waiting for approval, for a private (byobu) one and for one
+ * carrying a second, restricted tag; none of those may surface in a channel
+ * bound to an open category. See audienceMaySee().
  */
 class AnnounceDiscussions
 {
@@ -81,6 +93,10 @@ class AnnounceDiscussions
 
         foreach ($channels as $channel) {
             if (! $channel->acceptsMessages()) {
+                continue;
+            }
+
+            if (! $this->audienceMaySee($channel, $discussion)) {
                 continue;
             }
 
@@ -133,6 +149,65 @@ class AnnounceDiscussions
             // messages use, so the announcement behaves like any other arrival.
             $this->events->dispatch(new MessageWasSent($message, $event->actor));
         }
+    }
+
+    /**
+     * Whether the least-privileged reader of the channel can view the discussion.
+     *
+     * A tag-bound channel is readable by anyone who may use the chat and holds
+     * `viewForum` on its tag and the tag's parent. Nothing more is guaranteed of
+     * its readers, private channel or not, so that is the account asked. The
+     * discussion is then looked up through core's own visibility scope, which is
+     * what folds in every rule other extensions add: all of the discussion's
+     * tags, byobu recipients, approval, hiding.
+     *
+     * The explicit checks before the query are a second line, not the rule: they
+     * answer the common cases without a query, and they hold even if a scope that
+     * should have excluded the discussion is not registered.
+     */
+    protected function audienceMaySee(object $channel, object $discussion): bool
+    {
+        if ((bool) ($discussion->is_private ?? false) || $discussion->hidden_at !== null) {
+            return false;
+        }
+
+        // Null when flarum/approval is not installed, and then there is nothing
+        // to wait for.
+        $approved = $discussion->is_approved ?? null;
+
+        if ($approved !== null && ! (bool) $approved) {
+            return false;
+        }
+
+        $tag = Tag::query()->find($channel->tag_id);
+
+        if ($tag === null) {
+            return false;
+        }
+
+        $granted = ['tag'.$tag->id.'.viewForum'];
+
+        if (! empty($tag->parent_id)) {
+            $granted[] = 'tag'.$tag->parent_id.'.viewForum';
+        }
+
+        // The same answer for the tags already in memory, without a query: a
+        // restricted tag the channel's readers are not known to hold.
+        try {
+            foreach ($discussion->tags ?? [] as $other) {
+                if ($other->is_restricted && ! in_array('tag'.$other->id.'.viewForum', $granted, true)) {
+                    return false;
+                }
+            }
+        } catch (\Throwable $e) {
+            return false;
+        }
+
+        return Discussion::query()
+            // @phpstan-ignore method.notFound (Flarum model scope)
+            ->whereVisibleTo(AudienceProbe::memberWith($granted))
+            ->whereKey($discussion->id)
+            ->exists();
     }
 
     /**

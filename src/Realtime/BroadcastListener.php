@@ -9,25 +9,41 @@
 
 namespace Ramon\Chat\Realtime;
 
+use Carbon\Carbon;
 use Flarum\User\User;
 use Psr\Log\LoggerInterface;
 use Ramon\Chat\Channel;
+use Ramon\Chat\Event\ChannelModeratorChanged;
+use Ramon\Chat\Event\ChannelOwnershipTransferred;
+use Ramon\Chat\Event\ChannelRanksChanged;
 use Ramon\Chat\Event\ChannelStatusChanged;
+use Ramon\Chat\Event\ChannelWasArchived;
+use Ramon\Chat\Event\ChannelWasCreated;
+use Ramon\Chat\Event\ChannelWasDeleted;
 use Ramon\Chat\Event\ChannelWasEdited;
+use Ramon\Chat\Event\FlagsChanged;
 use Ramon\Chat\Event\InviteWasCancelled;
 use Ramon\Chat\Event\InviteWasDeclined;
 use Ramon\Chat\Event\MessagePinToggled;
+use Ramon\Chat\Event\MessagesWereMoved;
 use Ramon\Chat\Event\MessageWasDeleted;
 use Ramon\Chat\Event\MessageWasEdited;
 use Ramon\Chat\Event\MessageWasPurged;
 use Ramon\Chat\Event\MessageWasRestored;
 use Ramon\Chat\Event\MessageWasSent;
+use Ramon\Chat\Event\OwnershipTransferEnded;
+use Ramon\Chat\Event\OwnershipTransferRequested;
 use Ramon\Chat\Event\ReactionToggled;
 use Ramon\Chat\Event\ThreadWasCreated;
+use Ramon\Chat\Event\ThreadWasEdited;
 use Ramon\Chat\Event\UserJoinedChannel;
 use Ramon\Chat\Event\UserLeftChannel;
 use Ramon\Chat\Event\UserWasInvited;
+use Ramon\Chat\ChannelRankUser;
+use Ramon\Chat\ChannelUser;
 use Ramon\Chat\Message;
+use Ramon\Chat\Service\ChannelRanks;
+use Ramon\Chat\Thread;
 use Ramon\Chat\Upload;
 
 /**
@@ -63,9 +79,38 @@ class BroadcastListener
      */
     public const EVENT_MEMBERSHIP = 'ramonChat.membership';
 
+    /**
+     * Messages that left one channel for another. Ids only: the side that
+     * loses them drops the rows, the side that gains them reads them through
+     * the API, which is what decides whether each reader may have them.
+     */
+    public const EVENT_MESSAGES_MOVED = 'ramonChat.messagesMoved';
+
+    /**
+     * The moderation queue moved. Carries nothing; see FlagsChanged.
+     */
+    public const EVENT_FLAGS = 'ramonChat.flags';
+
+    /**
+     * A channel's rank book changed. Carries the whole book: it is channel
+     * configuration every member may read, small, and the same for all of them,
+     * so each author line and an open members tab redraw without a fetch.
+     */
+    public const EVENT_RANKS = 'ramonChat.ranks';
+
+    /**
+     * Members at which a channel-wide push goes to the queue whatever the
+     * forum's setting: an auto-join channel can hold every account, and
+     * resolving that audience is not work for the request that created it.
+     * Only on a continuously worked queue: under `sync` or `database` it runs
+     * inline like any other push (see QueueKind).
+     */
+    public const LARGE_AUDIENCE = 500;
+
     public function __construct(
         protected ChatBroadcaster $broadcaster,
-        protected LoggerInterface $log
+        protected LoggerInterface $log,
+        protected ChannelRanks $ranks
     ) {
     }
 
@@ -148,7 +193,7 @@ class BroadcastListener
         );
     }
 
-    public function whenThreadChanged(ThreadWasCreated $event): void
+    public function whenThreadChanged(ThreadWasCreated|ThreadWasEdited $event): void
     {
         $channel = $event->thread->channel;
 
@@ -211,10 +256,229 @@ class BroadcastListener
                 'name'           => $event->channel->name,
                 'emoji'          => $event->channel->emoji,
                 'description'    => $event->channel->description,
+                'imageUrl'       => $event->channel->imageUrl(),
+
+                // Always sent, so leaving the archive clears them on every
+                // screen the way archiving set them.
+                'archivedAt'           => $event->channel->archived_at?->toIso8601String(),
+                'archivedDiscussionId' => $event->channel->archived_discussion_id,
             ],
             // Not excluded: the actor's own client has already applied the change
             // optimistically, and pushing it again is harmless — whereas excluding
             // them would leave a moderator with two browser tabs out of step.
+            null
+        );
+    }
+
+    /**
+     * A channel that has just come into existence, for whoever it already
+     * holds besides its creator: the other side of a direct conversation, or
+     * everyone an auto-join channel took in. Without it the channel appeared
+     * only on their next fetch of the list.
+     *
+     * Ids only. Each recipient reads the channel through the API, which decides
+     * what of it they may see; the audience itself already went through the
+     * visibility scope in SendChatEventJob.
+     */
+    public function whenChannelCreated(ChannelWasCreated $event): void
+    {
+        $this->broadcaster->toChannelMembers(
+            $event->channel,
+            self::EVENT_CHANNEL,
+            [
+                'channelId' => (int) $event->channel->id,
+                'status'    => $event->channel->status,
+                'created'   => true,
+            ],
+            $event->actor?->id,
+            queue: (int) $event->channel->user_count >= self::LARGE_AUDIENCE
+        );
+    }
+
+    /**
+     * A move, told to both rooms it touched.
+     *
+     * The rooms the messages left hear which rows to drop, and the new counts
+     * of the threads they left. The room they went to hears which rows to read.
+     * Neither side hears the other's id: the destination may be a channel the
+     * source's members cannot see, and the reverse.
+     */
+    public function whenMessagesMoved(MessagesWereMoved $event): void
+    {
+        $threads = [];
+
+        foreach (Thread::query()->whereKey(array_values(array_unique($event->threadIds)))->get() as $thread) {
+            $threads[(int) $thread->channel_id][] = [
+                'threadId'          => (int) $thread->id,
+                'repliesCount'      => (int) $thread->replies_count,
+                'originalMessageId' => $thread->original_message_id,
+                'lastMessageId'     => $thread->last_message_id,
+            ];
+        }
+
+        $movedIn = [];
+
+        foreach ($event->messageIdsBySource as $sourceId => $messageIds) {
+            $messageIds = array_map('intval', $messageIds);
+            $movedIn = array_merge($movedIn, $messageIds);
+
+            $source = $event->sources[$sourceId] ?? null;
+
+            if ($source === null) {
+                continue;
+            }
+
+            $this->broadcaster->toChannelMembers(
+                $source,
+                self::EVENT_MESSAGES_MOVED,
+                [
+                    'channelId'     => (int) $sourceId,
+                    'movedOut'      => $messageIds,
+
+                    // So a thread panel open on one of these can drop it too.
+                    'threadIds'     => array_intersect_key($event->threadIds, array_flip($messageIds)),
+                    'threads'       => $threads[(int) $sourceId] ?? [],
+                    'messagesCount' => (int) $source->messages_count,
+                ],
+                null
+            );
+        }
+
+        $this->broadcaster->toChannelMembers(
+            $event->target,
+            self::EVENT_MESSAGES_MOVED,
+            [
+                'channelId'     => (int) $event->target->id,
+                'movedIn'       => $movedIn,
+
+                // The move rewrote each row, so its `updated_at` is at least
+                // this. Narrowing the read to it keeps rows that were already
+                // in the destination, inside the same id range, out of it.
+                'movedAt'       => Carbon::now()->subSecond()->getTimestamp(),
+                'messagesCount' => (int) $event->target->messages_count,
+            ],
+            null
+        );
+    }
+
+    /**
+     * Someone made or unmade a moderator of a channel. The room hears it, as
+     * the role shows in the member list anyone in the room can open, and the
+     * person it is about refetches what they may now do there.
+     */
+    public function whenModeratorChanged(ChannelModeratorChanged $event): void
+    {
+        $this->membership(
+            $event->channel,
+            $event->user,
+            $event->isModerator ? 'promoted' : 'demoted',
+            $event->actor,
+            tellMembers: true
+        );
+
+        $this->pushRanks($event->channel);
+    }
+
+    /**
+     * The channel changed hands. The whole room hears it, because the owner
+     * badge moves in every open members tab, and both people involved re-read
+     * what they may now do there. `previousOwnerId` is what tells the old
+     * owner the push concerns them too.
+     */
+    public function whenOwnershipTransferred(ChannelOwnershipTransferred $event): void
+    {
+        $this->membership(
+            $event->channel,
+            $event->newOwner,
+            'owner_changed',
+            $event->newOwner,
+            tellMembers: true,
+            extra: ['previousOwnerId' => $event->previousOwner?->id !== null ? (int) $event->previousOwner->id : null]
+        );
+
+        $this->pushRanks($event->channel);
+    }
+
+    /**
+     * A handover offered, after the code: the member it is offered to, and
+     * whoever started it, so an open members tab on either side re-reads it.
+     */
+    public function whenTransferRequested(OwnershipTransferRequested $event): void
+    {
+        $this->membership($event->channel, $event->to, 'transfer_requested', $event->from, tellMembers: false);
+    }
+
+    /**
+     * A handover withdrawn, declined or replaced. Both parties hear it; the
+     * room never knew it was happening.
+     */
+    public function whenTransferEnded(OwnershipTransferEnded $event): void
+    {
+        $to = User::query()->find($event->transfer->to_user_id);
+        $from = User::query()->find($event->transfer->from_user_id);
+
+        if ($to === null) {
+            return;
+        }
+
+        $this->membership(
+            $event->channel,
+            $to,
+            'transfer_ended',
+            $from,
+            tellMembers: false,
+            extra: ['reason' => $event->reason]
+        );
+    }
+
+    /**
+     * The queue moved; every moderator recounts their own badge.
+     */
+    public function whenFlagsChanged(FlagsChanged $event): void
+    {
+        $this->broadcaster->toModerators(self::EVENT_FLAGS, []);
+    }
+
+    /**
+     * A channel removed. Ids and scalars only: the row is gone from every
+     * member's sidebar, so there is nothing left to describe — without the push
+     * the stale row stayed clickable and answered with a 404.
+     *
+     * The audience is still resolvable: deletion stamps `deleted_at` and leaves
+     * the memberships in place, and SendChatEventJob skips the visibility scope
+     * (which now excludes the channel) for a deleted channel, checking only that
+     * each member may still use the chat at all.
+     */
+    public function whenChannelDeleted(ChannelWasDeleted $event): void
+    {
+        $this->broadcaster->toChannelMembers(
+            $event->channel,
+            self::EVENT_CHANNEL,
+            [
+                'channelId' => (int) $event->channel->id,
+                'status'    => $event->channel->status,
+                'deleted'   => true,
+            ],
+            null
+        );
+    }
+
+    /**
+     * Archiving freezes the channel for good, so members' composers have to go
+     * the moment it happens, the same way closing does. Carries where the
+     * transcript went, which is what the frozen notice links to.
+     */
+    public function whenChannelArchived(ChannelWasArchived $event): void
+    {
+        $this->broadcaster->toChannelMembers(
+            $event->channel,
+            self::EVENT_CHANNEL,
+            [
+                'channelId'            => (int) $event->channel->id,
+                'status'               => $event->channel->status,
+                'archivedAt'           => $event->channel->archived_at?->toIso8601String(),
+                'archivedDiscussionId' => (int) $event->discussion->id,
+            ],
             null
         );
     }
@@ -228,11 +492,57 @@ class BroadcastListener
     {
         // A hidden arrival is not the room's to know; the member's own tabs are.
         $this->membership($event->channel, $event->user, 'joined', $event->actor, tellMembers: ! $event->hidden);
+
+        if (! $event->hidden && $this->holdsRank($event->channel, $event->user)) {
+            $this->pushRanks($event->channel);
+        }
     }
 
     public function whenLeft(UserLeftChannel $event): void
     {
         $this->membership($event->channel, $event->user, 'left', $event->actor, tellMembers: ! $event->hidden);
+
+        if (! $event->hidden && $this->holdsRank($event->channel, $event->user)) {
+            $this->pushRanks($event->channel);
+        }
+    }
+
+    /**
+     * A rank created, edited, deleted or reordered, or a member's ranks set.
+     * Not excluded from the actor: their editor already redrew from the
+     * response, but their other tabs have not.
+     */
+    public function whenRanksChanged(ChannelRanksChanged $event): void
+    {
+        $this->pushRanks($event->channel);
+    }
+
+    protected function pushRanks(Channel $channel): void
+    {
+        $book = $this->ranks->book($channel);
+
+        if ($book === null) {
+            return;
+        }
+
+        $this->broadcaster->toChannelMembers($channel, self::EVENT_RANKS, [
+            'channelId' => (int) $channel->id,
+            'rankBook'  => $book,
+        ], null);
+    }
+
+    /**
+     * Whether a member coming or going changes the rank book: only someone
+     * shown with a rank does. The owner shows one whether present or not.
+     */
+    protected function holdsRank(Channel $channel, User $user): bool
+    {
+        if (! $channel->isCategory()) {
+            return false;
+        }
+
+        return ChannelRankUser::query()->where('channel_id', $channel->id)->where('user_id', $user->id)->exists()
+            || ChannelUser::query()->where('channel_id', $channel->id)->where('user_id', $user->id)->where('is_moderator', true)->exists();
     }
 
     public function whenInviteDeclined(InviteWasDeclined $event): void
@@ -260,13 +570,16 @@ class BroadcastListener
      * The payload carries ids and display names only; the client refetches the
      * channel through the API when it needs the row, and the visibility scope
      * decides there whether it may have it.
+     *
+     * @param  array<string, mixed>  $extra  Scalars a particular action adds.
      */
     protected function membership(
         Channel $channel,
         User $user,
         string $action,
         ?User $actor,
-        bool $tellMembers
+        bool $tellMembers,
+        array $extra = []
     ): void {
         $payload = [
             'channelId'   => (int) $channel->id,
@@ -278,7 +591,7 @@ class BroadcastListener
             'actorId'     => $actor?->id !== null ? (int) $actor->id : null,
             'actorName'   => $actor?->display_name,
             'userCount'   => (int) $channel->user_count,
-        ];
+        ] + $extra;
 
         $this->broadcaster->toUser((int) $user->id, self::EVENT_MEMBERSHIP, $payload);
 
@@ -364,12 +677,14 @@ class BroadcastListener
                 && $message->deleted_by_id !== null
                 && (int) $message->deleted_by_id !== (int) $message->user_id,
 
-            // The id alone. The recipient names the moderator only if that user
-            // is already in their store — which they usually are, having been
-            // active in the channel — and falls back to the unnamed wording
-            // otherwise. Pushing a whole user record for a tombstone is not
-            // worth the payload on every edit and pin that shares this shape.
-            'deletedById' => $message->deleted_by_id,
+            // Never sent. The tombstone and who made it are for the author and
+            // the moderators, the only ones the API shows a deleted message to,
+            // but this one payload goes to every member — so naming the moderator
+            // here told the whole channel who removed whose message. Live, the
+            // tombstone reads "removed by a moderator"; the named form arrives
+            // with the next fetch, where MessageResource decides who may see it.
+            // The key stays so the client's payload shape does not change.
+            'deletedById' => null,
 
             'isPinned'    => $message->isPinned(),
             'pinnedAt'    => $message->pinned_at?->toIso8601String(),
@@ -406,6 +721,13 @@ class BroadcastListener
             // Sending the few fields the row actually uses costs a fraction of the
             // message body and removes the failure entirely.
             'user'        => $this->userPayload($message),
+
+            // The author's rank here, for the same reason: the row is drawn from
+            // this payload, and a recipient who has not loaded the channel's rank
+            // book has nothing else to read it from.
+            'authorRank'  => $message->user_id !== null && $message->channel !== null
+                ? $this->ranks->forUser($message->channel, (int) $message->user_id)
+                : null,
         ];
     }
 

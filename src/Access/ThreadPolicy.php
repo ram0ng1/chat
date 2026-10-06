@@ -99,7 +99,7 @@ class ThreadPolicy extends AbstractPolicy
      */
     protected function moderates(User $actor, Thread $thread): bool
     {
-        if ($actor->can('ramon-chat.moderate')) {
+        if ($actor->hasPermission('ramon-chat.moderate')) {
             return true;
         }
 

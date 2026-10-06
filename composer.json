@@ -29,20 +29,23 @@
     },
     "require-dev": {
         "flarum/mentions": "^2.0.0",
+        "fof/upload": "^2.0",
         "flarum/tags": "^2.0.0",
         "flarum/testing": "^2.0.0",
         "mockery/mockery": "^1.6",
         "phpstan/phpstan": "^2.2",
         "phpunit/phpunit": "^11.5 || ^13.2.0",
         "pusher/pusher-php-server": "^7.2",
-        "vimeo/psalm": "^6.0"
+        "vimeo/psalm": "^6.0",
+        "flarum/gdpr": "^2.0.0"
     },
     "suggest": {
         "flarum/tags": "Required for category-scoped channels, which inherit tag permissions (^2.0).",
         "flarum/realtime": "Required for live message delivery, typing indicators and presence (^2.0).",
         "flarum/mentions": "Enables @user and @group autocomplete parity with discussions (^2.0).",
         "flarum/emoji": "Enables :shortcode: rendering in messages (^2.0).",
-        "pianotell/flarum-ext-flamoji": "Adds its emoji picker to the chat composer, and renders custom emoji in messages, suggestions and reactions (^2.5)."
+        "pianotell/flarum-ext-flamoji": "Adds its emoji picker to the chat composer, and renders custom emoji in messages, suggestions and reactions (^2.5).",
+        "fof/upload": "Stores public chat attachments on fof/upload's configured storage (S3, Qiniu, a CDN-fronted directory) instead of the forum's own disk (^2.0)."
     },
     "autoload": {
         "psr-4": {
@@ -65,7 +68,8 @@
                 "flarum/emoji",
                 "pianotell/flarum-ext-flamoji",
                 "flarum/gdpr",
-                "flarum/audit"
+                "flarum/audit",
+                "fof/upload"
             ],
             "icon": {
                 "image": "icon.svg",

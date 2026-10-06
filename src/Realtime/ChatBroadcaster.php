@@ -51,7 +51,9 @@ use Ramon\Chat\Realtime\Job\SendChatEventJob;
  * So the default is immediate, and `ramon-chat.queue_realtime` moves it back
  * onto the queue for the forums that need it: one whose web process cannot reach
  * the daemon, or one large enough that the fan-out belongs off the request. That
- * setting is only sane alongside a continuously running worker.
+ * setting is only sane alongside a continuously running worker, so it is
+ * ignored (and the push runs inline) while the queue is `sync` or `database`;
+ * see QueueKind.
  *
  * ## Who receives a message
  *
@@ -86,19 +88,22 @@ class ChatBroadcaster
      *
      * @param  array<string, mixed>  $payload
      * @param  int|null  $exceptUserId  The actor, who already knows what happened.
+     * @param  bool  $queue  Off the request whatever the setting says, for an
+     *                       audience too large to resolve inside it.
      */
     public function toChannelMembers(
         Channel $channel,
         string $event,
         array $payload,
-        ?int $exceptUserId = null
+        ?int $exceptUserId = null,
+        bool $queue = false
     ): void {
         $this->dispatch(new SendChatEventJob(
             event: $event,
             payload: $payload,
             channelId: (int) $channel->id,
             exceptUserId: $exceptUserId
-        ));
+        ), $queue);
     }
 
     /**
@@ -116,6 +121,21 @@ class ChatBroadcaster
     }
 
     /**
+     * Sends an event to everyone holding `ramon-chat.moderate`.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    public function toModerators(string $event, array $payload, ?int $exceptUserId = null): void
+    {
+        $this->dispatch(new SendChatEventJob(
+            event: $event,
+            payload: $payload,
+            exceptUserId: $exceptUserId,
+            moderators: true
+        ));
+    }
+
+    /**
      * Running the job must never be able to fail the action that caused the
      * event: the message is already committed, and a client that misses the push
      * reconciles through the API. A daemon that is down would otherwise turn
@@ -125,14 +145,19 @@ class ChatBroadcaster
      * wired unconditionally, so on a forum with no realtime this is what keeps
      * every keystroke from running a job that would resolve to a no-op.
      */
-    protected function dispatch(SendChatEventJob $job): void
+    protected function dispatch(SendChatEventJob $job, bool $queue = false): void
     {
         if (! class_exists(Pusher::class) || ! $this->container->bound(Pusher::class)) {
             return;
         }
 
         try {
-            if ($this->settings->get('ramon-chat.queue_realtime')) {
+            // Only a continuously worked queue may take the push. Under `sync`
+            // the job would run inline anyway, and under `database` it would
+            // wait for the once-a-minute worker, so a stale switch or a large
+            // audience never delays a message there.
+            if (($queue || $this->settings->get('ramon-chat.queue_realtime'))
+                && QueueKind::defers($this->queue)) {
                 $this->queue->push($job);
 
                 return;

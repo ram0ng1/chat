@@ -1,0 +1,454 @@
+// ── Channel ranks ────────────────────────────────────────────────────────────
+// The small tag before a name, the name drawn in a rank's colour, the ranks
+// editor and the member's rank checklist.
+//
+// A custom colour arrives as custom properties set inline (utils/ranks.tsx),
+// already made legible on the server: `--chat-rank-fg` is white or near-black,
+// whichever reads better on the tag, and the two name colours are the rank's
+// own darkened for the light theme and lightened for the dark one until they
+// reach 4.5:1 (Rank\RankPalette). A built-in rank left at its default carries
+// no colour of its own and takes the theme's, as the members tab always did.
+
+.ChatRankTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  max-width: 13em;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 15px;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  vertical-align: middle;
+  background: var(--chat-rank-bg, var(--control-bg));
+  color: var(--chat-rank-fg, var(--control-color));
+  // An edge of its own, so a tag close to the surface colour — white on white,
+  // charcoal on charcoal — still reads as a tag.
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+
+  i {
+    font-size: 9px;
+  }
+
+  &-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &--owner {
+    background: var(--primary-color);
+    color: var(--button-primary-color, #fff);
+  }
+
+  // One rank down, visibly the same family: the primary as text on its own
+  // tint, like the members tab drew it before ranks existed.
+  &--moderator {
+    background: var(--control-bg);
+    color: var(--primary-color);
+    box-shadow: inset 0 0 0 1px var(--primary-color);
+
+    @supports (background: color-mix(in srgb, red, blue)) {
+      background: color-mix(in srgb, var(--primary-color) 14%, var(--body-bg));
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary-color) 30%, transparent);
+    }
+  }
+}
+
+// The rank without its tag: the name itself in the rank's colour.
+.ChatRankName,
+.ChatRankName .ChatUserLink,
+.ChatRankName .ChatUserLink:hover,
+.ChatRankName .ChatUserLink:focus {
+  color: var(--chat-rank-name);
+}
+
+.ChatRankName--owner,
+.ChatRankName--moderator {
+  --chat-rank-name: var(--primary-color);
+}
+
+[data-theme^="dark"] {
+  .ChatRankTag {
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  }
+
+  // A dark primary as text on a dark surface fails AA, so the default moderator
+  // tag and default name colour are lifted towards white, as Browse does.
+  .ChatRankTag--moderator {
+    color: #ec8e8e;
+    background: rgba(236, 142, 142, 0.14);
+    box-shadow: inset 0 0 0 1px rgba(236, 142, 142, 0.3);
+
+    @supports (color: color-mix(in srgb, red, blue)) {
+      color: color-mix(in srgb, var(--primary-color) 35%, #fff);
+      background: color-mix(in srgb, var(--primary-color) 22%, transparent);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary-color) 45%, transparent);
+    }
+  }
+
+  .ChatRankName,
+  .ChatRankName .ChatUserLink,
+  .ChatRankName .ChatUserLink:hover,
+  .ChatRankName .ChatUserLink:focus {
+    color: var(--chat-rank-name-dark, var(--chat-rank-name));
+  }
+
+  .ChatRankName--owner,
+  .ChatRankName--moderator {
+    --chat-rank-name-dark: #ec8e8e;
+
+    @supports (color: color-mix(in srgb, red, blue)) {
+      --chat-rank-name-dark: color-mix(in srgb, var(--primary-color) 45%, #fff);
+    }
+  }
+}
+
+// In the author line the tag sits on the name's baseline, a step smaller than
+// the name so the name stays what the eye lands on.
+.ChatMessage-rank {
+  margin-right: -2px;
+}
+
+// ── Members tab ──────────────────────────────────────────────────────────────
+
+.ChatChannelInfo-memberRank {
+  margin-left: 2px;
+}
+
+.ChatChannelInfo-member-ranks {
+  flex-shrink: 0;
+  color: var(--avocado-muted-icon);
+  transition: color var(--avocado-t-fast);
+
+  &:hover:not(:disabled),
+  &:focus-visible,
+  &.active {
+    color: var(--primary-color);
+  }
+}
+
+// The member's ranks, under their row: a wrap of tags, each with its tick.
+.ChatChannelInfo-rankPicker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: @chat-space-xs @chat-space-sm;
+  margin: 0 @chat-space-xs @chat-space-sm 38px;
+  padding: @chat-space-sm @chat-space-md;
+  border: 1px solid var(--avocado-border-soft);
+  border-radius: @chat-radius-sm;
+  background: var(--avocado-surface-1);
+
+  .helpText {
+    margin: 0;
+  }
+}
+
+.ChatChannelInfo-rankOption {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px 3px 6px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: @chat-font-label;
+  transition: background var(--avocado-t-fast);
+
+  &:hover {
+    background: var(--control-bg);
+  }
+
+  input {
+    margin: 0;
+    cursor: pointer;
+  }
+
+  &--checked {
+    background: var(--control-bg);
+  }
+}
+
+// ── Ranks editor ─────────────────────────────────────────────────────────────
+
+.ChatRanks {
+  &-intro {
+    margin: 0 0 @chat-space-md;
+  }
+
+  &-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border: 1px solid var(--avocado-border-soft);
+    border-radius: @chat-radius-sm;
+    overflow: hidden;
+  }
+
+  &-row {
+    .chat-flex-row(@chat-space-sm);
+    min-height: 44px;
+    padding: 6px @chat-space-xs 6px @chat-space-md;
+
+    & + & {
+      border-top: 1px solid var(--avocado-border-soft);
+    }
+
+    &:hover {
+      background: var(--chat-row-hover-bg, rgba(0, 0, 0, 0.03));
+    }
+  }
+
+  &-sample {
+    flex: 0 1 auto;
+    min-width: 0;
+    font-size: @chat-font-label;
+    font-weight: 800;
+
+    .ChatRankTag {
+      font-size: 11.5px;
+      line-height: 18px;
+      padding: 1px 8px;
+    }
+  }
+
+  &-meta {
+    .chat-flex-row(6px);
+    flex: 1;
+    min-width: 0;
+    font-size: 12px;
+    color: var(--avocado-muted-label);
+  }
+
+  &-chip {
+    padding: 0 6px;
+    border-radius: 999px;
+    font-size: 11px;
+    line-height: 18px;
+    background: var(--control-bg);
+    color: var(--control-color);
+    white-space: nowrap;
+  }
+
+  &-actions {
+    .chat-flex-row(0);
+    flex-shrink: 0;
+
+    .Button--icon {
+      color: var(--avocado-muted-icon);
+
+      &:hover:not(:disabled),
+      &:focus-visible {
+        color: var(--avocado-text-dark);
+      }
+    }
+  }
+
+  &-delete:hover:not(:disabled),
+  &-delete:focus-visible {
+    color: var(--error-color, #d83e3e) !important;
+  }
+
+  &-empty {
+    margin: @chat-space-md 0 0;
+    font-size: 13px;
+    color: var(--avocado-muted-label);
+  }
+
+  &-footer {
+    .chat-flex-row(@chat-space-md);
+    margin-top: @chat-space-md;
+  }
+
+  // The form, above the list while it is open.
+  &-editor {
+    margin-bottom: @chat-space-lg;
+    padding: @chat-space-md @chat-space-lg @chat-space-lg;
+    border: 1px solid var(--avocado-border-soft);
+    border-radius: @chat-radius-sm;
+    background: var(--avocado-surface-1);
+  }
+
+  &-editorTitle {
+    margin-bottom: @chat-space-md;
+    font-size: @chat-font-label;
+    font-weight: 800;
+    color: var(--avocado-text-dark);
+  }
+
+  &-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: @chat-space-md @chat-space-lg;
+
+    @media (max-width: @chat-mobile-breakpoint) {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  &-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+
+    .FormControl {
+      width: 100%;
+      margin: 0;
+    }
+
+    .helpText {
+      margin: 0;
+    }
+
+    .Switch {
+      margin: 0;
+    }
+  }
+
+  &-label {
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 1.1px;
+    text-transform: uppercase;
+    color: var(--avocado-muted-label);
+  }
+
+  &-color,
+  &-icon {
+    .chat-flex-row(@chat-space-sm);
+  }
+
+  &-swatch {
+    flex-shrink: 0;
+    width: 40px;
+    height: 36px;
+    padding: 2px;
+    border: 1px solid var(--avocado-border-soft);
+    border-radius: @chat-radius-sm;
+    background: var(--body-bg);
+    cursor: pointer;
+  }
+
+  &-hex {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+    &--invalid {
+      border-color: var(--error-color, #d83e3e) !important;
+    }
+  }
+
+  &-iconPreview {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--avocado-border-soft);
+    border-radius: @chat-radius-sm;
+    color: var(--avocado-text-dark);
+    background: var(--body-bg);
+  }
+
+  &-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: @chat-space-lg;
+  }
+
+  &-previewPair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+
+    @media (max-width: @chat-mobile-breakpoint) {
+      grid-template-columns: 1fr;
+    }
+
+    border: 1px solid var(--avocado-border-soft);
+    border-radius: @chat-radius-sm;
+    overflow: hidden;
+  }
+
+  // The two samples are fixed surfaces, whatever the page's theme: the point
+  // is to see the rank on both.
+  &-sampleLine {
+    .chat-flex-row(8px);
+    min-width: 0;
+    padding: 12px @chat-space-md;
+    font-size: @chat-font-label;
+    font-weight: 800;
+
+    > span:last-child {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    &--light {
+      background: #ffffff;
+      color: #1d1d21;
+
+      .ChatRankTag {
+        box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+      }
+
+      .ChatRankName--owner,
+      .ChatRankName--moderator {
+        color: var(--primary-color);
+      }
+    }
+
+    &--dark {
+      background: #222226;
+      color: #ececee;
+
+      .ChatRankTag {
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+      }
+
+      .ChatRankTag--moderator {
+        color: #ec8e8e;
+        background: rgba(236, 142, 142, 0.14);
+
+        @supports (color: color-mix(in srgb, red, blue)) {
+          color: color-mix(in srgb, var(--primary-color) 45%, #fff);
+          background: color-mix(in srgb, var(--primary-color) 22%, transparent);
+        }
+      }
+
+      .ChatRankName--owner,
+      .ChatRankName--moderator {
+        color: #ec8e8e;
+
+        @supports (color: color-mix(in srgb, red, blue)) {
+          color: color-mix(in srgb, var(--primary-color) 45%, #fff);
+        }
+      }
+    }
+  }
+
+  &-editorActions {
+    .chat-flex-row(@chat-space-sm);
+    margin-top: @chat-space-lg;
+  }
+}
+
+// The light sample keeps its light-theme tag when the page itself is dark.
+[data-theme^="dark"] .ChatRanks-sampleLine--light {
+  .ChatRankTag--moderator {
+    color: var(--primary-color);
+    background: var(--control-bg);
+
+    @supports (background: color-mix(in srgb, red, blue)) {
+      background: color-mix(in srgb, var(--primary-color) 14%, #fff);
+    }
+  }
+
+  .ChatRankName--owner,
+  .ChatRankName--moderator {
+    color: var(--primary-color);
+  }
+}

@@ -56,6 +56,22 @@ class PermissionSetVisibility
             ->exists();
     }
 
+    /** @var array<string, bool> */
+    private array $chatUsers = [];
+
+    /**
+     * Whether the user may use the chat at all, `ramon-chat.use`, bucketed the
+     * same way. `hasPermission` loads the permission list per user, which on a
+     * fan-out over a busy channel is a query per member; the answer depends on
+     * the permission groups alone, so one user per set is enough to decide it.
+     * Keying on `permissionGroupIds()` is also what makes a suspension count:
+     * flarum/suspend demotes the suspended user's groups there.
+     */
+    public function usesChat(User $user): bool
+    {
+        return $this->chatUsers[self::key($user)] ??= $user->hasPermission('ramon-chat.use');
+    }
+
     /**
      * The permission sets already resolved, for assertions and diagnostics.
      */

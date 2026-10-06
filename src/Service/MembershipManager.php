@@ -22,7 +22,8 @@ use Ramon\Chat\ChannelUser;
 class MembershipManager
 {
     public function __construct(
-        protected ConnectionInterface $db
+        protected ConnectionInterface $db,
+        protected OwnershipSuccession $succession
     ) {
     }
 
@@ -36,6 +37,10 @@ class MembershipManager
      *                        member list, no change to `user_count`, and no join
      *                        announcement. For moderators reading a channel without
      *                        their presence changing how people talk in it.
+     *
+     * Whether anything changed is on the returned row: `wasRecentlyCreated`, or
+     * `wasChanged(['left_at', 'hidden'])`. A caller announcing the join reads that
+     * instead of assuming, so repeating the request is not a way to repeat the line.
      */
     public function join(
         Channel $channel,
@@ -105,10 +110,16 @@ class MembershipManager
     /**
      * Leaves without destroying the membership row, so read state and history
      * survive a rejoin.
+     *
+     * An owner leaving hands the channel to its oldest moderator in the same
+     * transaction (OwnershipSuccession); the announcement goes out after the
+     * commit, before the caller announces the departure itself.
      */
-    public function leave(Channel $channel, User $user): ?ChannelUser
+    public function leave(Channel $channel, User $user, ?User $actor = null): ?ChannelUser
     {
-        return $this->db->transaction(function () use ($channel, $user) {
+        $settled = null;
+
+        $membership = $this->db->transaction(function () use ($channel, $user, &$settled) {
             /** @var ChannelUser|null $membership */
             $membership = ChannelUser::query()
                 ->where('channel_id', $channel->id)
@@ -134,10 +145,16 @@ class MembershipManager
                 $channel->decrement('user_count');
             }
 
+            $settled = $this->succession->settle($channel, $user);
+
             $channel->forgetMembership($user);
 
             return $membership;
         });
+
+        $this->succession->announce($settled, $actor);
+
+        return $membership;
     }
 
     public function updatePreferences(
@@ -145,17 +162,20 @@ class MembershipManager
         User $user,
         ?int $notificationLevel = null,
         ?bool $muted = null
-    ): ChannelUser {
+    ): ?ChannelUser {
         /** @var ChannelUser|null $membership */
         $membership = ChannelUser::query()
             ->where('channel_id', $channel->id)
             ->where('user_id', $user->id)
+            ->whereNull('left_at')
             ->first();
 
-        // Setting a preference on a channel you have not joined implies joining
-        // it — otherwise the preference would have nowhere to live.
+        // Only on a live membership. Setting a preference used to imply joining,
+        // and that made this a side door past the join policy: a closed channel,
+        // or a private one seen through an invitation, could be entered by
+        // choosing how loudly it should notify.
         if ($membership === null) {
-            $membership = $this->join($channel, $user);
+            return null;
         }
 
         if ($notificationLevel !== null && in_array($notificationLevel, ChannelUser::levels(), true)) {

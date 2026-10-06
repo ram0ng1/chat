@@ -94,6 +94,13 @@ class MessagePolicy extends AbstractPolicy
             return false;
         }
 
+        // Rewriting a message is posting it again. Someone who has left the
+        // channel, lost the right to post in it, or had it made read-only kept
+        // the ability to change what everyone still reads under their name.
+        if (! $actor->can('postMessage', $channel)) {
+            return false;
+        }
+
         return $this->withinEditWindow($message);
     }
 
@@ -110,7 +117,7 @@ class MessagePolicy extends AbstractPolicy
             return false;
         }
 
-        if ($actor->can('ramon-chat.moderate')) {
+        if ($actor->hasPermission('ramon-chat.moderate')) {
             return true;
         }
 
@@ -165,7 +172,7 @@ class MessagePolicy extends AbstractPolicy
             return false;
         }
 
-        return $actor->can('ramon-chat.moderate') ? true : null;
+        return $actor->hasPermission('ramon-chat.moderate') ? true : null;
     }
 
     public function react(User $actor, Message $message): ?bool
@@ -296,7 +303,7 @@ class MessagePolicy extends AbstractPolicy
 
     public function move(User $actor, Message $message): ?bool
     {
-        return $actor->can('ramon-chat.moderate') ? true : null;
+        return $actor->hasPermission('ramon-chat.moderate') ? true : null;
     }
 
     /**

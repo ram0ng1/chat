@@ -286,6 +286,26 @@ class MessageDispatcher
      *
      * @throws ValidationException
      */
+    /**
+     * The checks a send makes on its words, for an edit.
+     *
+     * An edit replaces the content wholesale, so it is held to everything the
+     * content was held to: the length limits, the sticker permission, and the
+     * per-user rate limit. Without them PATCH was a way around all three: a
+     * message could be sent short and edited past the cap, a sticker typed in
+     * afterwards, and edits fired as fast as the client could send them.
+     *
+     * @throws ValidationException
+     */
+    public function assertMayRevise(Channel $channel, User $actor, string $content): void
+    {
+        $content = trim($content);
+
+        $this->assertValidContent($channel, $content, []);
+        $this->assertMaySendStickers($actor, $content);
+        $this->rateLimiter->assertWithinLimit($actor);
+    }
+
     protected function assertMaySendStickers(User $actor, string $content): void
     {
         if ($content === '' || $actor->hasPermission('ramon-chat.sendStickers')) {

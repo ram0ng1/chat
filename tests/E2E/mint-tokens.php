@@ -21,6 +21,12 @@
  * Só para um fórum de desenvolvimento. Os usuários criados são contas normais
  * (grupo Membro) chamadas chat_e2e_a, chat_e2e_b e chat_e2e_c; o administrador
  * é o usuário 1.
+ *
+ * A suíte de permissões precisa de três níveis a mais, criados do mesmo jeito
+ * idempotente: chat_e2e_mod (grupo Moderador), chat_e2e_susp (suspenso por um
+ * ano, rebaixado a convidado pelo flarum/suspend) e chat_e2e_unconf (e-mail não
+ * confirmado, que o core também reduz a convidado). Saem nas chaves `mod`,
+ * `susp` e `unconf`.
  */
 
 use Flarum\Foundation\Site;
@@ -63,6 +69,46 @@ foreach (['a', 'b', 'c'] as $letter) {
     }
 
     $users[$letter] = $user;
+}
+
+$extra = [
+    'mod'    => ['username' => 'chat_e2e_mod', 'activate' => true],
+    'susp'   => ['username' => 'chat_e2e_susp', 'activate' => true],
+    'unconf' => ['username' => 'chat_e2e_unconf', 'activate' => false],
+];
+
+foreach ($extra as $key => $spec) {
+    $user = User::query()->where('username', $spec['username'])->first();
+
+    if ($user === null) {
+        $user = new User();
+        $user->username = $spec['username'];
+        $user->email = $spec['username'].'@e2e.local';
+        $user->password = 'chat-e2e-password';
+        $user->joined_at = \Carbon\Carbon::now();
+
+        if ($spec['activate']) {
+            $user->activate();
+        }
+
+        $user->save();
+    }
+
+    if ($key === 'mod') {
+        $user->groups()->syncWithoutDetaching([\Flarum\Group\Group::MODERATOR_ID]);
+    }
+
+    if ($key === 'susp') {
+        $user->setAttribute('suspended_until', \Carbon\Carbon::now()->addYear());
+        $user->save();
+    }
+
+    if ($key === 'unconf' && $user->is_email_confirmed) {
+        $user->is_email_confirmed = false;
+        $user->save();
+    }
+
+    $users[$key] = $user;
 }
 
 $admin = User::query()->findOrFail(1);

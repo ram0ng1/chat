@@ -14,6 +14,7 @@ use Flarum\Group\Group;
 use Flarum\Testing\integration\RetrievesAuthorizedUsers;
 use Flarum\Testing\integration\TestCase;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use Ramon\Chat\Tests\integration\FlushesCache;
 use Ramon\Chat\Tests\integration\ResetsVisibilityScopers;
 
 /**
@@ -33,6 +34,7 @@ use Ramon\Chat\Tests\integration\ResetsVisibilityScopers;
 #[RunTestsInSeparateProcesses]
 class ChannelInviteTest extends TestCase
 {
+    use FlushesCache;
     use RetrievesAuthorizedUsers;
     use ResetsVisibilityScopers;
 
@@ -94,6 +96,8 @@ class ChannelInviteTest extends TestCase
                 $this->membership(self::CH_RESTRICTED, self::OWNER),
             ],
         ]);
+
+        $this->flushCache();
     }
 
     public function test_inviting_creates_an_invite_and_a_notification_but_no_membership(): void

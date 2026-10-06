@@ -32,6 +32,12 @@ export async function launchBrowser({ label = "browser", width = 1360, height = 
       "--disable-gpu",
       "--no-first-run",
       "--no-default-browser-check",
+      // A headless window left idle is otherwise treated as occluded: the page
+      // reports `document.hidden`, animation frames stop and Mithril never
+      // redraws, so a live push looks like it never arrived.
+      "--disable-backgrounding-occluded-windows",
+      "--disable-renderer-backgrounding",
+      "--disable-background-timer-throttling",
       "--remote-debugging-port=" + port,
       "--user-data-dir=" + profile,
       "--window-size=" + width + "," + height,
@@ -111,8 +117,36 @@ export async function launchBrowser({ label = "browser", width = 1360, height = 
   await call("Page.enable");
   await call("Runtime.enable");
   await call("Network.enable");
+  // Keeps the page focused and visible however long it sits idle; see the
+  // backgrounding flags above for what goes wrong otherwise.
+  await call("Emulation.setFocusEmulationEnabled", { enabled: true }).catch(() => {});
 
   const consoleErrors = [];
+  const requests = [];
+
+  listeners.push((frame) => {
+    if (frame.sessionId !== sessionId) return;
+
+    if (frame.method === "Network.requestWillBeSent") {
+      requests.push({
+        id: frame.params.requestId,
+        url: frame.params.request.url,
+        method: frame.params.request.method,
+        at: Date.now(),
+        done: null,
+        initiator: (frame.params.initiator?.stack?.callFrames ?? [])
+          .slice(0, 6)
+          .map((f) => f.functionName + ":" + f.columnNumber)
+          .join(" < "),
+      });
+    }
+
+    if (frame.method === "Network.loadingFinished" || frame.method === "Network.loadingFailed") {
+      const request = requests.findLast((r) => r.id === frame.params.requestId);
+
+      if (request) request.done = Date.now();
+    }
+  });
 
   listeners.push((frame) => {
     if (frame.sessionId !== sessionId) return;
@@ -130,6 +164,8 @@ export async function launchBrowser({ label = "browser", width = 1360, height = 
 
   const browser = {
     consoleErrors,
+    /** Every request the page has sent, in order: `{ url, method, at, done }`. */
+    requests,
 
     /**
      * Signs the page in as the holder of a remember token. The cookie is set for
@@ -212,6 +248,34 @@ export async function launchBrowser({ label = "browser", width = 1360, height = 
           JSON.stringify(selector) +
           "); if (!el) return false; el.click(); return true; })()",
       );
+    },
+
+    /**
+     * Clicks like a person: moves the mouse onto the element, presses, holds for
+     * `holdMs` and releases. Pointer handlers (hover, press) fire as they would
+     * for a real click. Returns the time the button was released.
+     */
+    async mouseClick(selector, holdMs = 90) {
+      const box = await browser.evaluate(
+        "(() => { const r = document.querySelector(" + JSON.stringify(selector) +
+          ")?.getBoundingClientRect(); return r ? { x: r.x + r.width / 2, y: r.y + r.height / 2 } : null; })()",
+      );
+
+      if (!box) return null;
+
+      await call("Input.dispatchMouseEvent", { type: "mouseMoved", x: box.x, y: box.y });
+      await call("Input.dispatchMouseEvent", { type: "mousePressed", x: box.x, y: box.y, button: "left", clickCount: 1 });
+      await sleep(holdMs);
+      await call("Input.dispatchMouseEvent", { type: "mouseReleased", x: box.x, y: box.y, button: "left", clickCount: 1 });
+
+      return Date.now();
+    },
+
+    /** Turns `prefers-reduced-motion: reduce` on or off for the page. */
+    async emulateReducedMotion(on) {
+      await call("Emulation.setEmulatedMedia", {
+        features: [{ name: "prefers-reduced-motion", value: on ? "reduce" : "no-preference" }],
+      });
     },
 
     /** Clicks the element matched by a JS expression that returns it. */

@@ -52,6 +52,14 @@ interface TypingEntry {
 
 const PAGE_SIZE = 50;
 
+/**
+ * Page size and cap for filling the gap down to a message that is older than
+ * the loaded window. 100 is the endpoint's maximum; twenty pages is two
+ * thousand messages, past which a jump gives up rather than pin the browser.
+ */
+const GAP_PAGE_SIZE = 100;
+const GAP_MAX_PAGES = 20;
+
 /** How many recently viewed channels the local snapshot keeps a tail for. */
 const SNAPSHOT_CHANNELS = 3;
 
@@ -115,6 +123,9 @@ export default class ChatState {
 
   /** Channels whose pinned preview came from the local snapshot. */
   private pinnedStale = new Set<number>();
+
+  /** Pin previews being fetched, so a prefetch and the view share one request. */
+  private pinnedInFlight = new Map<number, Promise<void>>();
 
   /** Pending debounced snapshot write, if any. */
   private snapshotTimer: number | null = null;
@@ -863,6 +874,55 @@ export default class ChatState {
    * the reader can no longer see. The store record is left alone; a public
    * channel is still readable and the next fetch says what it may still do.
    */
+  /**
+   * A channel that no longer exists for this reader: deleted, or put out of
+   * their reach. It leaves the list, its cached stream and pin, and the local
+   * snapshot, so a reload cannot bring it back; whoever is looking at it is
+   * stepped out of it with a notice rather than left on a page whose every
+   * request now answers 404.
+   */
+  channelGone(channelId: number): void {
+    const wasOpen =
+      this.activeChannelId === channelId &&
+      (m.route.get() ?? "").includes(`/chat/c/${channelId}`);
+    this.forgetChannel(channelId);
+    delete this.streams[channelId];
+    delete this.pinnedPreviews[channelId];
+    delete this.pinnedTotals[channelId];
+    this.scheduleSnapshot();
+
+    if (wasOpen) m.route.set(app.route("chat.index"));
+
+    // Only for whoever was looking at it. A row that merely leaves the list
+    // needs no explanation, and announcing every deletion would flood anyone
+    // who belongs to many channels — an administrator above all.
+    if (wasOpen) {
+      app.alerts.show(
+        { type: "warning" },
+        app.translator.trans("ramon-chat.forum.channel.gone"),
+      );
+    }
+
+    m.redraw();
+  }
+
+  /**
+   * Error handler for requests scoped to one channel: a 403 or 404 means the
+   * channel is gone for this reader, which `channelGone` settles quietly in
+   * place of core's generic "not found" alert. Anything else falls through.
+   */
+  private goneHandler(channelId: number) {
+    return (error: { status?: number }): false | void => {
+      if (error?.status === 403 || error?.status === 404) {
+        this.channelGone(channelId);
+
+        return;
+      }
+
+      return false;
+    };
+  }
+
   forgetChannel(channelId: number): void {
     this.channels = this.channels.filter(
       (channel) => Number(channel.id()) !== channelId,
@@ -1079,7 +1139,11 @@ export default class ChatState {
    * page is reversed before being prepended.
    */
   async fetchPage(channelId: number): Promise<void> {
-    await this.fetchInto(this.stream(channelId), { channel: channelId });
+    await this.fetchInto(
+      this.stream(channelId),
+      { channel: channelId },
+      this.goneHandler(channelId),
+    );
   }
 
   /**
@@ -1092,6 +1156,7 @@ export default class ChatState {
   private async fetchInto(
     stream: ChannelStream,
     filter: Record<string, unknown>,
+    errorHandler?: (error: { status?: number }) => false | void,
   ): Promise<void> {
     if (stream.loading || !stream.hasMore) return;
 
@@ -1100,14 +1165,19 @@ export default class ChatState {
     try {
       const oldest = stream.messages[0];
 
-      const results = (await app.store.find("chat-messages", {
-        filter: {
-          ...filter,
-          ...(oldest ? { lessThan: Number(oldest.id()) } : {}),
+      const results = (await app.store.find(
+        "chat-messages",
+        {
+          filter: {
+            ...filter,
+            ...(oldest ? { lessThan: Number(oldest.id()) } : {}),
+          },
+          sort: "-id",
+          page: { limit: PAGE_SIZE },
         },
-        sort: "-id",
-        page: { limit: PAGE_SIZE },
-      })) as unknown as Message[];
+        undefined,
+        errorHandler ? { errorHandler } : undefined,
+      )) as unknown as Message[];
 
       const page = (Array.isArray(results) ? results : []).slice().reverse();
 
@@ -1125,6 +1195,74 @@ export default class ChatState {
       stream.loading = false;
       m.redraw();
     }
+  }
+
+  /**
+   * Makes sure a message is in the channel's loaded window, so it can be scrolled
+   * to.
+   *
+   * The window only ever grows upwards from the newest message, so anything
+   * older than it — a pin, a quoted reply — was unreachable: the pinned strip
+   * drew its jump disabled and a quote said "not loaded". This pages the gap
+   * between the oldest loaded row and the target in one run, keeping the window
+   * contiguous. Resolves to whether the message is now there; a thread reply or
+   * a deleted row never is, since the channel stream does not carry them.
+   */
+  async revealMessage(channelId: number, messageId: number): Promise<boolean> {
+    const stream = this.stream(channelId);
+    const has = () =>
+      stream.messages.some((message) => Number(message.id()) === messageId);
+
+    if (has()) return true;
+
+    if (!stream.loadedInitial) await this.loadChannel(channelId);
+
+    for (let waited = 0; stream.loading && waited < 100; waited++) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+
+    if (has()) return true;
+    if (stream.loading) return false;
+
+    stream.loading = true;
+
+    try {
+      for (let i = 0; i < GAP_MAX_PAGES && !has(); i++) {
+        const oldest = stream.messages[0];
+
+        if (oldest && Number(oldest.id()) < messageId) break;
+
+        const results = (await app.store.find("chat-messages", {
+          filter: {
+            channel: channelId,
+            greaterThan: messageId - 1,
+            ...(oldest ? { lessThan: Number(oldest.id()) } : {}),
+          },
+          sort: "-id",
+          page: { limit: GAP_PAGE_SIZE },
+        })) as unknown as Message[];
+
+        const page = (Array.isArray(results) ? results : []).slice().reverse();
+        const known = new Set(stream.messages.map((msg) => msg.id()));
+
+        stream.messages = [
+          ...page.filter((msg) => !known.has(msg.id())),
+          ...stream.messages,
+        ];
+        this.sortStream(stream);
+
+        if (page.length < GAP_PAGE_SIZE) break;
+      }
+
+      this.scheduleSnapshot();
+    } catch {
+      return false;
+    } finally {
+      stream.loading = false;
+      m.redraw();
+    }
+
+    return has();
   }
 
   /**
@@ -1148,11 +1286,16 @@ export default class ChatState {
     stream.loading = true;
 
     try {
-      const results = (await app.store.find("chat-messages", {
-        filter: { channel: channelId },
-        sort: "-id",
-        page: { limit: PAGE_SIZE },
-      })) as unknown as Message[];
+      const results = (await app.store.find(
+        "chat-messages",
+        {
+          filter: { channel: channelId },
+          sort: "-id",
+          page: { limit: PAGE_SIZE },
+        },
+        undefined,
+        { errorHandler: this.goneHandler(channelId) },
+      )) as unknown as Message[];
 
       const fresh = (Array.isArray(results) ? results : []).slice().reverse();
       const complete = fresh.length < PAGE_SIZE;
@@ -1285,6 +1428,20 @@ export default class ChatState {
       return;
     }
 
+    const inFlight = this.pinnedInFlight.get(channelId);
+
+    if (inFlight) return inFlight;
+
+    const request = this.fetchPinnedPreview(channelId).finally(() =>
+      this.pinnedInFlight.delete(channelId),
+    );
+
+    this.pinnedInFlight.set(channelId, request);
+
+    return request;
+  }
+
+  private async fetchPinnedPreview(channelId: number): Promise<void> {
     try {
       const results = (await app.store.find("chat-messages", {
         filter: {
@@ -1649,6 +1806,7 @@ export default class ChatState {
         method: "POST",
         url: `${app.forum.attribute("apiUrl")}/chat-channels/${channelId}/read`,
         body: { data: { attributes: { lastReadMessageId: upTo } } },
+        errorHandler: this.goneHandler(channelId),
       })
       .catch(() => {
         // Swallowed deliberately — see above.
@@ -1922,6 +2080,10 @@ export default class ChatState {
         method: "POST",
         url: `${app.forum.attribute("apiUrl")}/chat/typing`,
         body: { data: { attributes: { channelId, typing: true } } },
+        // Fire-and-forget: a refused signal (the channel was just closed, or the
+        // reader removed) is not worth an alert on every keystroke. The channel
+        // push or the next read settles what the composer should show.
+        errorHandler: () => {},
       })
       .catch(() => {});
   }

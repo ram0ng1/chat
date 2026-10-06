@@ -13,12 +13,6 @@ parameters:
 			path: src/Api/Controller/StartDirectController.php
 
 		-
-			message: '#^Call to method addType\(\) on an unknown class Flarum\\Gdpr\\Extend\\UserData\.$#'
-			identifier: class.notFound
-			count: 1
-			path: extend.php
-
-		-
 			message: '#^Call to method group\(\) on an unknown class Flarum\\Audit\\Extend\\Audit\.$#'
 			identifier: class.notFound
 			count: 1
@@ -26,12 +20,6 @@ parameters:
 
 		-
 			message: '#^Instantiated class Flarum\\Audit\\Extend\\Audit not found\.$#'
-			identifier: class.notFound
-			count: 1
-			path: extend.php
-
-		-
-			message: '#^Instantiated class Flarum\\Gdpr\\Extend\\UserData not found\.$#'
 			identifier: class.notFound
 			count: 1
 			path: extend.php
@@ -59,12 +47,6 @@ parameters:
 			identifier: method.notFound
 			count: 1
 			path: src/Access/ScopeThreadVisibility.php
-
-		-
-			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:imageUrl\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: src/Api/Controller/ChannelImageController.php
 
 		-
 			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Ramon\\Chat\\Channel\>\:\:whereVisibleTo\(\)\.$#'
@@ -337,12 +319,6 @@ parameters:
 			path: src/Listener/JoinChannelsOnReply.php
 
 		-
-			message: '#^Parameter \#1 \$membership of method Ramon\\Chat\\Service\\UnreadTracker\:\:recalculate\(\) expects Ramon\\Chat\\ChannelUser, stdClass given\.$#'
-			identifier: argument.type
-			count: 1
-			path: src/Listener/RecalculateUnreadCounts.php
-
-		-
 			message: '#^Offset ''plain'' on \*NEVER\* on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
@@ -365,12 +341,6 @@ parameters:
 			identifier: identical.alwaysFalse
 			count: 1
 			path: src/Mention/MentionResolver.php
-
-		-
-			message: '#^Call to an undefined method Illuminate\\Database\\ConnectionInterface\:\:getTablePrefix\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: src/Message.php
 
 		-
 			message: '#^Property Ramon\\Chat\\Message\:\:\$number \(int\|null\) does not accept Illuminate\\Database\\Query\\Expression\<float\|int\|string\>\.$#'

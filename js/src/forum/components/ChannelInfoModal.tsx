@@ -13,13 +13,30 @@ import userLink from "../utils/userLink";
 
 import type Channel from "../../common/models/Channel";
 import { NotificationLevel } from "../../common/models/Channel";
+import type { OwnershipTransferState } from "../../common/models/Channel";
 import chatState from "../state/chat";
 import { isOnline } from "../utils/presence";
 import { MembersSkeleton } from "./Skeletons";
 import { channelIcon } from "../utils/channelIcon";
 import { sendKeyPreference, type SendKey } from "../utils/shortcuts";
-import AddMembersModal from "./AddMembersModal";
 import iconLabel from "../utils/iconLabel";
+import { loadAddMembersModal } from "../utils/lazy";
+import TransferCodeModal from "./TransferCodeModal";
+import {
+  acceptTransfer,
+  cancelTransfer,
+  declineTransfer,
+  startTransfer,
+} from "../utils/transfers";
+import { invitationErrorText } from "../utils/invitations";
+import ChannelRanksTab, { rankRequest } from "./ChannelRanksTab";
+import {
+  displayedRank,
+  heldRankIds,
+  rankName,
+  rankNameAttrs,
+  rankTag,
+} from "../utils/ranks";
 
 export interface ChannelInfoModalAttrs extends IInternalModalAttrs {
   channel: Channel;
@@ -35,10 +52,29 @@ export interface ChannelInfoModalAttrs extends IInternalModalAttrs {
  * flag — so a plain member gets a useful panel rather than a locked one.
  */
 export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
-  private tab: "settings" | "members" = "settings";
+  private tab: "settings" | "members" | "ranks" = "settings";
+
+  /** Whose ranks are open for editing in the members tab, or null. */
+  private assigningUserId: string | null = null;
   private members: User[] = [];
+
+  /**
+   * Who holds the channel's moderator role, as of the last read of the member
+   * list or the last promotion. Kept here rather than read off the store's
+   * record: every other read of the channel comes without the member list and
+   * answers this empty, so a capability refresh landing while the tab was open
+   * wiped every badge from it.
+   */
+  private moderatorIds: number[] = [];
   /** People invited and not yet answered. Served to managers only. */
   private invited: User[] = [];
+
+  /**
+   * The pending ownership handover, as the server shows it to this reader:
+   * the owner's own (waiting for the code, or for the answer), or the one
+   * offered to this reader. Read with the member list, like `moderatorIds`.
+   */
+  private transfer: OwnershipTransferState | null = null;
   private loadingMembers = false;
   private loadedMembers = false;
   private memberFilter = "";
@@ -55,7 +91,7 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
    * started something — and driving them all from the one flag meant changing
    * the notification level spun Close and Archive along with it.
    */
-  private pending: "status" | "archive" | "delete" | null = null;
+  private pending: "status" | "archive" | "unarchive" | "delete" | null = null;
 
   className(): string {
     return "ChatModal ChatChannelInfoModal Modal--medium";
@@ -78,15 +114,22 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
         <div className="ChatChannelInfo-tabs">
           {this.tabButton("settings", "ramon-chat.forum.info.tab_settings")}
           {this.tabButton("members", "ramon-chat.forum.info.tab_members")}
+          {this.attrs.channel.canManageRanks()
+            ? this.tabButton("ranks", "ramon-chat.forum.ranks.tab")
+            : null}
         </div>
 
-        {this.tab === "settings" ? this.settings() : this.memberTab()}
+        {this.tab === "settings"
+          ? this.settings()
+          : this.tab === "ranks"
+            ? ChannelRanksTab.component({ channel: this.attrs.channel })
+            : this.memberTab()}
       </div>
     );
   }
 
   protected tabButton(
-    tab: "settings" | "members",
+    tab: "settings" | "members" | "ranks",
     key: string,
   ): Mithril.Children {
     return (
@@ -274,7 +317,7 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
     const channel = this.attrs.channel;
     const items: Mithril.Children[] = [];
 
-    if (channel.canClose()) {
+    if (channel.canClose() && !channel.isArchived()) {
       const closed = channel.status() === "closed";
 
       items.push(
@@ -294,7 +337,7 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
       );
     }
 
-    if (channel.canArchive() && !channel.archivedAt()) {
+    if (channel.canArchive() && !channel.isArchived()) {
       items.push(
         <Button
           className="Button"
@@ -304,6 +347,23 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
           onclick={() => this.archive()}
         >
           {app.translator.trans("ramon-chat.forum.info.archive_channel")}
+        </Button>,
+      );
+    }
+
+    // Read from the status, not from `archivedAt`. The stamps used to survive a
+    // channel being reopened by status, and a channel that still carried them
+    // never offered the archive action again.
+    if (channel.isArchived() && channel.canUnarchive()) {
+      items.push(
+        <Button
+          className="Button"
+          icon="fas fa-box-open"
+          loading={this.pending === "unarchive"}
+          disabled={this.working}
+          onclick={() => this.unarchive()}
+        >
+          {app.translator.trans("ramon-chat.forum.info.unarchive_channel")}
         </Button>,
       );
     }
@@ -384,6 +444,8 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
           </p>
         ) : null}
 
+        {this.transferBanner()}
+
         <input
           className="FormControl ChatChannelInfo-filter"
           type="search"
@@ -399,17 +461,27 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
         />
 
         <div className="ChatChannelInfo-memberList">
+          {/* One keyed item per member, holding the row and, while open, the
+              member's ranks under it: a keyed list may not have holes. */}
           {shown.map((user) => (
-            <div
-              key={user.id()}
-              className={classList("ChatChannelInfo-member", {
-                "ChatChannelInfo-member--online": isOnline(user),
-              })}
-            >
-              <Avatar user={user} className="Avatar" />
-              <span>{userLink(user)}</span>
-              {this.memberBadge(user)}
-              {this.memberControls(user)}
+            <div key={user.id()} className="ChatChannelInfo-memberItem">
+              <div
+                className={classList("ChatChannelInfo-member", {
+                  "ChatChannelInfo-member--online": isOnline(user),
+                })}
+              >
+                <Avatar user={user} className="Avatar" />
+                <span {...rankNameAttrs(this.rankOf(user))}>
+                  {userLink(user)}
+                </span>
+                {this.memberBadge(user)}
+                {this.rankControl(user)}
+                {this.memberControls(user)}
+              </div>
+
+              {this.assigningUserId === user.id()
+                ? this.rankPicker(user)
+                : null}
             </div>
           ))}
 
@@ -533,13 +605,34 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
   }
 
   protected isModerator(user: User): boolean {
-    return (this.attrs.channel.moderatorIds() ?? []).some(
-      (id) => Number(id) === Number(user.id()),
-    );
+    return this.moderatorIds.some((id) => Number(id) === Number(user.id()));
   }
 
-  /** The owner's and channel moderators' labels, so the roles are visible to everyone. */
+  /** The rank shown for a member, from the channel's rank book. */
+  protected rankOf(user: User) {
+    const book = this.attrs.channel.rankBook?.();
+
+    return book && Array.isArray(book.ranks)
+      ? displayedRank(book, Number(user.id()))
+      : null;
+  }
+
+  /**
+   * The member's rank, the way author lines draw it: a tag, or nothing here
+   * when the rank colours the name instead. Without a rank book — a direct
+   * conversation has none — the role labels the list always had.
+   */
   protected memberBadge(user: User): Mithril.Children {
+    const book = this.attrs.channel.rankBook?.();
+
+    if (book && Array.isArray(book.ranks)) {
+      const rank = displayedRank(book, Number(user.id()));
+
+      return rank?.showBadge
+        ? rankTag(rank, "ChatChannelInfo-memberRank")
+        : null;
+    }
+
     if (this.isOwner(user)) {
       return (
         <span className="ChatChannelInfo-member-badge ChatChannelInfo-member-badge--owner">
@@ -550,13 +643,131 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
 
     if (this.isModerator(user)) {
       return (
-        <span className="ChatChannelInfo-member-badge">
+        <span className="ChatChannelInfo-member-badge ChatChannelInfo-member-badge--moderator">
           {app.translator.trans("ramon-chat.forum.info.moderator_badge")}
         </span>
       );
     }
 
     return null;
+  }
+
+  /**
+   * Opens the member's ranks, for whoever manages them. Offered for oneself
+   * too: a chat moderator running another person's room may wear a rank there.
+   */
+  protected rankControl(user: User): Mithril.Children {
+    if (!this.attrs.channel.canManageRanks()) return null;
+
+    const open = this.assigningUserId === user.id();
+
+    return (
+      <Button
+        className={classList(
+          "Button Button--icon Button--flat ChatChannelInfo-member-ranks",
+          { active: open },
+        )}
+        icon="fas fa-tags"
+        disabled={this.working}
+        aria-expanded={open ? "true" : "false"}
+        {...iconLabel(
+          app.translator.trans(
+            "ramon-chat.forum.ranks.assign",
+            { username: username(user) },
+            true,
+          ),
+        )}
+        onclick={() => {
+          this.assigningUserId = open ? null : (user.id() as string);
+        }}
+      />
+    );
+  }
+
+  /**
+   * The owner's ranks as a checklist under the member's row. Each tick saves
+   * at once, the whole set: the server answers with the rank book, which
+   * redraws this list, the member's tag and every author line together.
+   */
+  protected rankPicker(user: User): Mithril.Children {
+    const book = this.attrs.channel.rankBook?.();
+    const custom =
+      book && Array.isArray(book.ranks)
+        ? book.ranks.filter((rank) => rank.builtin === null)
+        : [];
+    const held = book ? heldRankIds(book, Number(user.id())) : [];
+
+    return (
+      <div
+        className="ChatChannelInfo-rankPicker"
+        role="group"
+        aria-label={app.translator.trans(
+          "ramon-chat.forum.ranks.assign",
+          { username: username(user) },
+          true,
+        )}
+      >
+        {custom.length === 0 ? (
+          <span className="helpText">
+            {app.translator.trans("ramon-chat.forum.ranks.assign_empty")}
+          </span>
+        ) : (
+          custom.map((rank) => {
+            const checked = held.includes(Number(rank.id));
+
+            return (
+              <label
+                key={rank.key}
+                className={classList("ChatChannelInfo-rankOption", {
+                  "ChatChannelInfo-rankOption--checked": checked,
+                })}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  disabled={this.working}
+                  onchange={() =>
+                    this.assignRanks(
+                      user,
+                      checked
+                        ? held.filter((id) => id !== Number(rank.id))
+                        : [...held, Number(rank.id)],
+                    )
+                  }
+                />
+                {rank.showBadge ? (
+                  rankTag(rank)
+                ) : (
+                  <span {...rankNameAttrs(rank)}>{rankName(rank)}</span>
+                )}
+              </label>
+            );
+          })
+        )}
+      </div>
+    );
+  }
+
+  protected async assignRanks(user: User, rankIds: number[]): Promise<void> {
+    if (this.working) return;
+
+    this.working = true;
+    m.redraw();
+
+    try {
+      await rankRequest(this.attrs.channel.id() as string, "/assign", {
+        userId: Number(user.id()),
+        rankIds,
+      });
+    } catch (e: any) {
+      app.alerts.show(
+        { type: "error" },
+        invitationErrorText(e, "ramon-chat.forum.ranks.save_failed"),
+      );
+    } finally {
+      this.working = false;
+      m.redraw();
+    }
   }
 
   /**
@@ -594,6 +805,27 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
       );
     }
 
+    // Handing the channel over. Offered to its owner (and administrators) for
+    // anyone else in the list; the server still decides whether that member
+    // may own channels, and says so if not.
+    if (channel.canTransferOwnership() && !this.isOwner(user)) {
+      controls.push(
+        <Button
+          className="Button Button--icon Button--flat ChatChannelInfo-member-transfer"
+          icon="fas fa-crown"
+          disabled={this.working}
+          {...iconLabel(
+            app.translator.trans(
+              "ramon-chat.forum.info.transfer_ownership",
+              { username: username(user) },
+              true,
+            ),
+          )}
+          onclick={() => this.startTransfer(user)}
+        />,
+      );
+    }
+
     if (channel.canManageMembers()) {
       controls.push(
         <Button
@@ -616,12 +848,256 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
   }
 
   /**
+   * The pending handover, with what this reader can do about it: the owner
+   * enters the code or cancels; the member it is offered to accepts or
+   * declines, the same two answers the notification row carries.
+   */
+  protected transferBanner(): Mithril.Children {
+    const transfer = this.transfer;
+
+    if (!transfer) return null;
+
+    let text: Mithril.Children;
+    const actions: Mithril.Children[] = [];
+
+    if (transfer.incoming) {
+      text = app.translator.trans("ramon-chat.forum.info.transfer_incoming", {
+        username: this.userName(transfer.fromUserId),
+      });
+
+      actions.push(
+        <Button
+          className="Button Button--primary Button--compact"
+          icon="fas fa-check"
+          disabled={this.working}
+          onclick={() => this.answerTransfer(true)}
+        >
+          {app.translator.trans("ramon-chat.forum.notifications.invite_accept")}
+        </Button>,
+        <Button
+          className="Button Button--compact"
+          icon="fas fa-xmark"
+          disabled={this.working}
+          onclick={() => this.answerTransfer(false)}
+        >
+          {app.translator.trans(
+            "ramon-chat.forum.notifications.invite_decline",
+          )}
+        </Button>,
+      );
+    } else {
+      const recipient = this.userName(transfer.toUserId);
+
+      text = app.translator.trans(
+        transfer.confirmed
+          ? "ramon-chat.forum.info.transfer_pending_answer"
+          : "ramon-chat.forum.info.transfer_pending_code",
+        { username: recipient },
+      );
+
+      if (
+        !transfer.confirmed &&
+        String(transfer.fromUserId) === String(app.session.user?.id())
+      ) {
+        actions.push(
+          <Button
+            className="Button Button--primary Button--compact"
+            icon="fas fa-key"
+            disabled={this.working}
+            onclick={() => this.openCodeModal(recipient)}
+          >
+            {app.translator.trans("ramon-chat.forum.info.transfer_enter_code")}
+          </Button>,
+        );
+      }
+
+      actions.push(
+        <Button
+          className="Button Button--compact"
+          icon="fas fa-xmark"
+          disabled={this.working}
+          onclick={() => this.cancelTransfer()}
+        >
+          {app.translator.trans("ramon-chat.forum.info.transfer_cancel")}
+        </Button>,
+      );
+    }
+
+    return (
+      <div className="ChatChannelInfo-transfer">
+        <i className="fas fa-crown" aria-hidden="true" />
+        <span className="ChatChannelInfo-transfer-text">{text}</span>
+        <span className="ChatChannelInfo-transfer-actions">{actions}</span>
+      </div>
+    );
+  }
+
+  /** A member's display name by id, from the list or the store. */
+  protected userName(id: number): string {
+    const user =
+      this.members.find((member) => Number(member.id()) === Number(id)) ??
+      (app.store.getById("users", String(id)) as User | undefined);
+
+    return user
+      ? user.displayName()
+      : (app.translator.trans(
+          "ramon-chat.forum.notifications.someone",
+          {},
+          true,
+        ) as string);
+  }
+
+  /**
+   * First step: asked once, then the server mails the owner a code and the
+   * code dialog opens over this one.
+   */
+  protected async startTransfer(user: User): Promise<void> {
+    if (this.working) return;
+
+    const confirmed = confirm(
+      app.translator.trans(
+        "ramon-chat.forum.info.transfer_confirm_start",
+        {
+          channel: this.attrs.channel.displayName(),
+          username: username(user),
+        },
+        true,
+      ),
+    );
+
+    if (!confirmed) return;
+
+    this.working = true;
+    m.redraw();
+
+    try {
+      const channel = await startTransfer(
+        this.attrs.channel.id() as string,
+        Number(user.id()),
+      );
+
+      this.adoptMembers(channel);
+      this.openCodeModal(user.displayName());
+    } catch (e: any) {
+      app.alerts.show(
+        { type: "error" },
+        invitationErrorText(e, "ramon-chat.forum.info.transfer_failed"),
+      );
+    } finally {
+      this.working = false;
+      m.redraw();
+    }
+  }
+
+  protected openCodeModal(recipientName: string): void {
+    app.modal.show(
+      TransferCodeModal,
+      {
+        channel: this.attrs.channel,
+        recipientName,
+        onConfirmed: (channel: Channel | null) => {
+          if (channel) {
+            this.adoptMembers(channel);
+          } else {
+            this.reloadMembers();
+          }
+        },
+      },
+      true,
+    );
+  }
+
+  protected async cancelTransfer(): Promise<void> {
+    if (this.working) return;
+
+    this.working = true;
+    m.redraw();
+
+    try {
+      this.adoptMembers(
+        await cancelTransfer(this.attrs.channel.id() as string),
+      );
+
+      app.alerts.show(
+        { type: "success" },
+        app.translator.trans("ramon-chat.forum.info.transfer_cancelled"),
+      );
+    } catch (e: any) {
+      app.alerts.show(
+        { type: "error" },
+        invitationErrorText(e, "ramon-chat.forum.info.transfer_failed"),
+      );
+      this.reloadMembers();
+    } finally {
+      this.working = false;
+      m.redraw();
+    }
+  }
+
+  protected async answerTransfer(accept: boolean): Promise<void> {
+    if (this.working) return;
+
+    this.working = true;
+    m.redraw();
+
+    try {
+      const id = this.attrs.channel.id() as string;
+
+      this.adoptMembers(
+        await (accept ? acceptTransfer(id) : declineTransfer(id)),
+      );
+
+      app.alerts.show(
+        { type: "success" },
+        app.translator.trans(
+          accept
+            ? "ramon-chat.forum.info.transfer_accepted"
+            : "ramon-chat.forum.info.transfer_declined",
+        ),
+      );
+    } catch (e: any) {
+      app.alerts.show(
+        { type: "error" },
+        invitationErrorText(e, "ramon-chat.forum.info.transfer_failed"),
+      );
+      this.reloadMembers();
+    } finally {
+      this.working = false;
+      m.redraw();
+    }
+  }
+
+  /**
+   * Redraws the tab from a channel the server answered with, members and all.
+   * The transfer endpoints include participants, so the badges, the role list
+   * and the pending handover all come from that one answer.
+   */
+  protected adoptMembers(channel: Channel | null): void {
+    if (!channel) {
+      this.reloadMembers();
+
+      return;
+    }
+
+    this.members = (channel.participants() || []).filter(Boolean) as User[];
+    this.moderatorIds = (channel.moderatorIds() ?? []).map(Number);
+    this.transfer = channel.ownershipTransfer() ?? null;
+  }
+
+  protected reloadMembers(): void {
+    this.loadedMembers = false;
+    void this.loadMembers();
+  }
+
+  /**
    * Hands the channel's moderator role to a member, or takes it back.
    *
    * The response carries the channel with its participants, so pushing it
    * refreshes `moderatorIds` on the very model this modal is drawing from.
    */
   protected async setModerator(user: User, moderator: boolean): Promise<void> {
+    if (this.working) return;
+
     this.working = true;
     m.redraw();
 
@@ -633,6 +1109,11 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
       });
 
       if (payload?.data) app.store.pushPayload(payload);
+
+      // The answer the server gave, which is what the row is drawn from.
+      const ids = payload?.data?.attributes?.moderatorIds;
+
+      if (Array.isArray(ids)) this.moderatorIds = ids.map(Number);
 
       app.alerts.show(
         { type: "success" },
@@ -669,7 +1150,7 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
    */
   protected openAddMembers(): void {
     app.modal.show(
-      AddMembersModal,
+      loadAddMembersModal,
       {
         channel: this.attrs.channel,
         // Both lists: the picker shows them marked rather than offering them,
@@ -787,10 +1268,13 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
       )) as unknown as Channel;
 
       this.members = (channel.participants() || []).filter(Boolean) as User[];
+      this.moderatorIds = (channel.moderatorIds() ?? []).map(Number);
       this.invited = (channel.invitedUsers() || []).filter(Boolean) as User[];
+      this.transfer = channel.ownershipTransfer() ?? null;
     } catch {
       this.members = [];
       this.invited = [];
+      this.transfer = null;
     } finally {
       this.loadingMembers = false;
       this.loadedMembers = true;
@@ -908,6 +1392,14 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
     );
   }
 
+  protected async unarchive(): Promise<void> {
+    await this.act(
+      "unarchive",
+      `/chat-channels/${this.attrs.channel.id()}/unarchive`,
+      {},
+    );
+  }
+
   protected async destroy(): Promise<void> {
     if (
       !confirm(
@@ -950,7 +1442,7 @@ export default class ChannelInfoModal extends Modal<ChannelInfoModalAttrs> {
    * still gates every other control, so nothing else can be started meanwhile.
    */
   protected async act(
-    action: "status" | "archive",
+    action: "status" | "archive" | "unarchive",
     path: string,
     attributes: Record<string, unknown>,
   ): Promise<void> {

@@ -18,40 +18,29 @@ import MessageFlag from "../common/models/MessageFlag";
 import chatState from "./state/chat";
 import ChatState from "./state/ChatState";
 import ChatNavButton from "./components/ChatNavButton";
-import ChatDrawer from "./components/ChatDrawer";
-import ChatPage from "./components/ChatPage";
-import ChatSidebar from "./components/ChatSidebar";
-import ChannelView from "./components/ChannelView";
-import ThreadPanel from "./components/ThreadPanel";
-import PinnedPanel from "./components/PinnedPanel";
-import ThreadsList from "./components/ThreadsList";
-import ChatSearch from "./components/ChatSearch";
-import ChatMessage from "./components/ChatMessage";
-import ChatComposer from "./components/ChatComposer";
-import BrowseChannelsPage from "./components/BrowseChannelsPage";
-import ChannelFormModal from "./components/ChannelFormModal";
+import ChatDrawer, { loadDrawerPanel } from "./components/ChatDrawer";
 import ChannelInviteNotification from "./components/ChannelInviteNotification";
 import ChannelInviteDeclinedNotification from "./components/ChannelInviteDeclinedNotification";
 import MessageFlaggedNotification from "./components/MessageFlaggedNotification";
-import ChannelInfoModal from "./components/ChannelInfoModal";
-import AddMembersModal from "./components/AddMembersModal";
-import MessageTooLongModal from "./components/MessageTooLongModal";
-import ChatSelectionBar from "./components/ChatSelectionBar";
-import ChatAutocomplete from "./components/ChatAutocomplete";
-import RevisionsModal from "./components/RevisionsModal";
-import FlagMessageModal from "./components/FlagMessageModal";
-import FlaggedMessagesList from "./components/FlaggedMessagesList";
+import ModeratorPromotedNotification from "./components/ModeratorPromotedNotification";
+import OwnershipTransferNotification from "./components/OwnershipTransferNotification";
+import OwnershipTransferDeclinedNotification from "./components/OwnershipTransferDeclinedNotification";
+import OwnershipInheritedNotification from "./components/OwnershipInheritedNotification";
 import {
   bindRealtime,
   setPollingFallback,
+  setConnectionHandlers,
   realtimeBound,
   realtimeDelivered,
+  realtimeLive,
 } from "./realtime";
 import { bindShortcuts } from "./utils/shortcuts";
+import { installComposerStacking } from "./utils/stacking";
 import { shouldUseChatDrawer } from "./utils/surface";
 import { chatTitle, chatIcon } from "./utils/branding";
 import ChatPageResolver from "./resolvers/ChatPageResolver";
 import bindFlagsIntegration from "./utils/flagsIntegration";
+import { loadChatUi } from "./utils/lazy";
 
 export {
   Channel,
@@ -63,36 +52,23 @@ export {
   chatState,
   ChatNavButton,
   ChatDrawer,
-  ChatPage,
-  ChatSidebar,
-  ChannelView,
-  ThreadPanel,
-  PinnedPanel,
-  ThreadsList,
-  ChatSearch,
-  ChatMessage,
-  ChatComposer,
-  BrowseChannelsPage,
-  ChannelFormModal,
   ChannelInviteNotification,
   ChannelInviteDeclinedNotification,
   MessageFlaggedNotification,
-  ChannelInfoModal,
-  AddMembersModal,
-  MessageTooLongModal,
-  ChatSelectionBar,
-  ChatAutocomplete,
-  RevisionsModal,
-  FlagMessageModal,
-  FlaggedMessagesList,
+  ModeratorPromotedNotification,
+  OwnershipTransferNotification,
+  OwnershipTransferDeclinedNotification,
+  OwnershipInheritedNotification,
   // Exported for diagnosis: in the console,
-  //   flarum.reg.get('ramon-chat', 'forum/index').realtimeBound()
+  //   flarum.extensions['ramon-chat'].realtimeBound()
   // tells you whether the chat is on the websocket or on the polling fallback.
   realtimeBound,
   // And whether anything has ever arrived over it. `realtimeBound() === true`
   // with `realtimeDelivered() === false` after some traffic is the signature of a
   // forum whose PHP process cannot reach the websocket daemon.
   realtimeDelivered,
+  // Connected and proven: the state in which the poller stands down.
+  realtimeLive,
 };
 
 /**
@@ -120,13 +96,14 @@ const POLL_INTERVAL = 3000;
 const POLL_INTERVAL_UNPROVEN = 15000;
 
 /**
- * Polling interval once the socket has actually delivered something.
+ * Polling interval once the socket is connected and has proven it delivers.
  *
- * At that point pushes demonstrably work end to end and this is a backstop for a
- * daemon that dies mid-session, so it is deliberately slow enough to be
- * negligible: one conditional request a minute per open chat tab.
+ * Effectively off. A dropped connection is no longer something this has to
+ * notice on its own — the socket's state change restarts the poller at once and
+ * a reconnect catches up immediately — so what is left is a deep backstop for an
+ * event lost while everything looked healthy.
  */
-const POLL_INTERVAL_PROVEN = 60000;
+const POLL_INTERVAL_PROVEN = 300000;
 
 /**
  * Floor between two refreshes of the channel list, whatever the poll rate is.
@@ -187,7 +164,17 @@ app.initializers.add("ramon-chat", () => {
   // between them redraws instead of remounting — see ChatPageResolver. Without it
   // opening a thread or switching channel tore the page down and rebuilt it, which
   // reads as a full reload.
-  const chatPage = { component: ChatPage, resolverClass: ChatPageResolver };
+  //
+  // The page itself is code-split: everything it renders lives in the chatUi
+  // chunk, which the header button prefetches on hover and the app warms once
+  // idle. The resolver's constant key still holds, because the loader resolves
+  // to the same class every time.
+  const chatPage = {
+    component: () => loadChatUi().then((ui) => ({ default: ui.ChatPage })),
+    resolverClass: ChatPageResolver,
+  };
+  const browsePage = () =>
+    loadChatUi().then((ui) => ({ default: ui.BrowseChannelsPage }));
 
   app.routes["chat.index"] = { path: "/chat", ...chatPage };
   app.routes["chat.channel"] = { path: "/chat/c/:id", ...chatPage };
@@ -200,12 +187,21 @@ app.initializers.add("ramon-chat", () => {
   // A genuinely separate page, so it keeps the default resolver.
   app.routes["chat.browse"] = {
     path: "/chat/browse",
-    component: BrowseChannelsPage,
+    component: browsePage,
   };
   app.routes["chat.browse.filter"] = {
     path: "/chat/browse/:filter",
-    component: BrowseChannelsPage,
+    component: browsePage,
   };
+
+  // Warm the chat UI once the forum is idle, so the first open does not wait on
+  // the chunk. Checked at drain time, which is after mount, when the session is
+  // known: a guest or an opted-out member never downloads it.
+  app.prefetch?.add(
+    "ramon-chat-ui",
+    () => (canUseChat() ? loadChatUi() : Promise.resolve()),
+    -10,
+  );
 
   // ── Notifications ─────────────────────────────────────────────────────────
   // The component that renders the alert, and the row in the user's notification
@@ -214,6 +210,14 @@ app.initializers.add("ramon-chat", () => {
   app.notificationComponents.chatChannelInviteDeclined =
     ChannelInviteDeclinedNotification;
   app.notificationComponents.chatMessageFlagged = MessageFlaggedNotification;
+  app.notificationComponents.chatModeratorPromoted =
+    ModeratorPromotedNotification;
+  app.notificationComponents.chatOwnershipTransfer =
+    OwnershipTransferNotification;
+  app.notificationComponents.chatOwnershipTransferDeclined =
+    OwnershipTransferDeclinedNotification;
+  app.notificationComponents.chatOwnershipInherited =
+    OwnershipInheritedNotification;
 
   extend(
     "flarum/forum/components/NotificationGrid",
@@ -232,6 +236,38 @@ app.initializers.add("ramon-chat", () => {
         icon: "fas fa-user-xmark",
         label: app.translator.trans(
           "ramon-chat.forum.settings.notify_channel_invite_declined",
+        ),
+      });
+
+      items.add("chatModeratorPromoted", {
+        name: "chatModeratorPromoted",
+        icon: "fas fa-user-shield",
+        label: app.translator.trans(
+          "ramon-chat.forum.settings.notify_moderator_promoted",
+        ),
+      });
+
+      items.add("chatOwnershipTransfer", {
+        name: "chatOwnershipTransfer",
+        icon: "fas fa-crown",
+        label: app.translator.trans(
+          "ramon-chat.forum.settings.notify_ownership_transfer",
+        ),
+      });
+
+      items.add("chatOwnershipTransferDeclined", {
+        name: "chatOwnershipTransferDeclined",
+        icon: "fas fa-user-xmark",
+        label: app.translator.trans(
+          "ramon-chat.forum.settings.notify_ownership_transfer_declined",
+        ),
+      });
+
+      items.add("chatOwnershipInherited", {
+        name: "chatOwnershipInherited",
+        icon: "fas fa-crown",
+        label: app.translator.trans(
+          "ramon-chat.forum.settings.notify_ownership_inherited",
         ),
       });
 
@@ -360,6 +396,13 @@ app.initializers.add("ramon-chat", () => {
       // client subscribes fine while the server cannot reach the daemon, so
       // nothing is ever pushed and nothing ever notices.
       setPollingFallback(startPolling);
+      setConnectionHandlers({
+        reconnect: () => {
+          lastChannelPoll = 0;
+          poll();
+        },
+        change: () => reschedulePolling(),
+      });
       bindRealtime();
       startPolling();
 
@@ -371,11 +414,13 @@ app.initializers.add("ramon-chat", () => {
       document.addEventListener("visibilitychange", () => {
         if (document.hidden) {
           chatState.flushSnapshot();
-        } else {
+        } else if (!realtimeLive()) {
           poll();
         }
       });
-      window.addEventListener("online", () => poll());
+      window.addEventListener("online", () => {
+        if (!realtimeLive()) poll();
+      });
       window.addEventListener("pagehide", () => chatState.flushSnapshot());
 
       // ── Drawer ────────────────────────────────────────────────────────────
@@ -384,6 +429,7 @@ app.initializers.add("ramon-chat", () => {
       mountDrawer();
 
       bindShortcuts();
+      installComposerStacking();
 
       // Chat reports in flarum/flags' own list, when that extension is present.
       bindFlagsIntegration();
@@ -391,6 +437,8 @@ app.initializers.add("ramon-chat", () => {
       // Reopen it if the last visit left it open. Dismissal is deliberate: only
       // the close button (and switching to the full-screen page) clears this.
       if (chatState.restoreDrawer()) {
+        loadDrawerPanel().catch(() => {});
+
         Promise.all([chatState.loadChannels(), chatState.loadDrafts()])
           .catch(() => {})
           .then(() => m.redraw());
@@ -570,15 +618,29 @@ function startPolling(): void {
   if (polling) return;
 
   polling = true;
+  schedulePoll();
+}
 
-  const schedule = () => {
-    window.setTimeout(() => {
-      poll();
-      schedule();
-    }, pollInterval());
-  };
+let pollTimer: number | null = null;
 
-  schedule();
+function schedulePoll(): void {
+  pollTimer = window.setTimeout(() => {
+    poll();
+    schedulePoll();
+  }, pollInterval());
+}
+
+/**
+ * Restarts the countdown at the current rate. Called when the socket drops or
+ * comes back, so a disconnected client does not sit out a five-minute timeout
+ * scheduled while it was live.
+ */
+function reschedulePolling(): void {
+  if (!polling) return;
+
+  if (pollTimer !== null) window.clearTimeout(pollTimer);
+
+  schedulePoll();
 }
 
 /**
@@ -588,7 +650,9 @@ function startPolling(): void {
 function pollInterval(): number {
   if (!realtimeBound()) return POLL_INTERVAL;
 
-  return realtimeDelivered() ? POLL_INTERVAL_PROVEN : POLL_INTERVAL_UNPROVEN;
+  if (realtimeLive()) return POLL_INTERVAL_PROVEN;
+
+  return realtimeDelivered() ? POLL_INTERVAL : POLL_INTERVAL_UNPROVEN;
 }
 
 /** When the channel list was last refreshed; see CHANNEL_POLL_INTERVAL. */
@@ -600,7 +664,7 @@ function poll(): void {
   if (!chatState.channelsLoaded) return;
 
   const now = Date.now();
-  const channelFloor = realtimeDelivered()
+  const channelFloor = realtimeLive()
     ? CHANNEL_POLL_INTERVAL_PROVEN
     : CHANNEL_POLL_INTERVAL;
 

@@ -17,7 +17,17 @@ const suites = [
   "join-composer.mjs",
   "invite-modal.mjs",
   "membership-live.mjs",
+  "realtime-live.mjs",
+  "pinned-jump.mjs",
+  "transitions.mjs",
+  "channel-gone.mjs",
+  "channel-status.mjs",
+  "live-state.mjs",
+  "slow-mode-owner.mjs",
+  "ownership-transfer.mjs",
+  "ranks.mjs",
   "admin-page.mjs",
+  "permissions.mjs",
 ].filter((name) =>
   name.includes(filter),
 );

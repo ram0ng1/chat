@@ -3,13 +3,15 @@ import Component from "flarum/common/Component";
 import type { ComponentAttrs } from "flarum/common/Component";
 import Button from "flarum/common/components/Button";
 import classList from "flarum/common/utils/classList";
+import { realtimeLive } from "../realtime";
 import type Mithril from "mithril";
 
 import type Channel from "../../common/models/Channel";
 import type ChatState from "../state/ChatState";
 import { SidebarSkeleton } from "./Skeletons";
-import ChannelFormModal from "./ChannelFormModal";
 import { channelIcon } from "../utils/channelIcon";
+import { loadChannelFormModal } from "../utils/lazy";
+import { isOnline } from "../utils/presence";
 
 export interface ChatSidebarAttrs extends ComponentAttrs {
   state: ChatState;
@@ -27,14 +29,78 @@ interface SectionAction {
  * Channel navigation: My Threads, Search, then the Channels and Direct Messages
  * sections — the same order and grouping as Discourse's chat sidebar.
  */
+/** How many unread channels are warmed in the background per page load. */
+const WARM_LIMIT = 3;
+
+/** Channels already warmed, so remounting the sidebar does not repeat it. */
+const warmed = new Set<number>();
+
+function whenIdle(fn: () => void, fallbackMs: number): void {
+  const idle = (
+    window as Window & {
+      requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number;
+    }
+  ).requestIdleCallback;
+
+  if (idle) {
+    window.setTimeout(() => idle(fn, { timeout: 2000 }), fallbackMs);
+  } else {
+    window.setTimeout(fn, fallbackMs);
+  }
+}
+
 export default class ChatSidebar extends Component<ChatSidebarAttrs> {
   /** Pending hover-intent timer; see the pointer handlers on a channel row. */
   private prefetchTimer: number | null = null;
+
+  oncreate(vnode: Mithril.VnodeDOM<ChatSidebarAttrs, this>): void {
+    super.oncreate(vnode);
+
+    this.warmUnread();
+  }
+
+  onupdate(vnode: Mithril.VnodeDOM<ChatSidebarAttrs, this>): void {
+    super.onupdate(vnode);
+
+    this.warmUnread();
+  }
 
   onremove(vnode: Mithril.VnodeDOM<ChatSidebarAttrs, this>): void {
     super.onremove(vnode);
 
     this.cancelPrefetch();
+  }
+
+  /**
+   * Loads the conversations someone is most likely to open next — the unread
+   * ones, mentions first — while the browser is idle, so the click lands on
+   * messages already drawn. Only while the websocket is live: that is what keeps
+   * a stream loaded in the background current until it is opened.
+   */
+  protected warmUnread(): void {
+    const { state } = this.attrs;
+
+    if (!state.channelsLoaded || !realtimeLive()) return;
+
+    const candidates = [...state.categoryChannels(), ...state.directChannels()]
+      .filter(
+        (channel) =>
+          channel.hasUnread() &&
+          Number(channel.id()) !== state.activeChannelId &&
+          !warmed.has(Number(channel.id())),
+      )
+      .sort(
+        (a, b) =>
+          (b.unreadMentionsCount() ?? 0) - (a.unreadMentionsCount() ?? 0),
+      )
+      .slice(0, Math.max(0, WARM_LIMIT - warmed.size));
+
+    candidates.forEach((channel, index) => {
+      const id = Number(channel.id());
+
+      warmed.add(id);
+      whenIdle(() => state.prefetchChannel(id), 400 * (index + 1));
+    });
   }
 
   view(): Mithril.Children {
@@ -275,6 +341,8 @@ export default class ChatSidebar extends Component<ChatSidebarAttrs> {
         className={classList("ChatChannelRow", {
           "ChatChannelRow--active": active,
           "ChatChannelRow--muted": channel.isMuted(),
+          "ChatChannelRow--online":
+            channel.isDirect() && isOnline(channel.others()[0]),
         })}
         onclick={() => onSelect?.(channel)}
         // Hover intent, not hover: sweeping the pointer down the list to reach
@@ -282,6 +350,11 @@ export default class ChatSidebar extends Component<ChatSidebarAttrs> {
         // 120ms is long enough that only a pointer that stopped here counts.
         onpointerenter={() => this.schedulePrefetch(channel)}
         onpointerleave={() => this.cancelPrefetch()}
+        // The press itself, a hundred-odd milliseconds before `click` fires —
+        // and the only head start a touchscreen gets, having no hover.
+        onpointerdown={() =>
+          this.attrs.state.prefetchChannel(Number(channel.id()))
+        }
         // Keyboard arrives without a pointer, and a channel reached by tabbing
         // deserves the same head start.
         onfocus={() => this.attrs.state.prefetchChannel(Number(channel.id()))}
@@ -371,7 +444,7 @@ export default class ChatSidebar extends Component<ChatSidebarAttrs> {
   }
 
   protected createChannel(): void {
-    app.modal.show(ChannelFormModal, {
+    app.modal.show(loadChannelFormModal, {
       onSaved: (channel: Channel) => {
         this.attrs.state.setActiveChannel(Number(channel.id()));
         m.route.set(app.route("chat.channel", { id: channel.id() }));
