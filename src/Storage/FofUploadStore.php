@@ -12,10 +12,13 @@ namespace Ramon\Chat\Storage;
 use Flarum\Settings\SettingsRepositoryInterface;
 use FoF\Upload\Adapters\Flysystem;
 use FoF\Upload\Adapters\Manager;
-use FoF\Upload\Downloader\DefaultDownloader;
+use Flarum\Foundation\Paths;
 use FoF\Upload\File;
 use FoF\Upload\Helpers\Util;
+use GuzzleHttp\Client;
+use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Psr7\StreamWrapper;
+use GuzzleHttp\Psr7\Utils;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Support\Str;
 use Ramon\Chat\Upload;
@@ -44,6 +47,13 @@ use Ramon\Chat\Upload;
  */
 class FofUploadStore implements UploadStore
 {
+    /**
+     * Seconds. Generous for a bucket, short enough that a request serving a
+     * private file, or the job moving one, gives up rather than hangs.
+     */
+    public const CONNECT_TIMEOUT = 5;
+    public const TIMEOUT = 30;
+
     public function __construct(
         protected Container $container,
         protected SettingsRepositoryInterface $settings
@@ -112,35 +122,160 @@ class FofUploadStore implements UploadStore
     }
 
     /**
-     * Fetched the way fof/upload fetches its own files: read off disk for the
-     * local adapter, over HTTP from the public URL for everything else. Only a
-     * 200 counts; an error page from the bucket must not be served as the file.
+     * Fetched the way fof/upload fetches its own files — off disk for the local
+     * adapter, over HTTP from the public URL for everything else — but not with
+     * fof/upload's downloader, whose HTTP client has no timeout: one slow bucket
+     * would hold a request, or a queue worker, for as long as it liked.
+     *
+     * The URL is the row's, so it is only fetched when its host is the one the
+     * adapter would name for the same path today. A row edited to point at an
+     * internal address is refused before any connection is made. Only a 200
+     * counts; an error page from the bucket must not be served as the file.
      */
     public function readStream(Upload $upload)
     {
-        try {
-            $file = $this->file($upload);
-            $file->upload_method = (string) $upload->storage_adapter;
+        if ($upload->storage_adapter === 'local') {
+            return $this->readLocal($upload);
+        }
 
-            $response = $this->container->make(DefaultDownloader::class)->download($file);
+        try {
+            $url = $this->trustedUrl($upload);
         } catch (\Throwable $e) {
             return null;
         }
 
-        if ($response->getStatusCode() !== 200) {
-            return null;
-        }
-
-        try {
-            return StreamWrapper::getResource($response->getBody());
-        } catch (\Throwable $e) {
-            return null;
-        }
+        return $url === null ? null : $this->fetch($url, $upload);
     }
 
     public function size(Upload $upload): ?int
     {
         return null;
+    }
+
+    /**
+     * fof/upload's local adapter writes under `public/assets/files`. Read from
+     * there directly, confined to that directory: the path comes from the row.
+     *
+     * @return resource|null
+     */
+    protected function readLocal(Upload $upload)
+    {
+        $base = realpath($this->container->make(Paths::class)->public.'/assets/files');
+        $relative = (string) $upload->path;
+
+        if ($base === false || $relative === '' || str_contains($relative, "\0") || str_contains($relative, '://')) {
+            return null;
+        }
+
+        $resolved = realpath($base.DIRECTORY_SEPARATOR.ltrim($relative, '/\\'));
+
+        if ($resolved === false
+            || ! is_file($resolved)
+            || ! str_starts_with($resolved.DIRECTORY_SEPARATOR, $base.DIRECTORY_SEPARATOR)) {
+            return null;
+        }
+
+        $stream = fopen($resolved, 'rb');
+
+        return is_resource($stream) ? $stream : null;
+    }
+
+    /**
+     * The row's URL, if it is http(s) on the host the file's adapter would
+     * generate for the same path now. Asking the adapter is what makes the
+     * check independent of the row: its host comes from the admin's settings.
+     */
+    protected function trustedUrl(Upload $upload): ?string
+    {
+        $url = (string) $upload->remote_url;
+        $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
+        $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+
+        if (! in_array($scheme, ['http', 'https'], true) || $host === '') {
+            return null;
+        }
+
+        $expected = strtolower((string) parse_url($this->generatedUrl($upload), PHP_URL_HOST));
+
+        return $expected !== '' && hash_equals($expected, $host) ? $url : null;
+    }
+
+    /**
+     * The URL the file's adapter names for its path. `generateUrl` is protected
+     * on fof/upload's Flysystem base, so it is called from that scope; it reads
+     * only settings and the path, and writes nothing but the File it is given.
+     */
+    protected function generatedUrl(Upload $upload): string
+    {
+        $adapter = $this->adapterOf($upload);
+        $file = $this->file($upload);
+        $file->url = '';
+
+        $generate = \Closure::bind(function (File $file): void {
+            $this->meta = ['path' => $file->path];
+            $this->generateUrl($file);
+        }, $adapter, Flysystem::class);
+
+        $generate($file);
+
+        return (string) $file->url;
+    }
+
+    /**
+     * Downloads into a temporary stream. Bounded three ways: connecting, the
+     * whole transfer, and size — the file is a copy of one the chat wrote, so a
+     * body much larger than the recorded size is not it. Redirects are not
+     * followed, since they would lead off the host just checked.
+     *
+     * @return resource|null
+     */
+    protected function fetch(string $url, Upload $upload)
+    {
+        $sink = Utils::streamFor(fopen('php://temp/maxmemory:'.(2 * 1024 * 1024), 'w+b'));
+        $limit = max((int) $upload->size, 1) * 2 + 1024 * 1024;
+
+        try {
+            $response = $this->http()->request('GET', $url, [
+                'connect_timeout' => self::CONNECT_TIMEOUT,
+                'timeout'         => self::TIMEOUT,
+                'allow_redirects' => false,
+                'http_errors'     => false,
+                'sink'            => $sink,
+                'progress'        => function ($expected, $downloaded) use ($limit) {
+                    if ($expected > $limit || $downloaded > $limit) {
+                        throw new \RuntimeException('Remote file is larger than the upload it should be.');
+                    }
+                },
+            ]);
+        } catch (\Throwable $e) {
+            $sink->close();
+
+            return null;
+        }
+
+        // Checked again once it is in: the progress callback is how cURL aborts
+        // early, and not every handler calls it.
+        if ($response->getStatusCode() !== 200 || ($response->getBody()->getSize() ?? 0) > $limit) {
+            $sink->close();
+
+            return null;
+        }
+
+        // Wrapped rather than detached: the wrapper keeps the PSR stream alive,
+        // which would otherwise close the handle when it went out of scope.
+        try {
+            $body = $response->getBody();
+            $body->rewind();
+
+            return StreamWrapper::getResource($body);
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    protected function http(): ClientInterface
+    {
+        return new Client();
     }
 
     /**

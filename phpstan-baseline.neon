@@ -13,12 +13,6 @@ parameters:
 			path: src/Api/Controller/StartDirectController.php
 
 		-
-			message: '#^Call to method addType\(\) on an unknown class Flarum\\Gdpr\\Extend\\UserData\.$#'
-			identifier: class.notFound
-			count: 1
-			path: extend.php
-
-		-
 			message: '#^Call to method group\(\) on an unknown class Flarum\\Audit\\Extend\\Audit\.$#'
 			identifier: class.notFound
 			count: 1
@@ -26,12 +20,6 @@ parameters:
 
 		-
 			message: '#^Instantiated class Flarum\\Audit\\Extend\\Audit not found\.$#'
-			identifier: class.notFound
-			count: 1
-			path: extend.php
-
-		-
-			message: '#^Instantiated class Flarum\\Gdpr\\Extend\\UserData not found\.$#'
 			identifier: class.notFound
 			count: 1
 			path: extend.php

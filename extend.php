@@ -393,6 +393,12 @@ return [
             // Retention is housekeeping: nightly is frequent enough, and 03:30
             // keeps a destructive job away from peak traffic.
             $event->daily()->at('03:30');
+        })
+        ->command(Console\PrivatizePendingUploadsCommand::class)
+        ->schedule(Console\PrivatizePendingUploadsCommand::class, function ($event) {
+            // A file that should be private and is not is a leak until the next
+            // run, so hourly; the command only queues, so it is cheap.
+            $event->hourly();
         }),
 
     // ── Search / filtering ───────────────────────────────────────────────────
@@ -486,6 +492,13 @@ return [
         ->whenExtensionEnabled('flarum-gdpr', fn () => [
             (new \Flarum\Gdpr\Extend\UserData())
                 ->addType(Gdpr\ChatData::class),
+        ])
+        // A category that becomes restricted, or moves under one that is, takes
+        // its channels' attachments off the public disk. Eloquent's own event,
+        // because flarum/tags dispatches none after the save.
+        ->whenExtensionEnabled('flarum-tags', fn () => [
+            (new Extend\Event())
+                ->listen('eloquent.saved: '.\Flarum\Tags\Tag::class, Listener\KeepUploadsPrivate::class.'@whenTagSaved'),
         ])
         ->whenExtensionEnabled('flarum-audit', fn () => [
             (new \Flarum\Audit\Extend\Audit())

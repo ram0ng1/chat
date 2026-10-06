@@ -14,6 +14,12 @@ use Flarum\Settings\SettingsRepositoryInterface;
 use FoF\Upload\Adapters\Manager;
 use FoF\Upload\Contracts\UploadAdapter;
 use FoF\Upload\Helpers\Util;
+use GuzzleHttp\Client;
+use GuzzleHttp\ClientInterface;
+use GuzzleHttp\Handler\MockHandler;
+use GuzzleHttp\HandlerStack;
+use GuzzleHttp\Middleware;
+use GuzzleHttp\Psr7\Response;
 use Illuminate\Contracts\Container\Container;
 use League\Flysystem\Local\LocalFilesystemAdapter;
 use Mockery;
@@ -142,6 +148,107 @@ class FofUploadStoreTest extends TestCase
         $keys = (new FofUploadStore($container, Mockery::mock(SettingsRepositoryInterface::class)))->adapterKeys();
 
         $this->assertSame(['aws-s3', 'local'], $keys);
+    }
+
+    public function test_a_remote_file_is_read_with_bounded_timeouts(): void
+    {
+        $upload = $this->remoteUpload(FakeBucketAdapter::HOST.'/2026-10-05/abc.png');
+        $history = [];
+        $store = $this->readingStore([new Response(200, [], base64_decode(self::PNG))], $history);
+
+        $stream = $store->readStream($upload);
+
+        $this->assertIsResource($stream);
+        $this->assertSame(base64_decode(self::PNG), stream_get_contents($stream));
+        $this->assertCount(1, $history);
+        $this->assertSame(FakeBucketAdapter::HOST.'/2026-10-05/abc.png', (string) $history[0]['request']->getUri());
+        $this->assertSame(FofUploadStore::CONNECT_TIMEOUT, $history[0]['options']['connect_timeout']);
+        $this->assertSame(FofUploadStore::TIMEOUT, $history[0]['options']['timeout']);
+        $this->assertFalse($history[0]['options']['allow_redirects']);
+    }
+
+    public function test_a_row_pointing_at_another_host_is_never_fetched(): void
+    {
+        $history = [];
+        $store = $this->readingStore([new Response(200, [], 'secret')], $history);
+
+        foreach ([
+            'http://169.254.169.254/latest/meta-data/',
+            'http://127.0.0.1/2026-10-05/abc.png',
+            'file:///etc/passwd',
+            'https://bucket.chat.test.evil.example/abc.png',
+        ] as $url) {
+            $this->assertNull($store->readStream($this->remoteUpload($url)), $url);
+        }
+
+        $this->assertSame([], $history);
+    }
+
+    public function test_an_error_page_from_the_bucket_is_not_the_file(): void
+    {
+        $history = [];
+        $store = $this->readingStore([new Response(403, [], '<Error>AccessDenied</Error>')], $history);
+
+        $this->assertNull($store->readStream($this->remoteUpload(FakeBucketAdapter::HOST.'/2026-10-05/abc.png')));
+    }
+
+    public function test_a_body_far_larger_than_the_upload_is_refused(): void
+    {
+        $history = [];
+        $store = $this->readingStore([new Response(200, ['Content-Length' => (string) (64 * 1024 * 1024)], str_repeat('x', 3 * 1024 * 1024))], $history);
+
+        $this->assertNull($store->readStream($this->remoteUpload(FakeBucketAdapter::HOST.'/2026-10-05/abc.png')));
+    }
+
+    /**
+     * A store whose HTTP client answers from the given queue and records what
+     * was asked of it.
+     *
+     * @param  Response[]  $responses
+     * @param  array<int, array{request: \Psr\Http\Message\RequestInterface, options: array<string, mixed>}>  $history
+     */
+    protected function readingStore(array $responses, array &$history): FofUploadStore
+    {
+        $stack = HandlerStack::create(new MockHandler($responses));
+        $stack->push(Middleware::history($history));
+        $client = new Client(['handler' => $stack]);
+
+        $settings = Mockery::mock(SettingsRepositoryInterface::class);
+        $settings->shouldReceive('get')->andReturn(null);
+
+        $manager = Mockery::mock(Manager::class);
+        $manager->shouldReceive('instantiate')->with('chat-bucket')->andReturnUsing(function () {
+            $adapter = $this->bucket();
+            $adapter->adapterKey = 'chat-bucket';
+
+            return $adapter;
+        });
+
+        $container = Mockery::mock(Container::class);
+        $container->shouldReceive('make')->with(Manager::class)->andReturn($manager);
+
+        return new class($container, $settings, $client) extends FofUploadStore {
+            public function __construct(Container $container, SettingsRepositoryInterface $settings, protected ClientInterface $client)
+            {
+                parent::__construct($container, $settings);
+            }
+
+            protected function http(): ClientInterface
+            {
+                return $this->client;
+            }
+        };
+    }
+
+    protected function remoteUpload(string $url): Upload
+    {
+        $upload = $this->newUpload();
+        $upload->storage = Upload::STORAGE_FOF;
+        $upload->storage_adapter = 'chat-bucket';
+        $upload->path = '2026-10-05/abc.png';
+        $upload->remote_url = $url;
+
+        return $upload;
     }
 
     /**

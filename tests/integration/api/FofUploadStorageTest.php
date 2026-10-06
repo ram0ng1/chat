@@ -22,6 +22,7 @@ use FoF\Upload\Events\Adapter\Instantiate;
 use Laminas\Diactoros\UploadedFile;
 use League\Flysystem\Local\LocalFilesystemAdapter;
 use Psr\Http\Message\ResponseInterface;
+use Ramon\Chat\Console\PrivatizePendingUploadsCommand;
 use Ramon\Chat\Console\PruneChatCommand;
 use Ramon\Chat\Storage\FofUploadStore;
 use Ramon\Chat\Tests\Fixtures\FakeBucketAdapter;
@@ -271,6 +272,28 @@ class FofUploadStorageTest extends TestCase
         $this->assertSame('', $served->getHeaderLine('Accept-Ranges'));
 
         $this->assertStatus(404, $this->fetch((int) $upload['id'], self::OUTSIDER));
+    }
+
+    public function test_a_move_the_job_gave_up_on_is_finished_by_the_hourly_command(): void
+    {
+        $this->useFofLocalAdapter();
+
+        $upload = $this->upload(self::MEMBER, self::CH_PUBLIC);
+        $remote = $this->row((int) $upload['id']);
+        $this->sendMessage(self::MEMBER, self::CH_PUBLIC, [(int) $upload['id']]);
+
+        // Flagged, bytes still in the bucket: what three failed tries leave.
+        $this->database()->table('chat_uploads')->where('id', $upload['id'])->update(['is_private' => 1]);
+
+        $command = $this->app()->getContainer()->make(PrivatizePendingUploadsCommand::class);
+        $command->run(new ArrayInput([]), new BufferedOutput());
+
+        $row = $this->row((int) $upload['id']);
+
+        $this->assertSame('local', $row->storage);
+        $this->assertSame(1, (int) $row->is_private);
+        $this->assertSame(base64_decode(self::PNG), file_get_contents($this->privateRoot().'/'.$row->path));
+        $this->assertFileDoesNotExist($this->fofLocalRoot().'/'.$remote->path);
     }
 
     public function test_a_public_bucket_file_is_not_proxied_by_the_forum(): void

@@ -10,6 +10,7 @@
 namespace Ramon\Chat\Service;
 
 use Carbon\Carbon;
+use Flarum\Database\AbstractModel;
 use Illuminate\Contracts\Filesystem\Factory;
 use Illuminate\Contracts\Queue\Queue;
 use Illuminate\Support\Collection;
@@ -49,6 +50,13 @@ class UploadPrivacy
     public const PUBLIC_DISK = 'chat';
     public const PRIVATE_DISK = 'chat-private';
 
+    /**
+     * flarum/tags nests two levels deep. The bound is there for a corrupted
+     * hierarchy that loops, which is treated as restricted rather than walked
+     * forever.
+     */
+    protected const MAX_TAG_DEPTH = 8;
+
     public function __construct(
         protected Factory $filesystem,
         protected LoggerInterface $log,
@@ -84,9 +92,44 @@ class UploadPrivacy
             return false;
         }
 
-        $tag = $channel->relationLoaded('tag') ? $channel->getRelation('tag') : $relation->first();
+        // A relation loaded before the channel was rebound to another tag would
+        // answer for the old one.
+        $loaded = $channel->relationLoaded('tag') ? $channel->getRelation('tag') : null;
+        $tag = $loaded !== null && (int) $loaded->getKey() === (int) $channel->tag_id
+            ? $loaded
+            : $relation->first();
 
-        return (bool) ($tag->is_restricted ?? false);
+        return self::tagIsRestricted($tag);
+    }
+
+    /**
+     * Whether a tag, or any tag above it, is restricted.
+     *
+     * flarum/tags hides a child whose parent the reader cannot see, so an
+     * unrestricted child of a restricted parent is no more public than the
+     * parent. A tag that is missing — the bound one deleted, or a parent gone
+     * from under its child — counts as restricted: the channel is hidden from
+     * everyone but admins then, and its files must not be readable by URL.
+     */
+    public static function tagIsRestricted(?AbstractModel $tag): bool
+    {
+        for ($depth = 0; $depth < self::MAX_TAG_DEPTH; $depth++) {
+            if ($tag === null) {
+                return true;
+            }
+
+            if ($tag->getAttribute('is_restricted')) {
+                return true;
+            }
+
+            if ($tag->getAttribute('parent_id') === null) {
+                return false;
+            }
+
+            $tag = $tag->newQuery()->whereKey((int) $tag->getAttribute('parent_id'))->first();
+        }
+
+        return true;
     }
 
     public static function diskFor(bool $private): string
@@ -152,6 +195,18 @@ class UploadPrivacy
                 ->whereHas('message', fn ($query) => $query->whereKey($messageIds))
                 ->get()
         );
+    }
+
+    /**
+     * The given rows, whatever channel they belong to. For callers that found
+     * them by something other than a message or a channel.
+     *
+     * @param  iterable<Upload>  $uploads
+     * @return int How many were moved.
+     */
+    public function privatizeUploads(iterable $uploads): int
+    {
+        return $this->privatizeEach($uploads);
     }
 
     /**
