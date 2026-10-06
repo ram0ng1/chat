@@ -57,7 +57,8 @@ return [
 
     (new Extend\Frontend('admin'))
         ->js(__DIR__.'/js/dist/admin.js')
-        ->css(__DIR__.'/less/admin.less'),
+        ->css(__DIR__.'/less/admin.less')
+        ->content(Content\QueueDriver::class),
 
     new Extend\Locales(__DIR__.'/locale'),
 

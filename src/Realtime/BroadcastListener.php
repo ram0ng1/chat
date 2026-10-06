@@ -102,6 +102,8 @@ class BroadcastListener
      * Members at which a channel-wide push goes to the queue whatever the
      * forum's setting: an auto-join channel can hold every account, and
      * resolving that audience is not work for the request that created it.
+     * Only on a continuously worked queue: under `sync` or `database` it runs
+     * inline like any other push (see QueueKind).
      */
     public const LARGE_AUDIENCE = 500;
 

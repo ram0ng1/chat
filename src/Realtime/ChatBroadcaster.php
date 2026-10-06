@@ -51,7 +51,9 @@ use Ramon\Chat\Realtime\Job\SendChatEventJob;
  * So the default is immediate, and `ramon-chat.queue_realtime` moves it back
  * onto the queue for the forums that need it: one whose web process cannot reach
  * the daemon, or one large enough that the fan-out belongs off the request. That
- * setting is only sane alongside a continuously running worker.
+ * setting is only sane alongside a continuously running worker, so it is
+ * ignored (and the push runs inline) while the queue is `sync` or `database`;
+ * see QueueKind.
  *
  * ## Who receives a message
  *
@@ -150,7 +152,12 @@ class ChatBroadcaster
         }
 
         try {
-            if ($queue || $this->settings->get('ramon-chat.queue_realtime')) {
+            // Only a continuously worked queue may take the push. Under `sync`
+            // the job would run inline anyway, and under `database` it would
+            // wait for the once-a-minute worker, so a stale switch or a large
+            // audience never delays a message there.
+            if (($queue || $this->settings->get('ramon-chat.queue_realtime'))
+                && QueueKind::defers($this->queue)) {
                 $this->queue->push($job);
 
                 return;

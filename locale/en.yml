@@ -695,6 +695,8 @@ ramon-chat:
       allow_archiving_channels: Allow archiving channels
       queue_realtime: Deliver realtime events through the queue
       queue_realtime_help: "Off by default: pushes run in the request, so messages arrive immediately. Turn this on only if your forum runs a continuous queue worker, or if the web server cannot reach the websocket daemon. With Flarum's database queue driver the worker runs once a minute, which will delay every message by up to that long."
+      queue_realtime_inline: "Realtime events are delivered within the request: this forum has no continuous queue worker, so routing them through the queue would only delay them."
+      queue_realtime_inline_database: "Realtime events are delivered within the request: Flarum's database queue is worked once a minute, so routing them through it would delay messages by up to a minute."
       sound: Notification sound
       sound_help: Played when a message arrives in a channel you are not looking at.
       sound_none: "Off"
@@ -725,6 +727,23 @@ ramon-chat:
       webhooks_help: Slack-compatible endpoints an external service can post into a channel with. The URL is shown once, when it is created or rotated.
       other_title: Other settings
       other_help: Settings registered for the chat by other extensions.
+
+    layout:
+      groups_aria: Settings groups
+      group_general: General
+      group_messages: Messages and files
+      group_delivery: Delivery and data
+      group_integrations: Integrations
+      search_placeholder: Search settings
+      search_clear: Clear search
+      search_empty: No setting matches this search.
+      unsaved: "{count, plural, one {# unsaved change} other {# unsaved changes}}"
+      saved: All changes saved
+      preview_label: Preview
+      preview_header: Header button
+      preview_drawer: Chat drawer
+      preview_bot_tag: Bot
+      preview_message_sample: "New discussion in General: Welcome to the forum"
 
     permissions:
       use: Use chat

@@ -20,6 +20,10 @@ export default class BotSettings extends Component<ComponentAttrs> {
     private searchSequence;
     view(): Mithril.Children;
     /**
+     * The announcement as it will land in a channel, from whichever half is live.
+     */
+    protected preview(announcer: User | null): Mithril.Children;
+    /**
      * The bot's own identity. Only drawn when no account is announcing.
      */
     protected botForm(): Mithril.Children;

@@ -1,0 +1,502 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Settings page layout: tab bar, cards, sticky save bar.
+// ─────────────────────────────────────────────────────────────────────────────
+
+@chat-admin-radius: 14px;
+@chat-admin-gap: 16px;
+
+// The primary colour pulled towards the heading colour: darker on a light
+// admin, lighter on a dark one, so a dark brand colour still reads on both.
+@chat-admin-accent: color-mix(in srgb, var(--primary-color) 70%, var(--heading-color));
+
+// A speech bubble with its tail at the lower left: the chat's mark on the
+// active tab and on every card badge.
+.chat-admin-bubble(@r: 12px) {
+  border-radius: @r @r @r 4px;
+}
+
+.chat-admin-focus() {
+  &:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+  }
+}
+
+.ChatAdmin {
+  // Core's .Form is a flex column with `align-items: flex-start`, which lets
+  // its children shrink to their content. Everything here takes the full
+  // width so the cards, the tab bar and the save bar share both edges.
+  .Form,
+  .Form-body {
+    width: 100%;
+    align-items: stretch;
+  }
+
+  // ── Tab bar + search ──────────────────────────────────────────────────────
+  // Sticky under the admin header: changing tabs from the foot of a long card
+  // must not mean scrolling back up first.
+  &-toolbar {
+    position: sticky;
+    top: var(--header-height);
+    z-index: 6;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 14px;
+    margin: -8px 0 6px;
+    padding: 12px 0;
+    background: var(--body-bg);
+    border-bottom: 1px solid var(--control-bg);
+
+    @media @phone {
+      top: var(--header-height-phone);
+    }
+  }
+
+  &-tabs {
+    display: flex;
+    flex: 1 1 auto;
+    gap: 4px;
+    min-width: 0;
+    max-width: 100%;
+    padding: 4px;
+    border-radius: 16px;
+    background: var(--control-bg);
+    // On a narrow window the tabs scroll sideways instead of wrapping into a
+    // ragged second row.
+    overflow-x: auto;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+
+    @media (min-width: 1100px) {
+      flex: 0 1 auto;
+    }
+  }
+
+  &-tab {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--control-color);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      background 0.15s,
+      color 0.15s,
+      box-shadow 0.15s;
+    .chat-admin-focus();
+
+    > i {
+      font-size: 13px;
+      opacity: 0.8;
+    }
+
+    &:hover {
+      background: var(--control-bg-shaded);
+      color: var(--heading-color);
+    }
+
+    &.is-active {
+      .chat-admin-bubble();
+      background: var(--body-bg);
+      color: var(--heading-color);
+      box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.08),
+        0 2px 8px rgba(0, 0, 0, 0.05);
+
+      > i {
+        color: @chat-admin-accent;
+        opacity: 1;
+      }
+
+      .ChatAdmin-tabCount {
+        background: var(--primary-color);
+        color: var(--button-primary-color, #fff);
+      }
+    }
+  }
+
+  // On a phone only the open tab keeps its name; the others are icons with
+  // their name as tooltip and accessible label, so all four fit on one row.
+  @media (max-width: 640px) {
+    &-tab:not(.is-active) {
+      .ChatAdmin-tabLabel,
+      .ChatAdmin-tabCount {
+        display: none;
+      }
+    }
+  }
+
+  // How many cards the tab holds, so its size is known before it is opened.
+  &-tabCount {
+    min-width: 20px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: var(--body-bg);
+    color: var(--control-color);
+    font-size: 11px;
+    font-weight: 700;
+    text-align: center;
+  }
+
+  &-search {
+    display: flex;
+    flex: 1 1 220px;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    height: 40px;
+    margin-left: auto;
+    padding: 0 6px 0 14px;
+    border: 1px solid var(--control-bg);
+    border-radius: 999px;
+    background: var(--body-bg);
+    transition:
+      border-color 0.15s,
+      box-shadow 0.15s;
+
+    @media (min-width: 1100px) {
+      flex: 0 1 280px;
+    }
+
+    > i {
+      flex-shrink: 0;
+      color: var(--muted-color);
+      font-size: 13px;
+    }
+
+    &:focus-within {
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color) 18%, transparent);
+    }
+  }
+
+  &-searchInput {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    border: 0;
+    outline: none;
+    background: transparent;
+    color: var(--text-color);
+    font-family: inherit;
+    font-size: 13px;
+
+    &::placeholder {
+      color: var(--muted-color);
+    }
+
+    // The native clear button would sit beside our own.
+    &::-webkit-search-cancel-button {
+      display: none;
+    }
+  }
+
+  &-searchClear {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    color: var(--muted-color);
+    cursor: pointer;
+    .chat-admin-focus();
+
+    &:hover {
+      background: var(--control-bg);
+      color: var(--heading-color);
+    }
+  }
+
+  &-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin: 8px 0 @chat-admin-gap;
+    padding: 28px 18px;
+    border: 1px dashed var(--control-bg-shaded);
+    border-radius: @chat-admin-radius;
+    color: var(--muted-color);
+    font-size: 14px;
+  }
+
+  // ── Cards ─────────────────────────────────────────────────────────────────
+  // One column on a narrow window, two from 1100px. The record panels
+  // (announcer, webhooks) span the row: they hold lists, and a half-width
+  // list wraps its rows twice.
+  &-grid {
+    display: grid;
+    width: 100%;
+    box-sizing: border-box;
+    grid-template-columns: 1fr;
+    gap: @chat-admin-gap;
+    margin: 8px 0 @chat-admin-gap;
+
+    @media (min-width: 1100px) {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  &-section {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    border: 1px solid var(--control-bg);
+    border-radius: @chat-admin-radius;
+    background: var(--body-bg);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+
+    &--announcer,
+    &--webhooks {
+      @media (min-width: 1100px) {
+        // Escaped: the LESS compiler reads a bare `1 / -1` as a division.
+        grid-column: ~"1 / -1";
+      }
+    }
+  }
+
+  &-sectionHeader {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 16px 20px 14px;
+    border-bottom: 1px solid var(--control-bg);
+    border-radius: @chat-admin-radius @chat-admin-radius 0 0;
+    background: var(--body-bg-shaded);
+  }
+
+  &-sectionHeading {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &-sectionIcon {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    .chat-admin-bubble();
+    background: color-mix(in srgb, var(--primary-color) 16%, var(--body-bg));
+    color: @chat-admin-accent;
+    font-size: 15px;
+  }
+
+  &-sectionTitle {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 1px 0 3px;
+    color: var(--heading-color);
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1.3;
+  }
+
+  // While searching, the tab a card lives in; a click opens that tab.
+  &-sectionGroup {
+    padding: 2px 9px;
+    border: 1px solid var(--control-bg-shaded);
+    border-radius: 999px;
+    background: var(--body-bg);
+    color: var(--control-color);
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    .chat-admin-focus();
+
+    &:hover {
+      border-color: var(--primary-color);
+      color: var(--heading-color);
+    }
+  }
+
+  &-sectionHelp {
+    margin: 0;
+    color: var(--muted-color);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  &-sectionBody {
+    flex: 1;
+    padding: 18px 20px 20px;
+  }
+
+  // Fields inside a card. Core's .Form-group is `display: flex; flex-direction:
+  // column` with its own bottom margin, which the grid gap replaces.
+  &-fields {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px 20px;
+
+    > .Form-group {
+      margin: 0;
+      min-width: 0;
+    }
+
+    &--two {
+      @media (min-width: 640px) {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      // A switch or a select with long help reads better full width.
+      > .Form-group:has(.Checkbox),
+      > .Form-group:has(select) {
+        grid-column: ~"1 / -1";
+      }
+    }
+  }
+
+  &-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin: 16px 0 0;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: var(--alert-bg);
+    color: var(--alert-color);
+    font-size: 13px;
+    line-height: 1.45;
+
+    i {
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+  }
+
+  // A neutral explanation in place of a control that would do nothing here.
+  &-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin: 0 0 16px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: var(--control-bg);
+    color: var(--muted-color-dark, var(--text-color));
+    font-size: 13px;
+    line-height: 1.45;
+
+    i {
+      flex-shrink: 0;
+      margin-top: 2px;
+      color: @chat-admin-accent;
+    }
+
+    // Under the fields, as the last thing in the card.
+    .ChatAdmin-fields + & {
+      margin: 16px 0 0;
+    }
+  }
+
+  // The feature switch at the top of the webhooks card, set off from the
+  // records under it by the same rule the card header uses.
+  &-switch {
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--control-bg);
+  }
+
+  &-muted {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    color: var(--muted-color);
+    font-size: 13px;
+  }
+
+  // ── Save bar ──────────────────────────────────────────────────────────────
+  // Pinned to the bottom of the window while the form is on screen, so a
+  // change made at the top of a long tab can be saved where it was made. It
+  // says how many changes are waiting; every card above it, the webhooks
+  // switch included, is saved by it.
+  &-controls {
+    position: sticky;
+    bottom: 12px;
+    z-index: 6;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px 16px;
+    margin: 4px 0 28px;
+    padding: 10px 12px 10px 18px;
+    border: 1px solid var(--control-bg);
+    border-radius: @chat-admin-radius;
+    background: var(--body-bg);
+    box-shadow:
+      0 -2px 10px rgba(0, 0, 0, 0.04),
+      0 6px 20px rgba(0, 0, 0, 0.08);
+
+    &.is-dirty {
+      border-color: color-mix(in srgb, var(--primary-color) 45%, var(--control-bg));
+    }
+  }
+
+  &-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--muted-color);
+    font-size: 13px;
+    font-weight: 600;
+
+    .is-dirty & {
+      color: var(--heading-color);
+    }
+  }
+
+  &-statusDot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--control-success-bg, #2e7d32);
+
+    .is-dirty & {
+      background: var(--primary-color);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary-color) 20%, transparent);
+    }
+  }
+
+  &-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+  }
+}
+
+// On a phone core clips horizontal overflow on both <html> and <body>, which
+// turns <body> into a scroll container that never scrolls (the window does),
+// and a sticky element measured against it never sticks. Clipping <body>
+// instead keeps the iOS fix without the scroll container, on this page only.
+@media @phone {
+  body:has(.ChatAdmin) {
+    overflow-x: clip;
+    overflow-y: visible;
+  }
+}

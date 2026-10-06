@@ -666,6 +666,8 @@ ramon-chat:
       allow_archiving_channels: Permitir arquivar canais
       queue_realtime: Entregar eventos em tempo real pela fila
       queue_realtime_help: "Desligado por padrão: os envios rodam na própria requisição, então as mensagens chegam na hora. Ligue só se o fórum mantém um worker de fila contínuo, ou se o servidor web não alcança o daemon do websocket. Com o driver de fila 'database' do Flarum o worker roda uma vez por minuto, atrasando cada mensagem em até esse tempo."
+      queue_realtime_inline: "Os eventos em tempo real saem na própria requisição: este fórum não tem um worker de fila contínuo, então passar pela fila só os atrasaria."
+      queue_realtime_inline_database: "Os eventos em tempo real saem na própria requisição: a fila 'database' do Flarum roda uma vez por minuto, então passar por ela atrasaria as mensagens em até um minuto."
       sound: Som de notificação
       sound_help: Tocado quando chega mensagem em um canal que você não está olhando.
       sound_none: Nenhum
@@ -696,6 +698,23 @@ ramon-chat:
       webhooks_help: Endpoints compatíveis com Slack pelos quais um serviço externo publica em um canal. A URL é exibida uma única vez, ao criar ou ao rotacionar.
       other_title: Outros ajustes
       other_help: Ajustes registrados para o chat por outras extensões.
+
+    layout:
+      groups_aria: Grupos de ajustes
+      group_general: Geral
+      group_messages: Mensagens e anexos
+      group_delivery: Entrega e dados
+      group_integrations: Integrações
+      search_placeholder: Buscar ajustes
+      search_clear: Limpar busca
+      search_empty: Nenhum ajuste corresponde à busca.
+      unsaved: "{count, plural, one {# alteração não salva} other {# alterações não salvas}}"
+      saved: Tudo salvo
+      preview_label: Prévia
+      preview_header: Botão no cabeçalho
+      preview_drawer: Painel do chat
+      preview_bot_tag: Bot
+      preview_message_sample: "Nova discussão em Geral: Boas-vindas ao fórum"
 
     permissions:
       use: Usar chat

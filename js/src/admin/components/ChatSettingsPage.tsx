@@ -1,10 +1,50 @@
 import app from "flarum/admin/app";
 import ExtensionPage from "flarum/admin/components/ExtensionPage";
 import Form from "flarum/common/components/Form";
+import extractText from "flarum/common/utils/extractText";
 import type Mithril from "mithril";
 
 import BotSettings from "./BotSettings";
+import { BrandingPreview } from "./ChatPreview";
 import WebhooksPanel from "./WebhooksPanel";
+
+/** Where public attachments are stored: "local" or "fof-upload". */
+export const STORAGE_SETTING = "ramon-chat.upload_storage";
+
+/** The fof/upload adapter key; empty follows fof/upload's own mime mapping. */
+export const ADAPTER_SETTING = "ramon-chat.fof_upload_adapter";
+
+/** Realtime pushes through the queue; only offered on a continuous worker. */
+const QUEUE_SETTING = "ramon-chat.queue_realtime";
+
+/**
+ * The forum's queue kind, from the admin payload (Content\QueueDriver):
+ * "sync", "database" or "other". Under the first two the server delivers
+ * every push inline whatever the switch says (Realtime\QueueKind), so the
+ * switch is replaced by a note saying so.
+ */
+function queueKind(): string {
+  const kind = app.data.ramonChatQueueKind;
+
+  return typeof kind === "string" ? kind : "sync";
+}
+
+/** The switch at the top of the webhooks card; a registered setting like the rest. */
+const WEBHOOKS_SWITCH = "ramon-chat.webhooks_enabled";
+
+type GroupKey = "general" | "messages" | "delivery" | "integrations";
+
+/**
+ * The tabs along the top of the page. Each holds two subjects that are
+ * decided together, so an operator looking for one setting opens one tab and
+ * does not scroll past eight unrelated cards on the way.
+ */
+const GROUPS: readonly { key: GroupKey; icon: string }[] = [
+  { key: "general", icon: "fas fa-comments" },
+  { key: "messages", icon: "fas fa-message" },
+  { key: "delivery", icon: "fas fa-tower-broadcast" },
+  { key: "integrations", icon: "fas fa-plug" },
+];
 
 /**
  * One block of related settings on the page.
@@ -15,6 +55,7 @@ import WebhooksPanel from "./WebhooksPanel";
  */
 interface Section {
   key: string;
+  group: GroupKey;
   icon: string;
   keys: readonly string[];
   /** Fields side by side, for short inputs like numbers. */
@@ -23,15 +64,10 @@ interface Section {
   warning?: string;
 }
 
-/** Where public attachments are stored: "local" or "fof-upload". */
-export const STORAGE_SETTING = "ramon-chat.upload_storage";
-
-/** The fof/upload adapter key; empty follows fof/upload's own mime mapping. */
-export const ADAPTER_SETTING = "ramon-chat.fof_upload_adapter";
-
 const SECTIONS: readonly Section[] = [
   {
     key: "channels",
+    group: "general",
     icon: "fas fa-people-group",
     keys: [
       "ramon-chat.channel_ownership",
@@ -41,12 +77,14 @@ const SECTIONS: readonly Section[] = [
   },
   {
     key: "appearance",
+    group: "general",
     icon: "fas fa-palette",
     keys: ["ramon-chat.title", "ramon-chat.icon", "ramon-chat.show_icon"],
     columns: 2,
   },
   {
     key: "messages",
+    group: "messages",
     icon: "fas fa-message",
     keys: [
       "ramon-chat.max_message_length",
@@ -58,6 +96,7 @@ const SECTIONS: readonly Section[] = [
   },
   {
     key: "uploads",
+    group: "messages",
     icon: "fas fa-paperclip",
     // The last two are registered only while fof/upload is enabled; a key that
     // was never registered is simply not drawn.
@@ -70,88 +109,146 @@ const SECTIONS: readonly Section[] = [
     columns: 2,
   },
   {
+    key: "realtime",
+    group: "delivery",
+    icon: "fas fa-bolt",
+    keys: [QUEUE_SETTING, "ramon-chat.notification_sound"],
+  },
+  {
     key: "retention",
+    group: "delivery",
     icon: "fas fa-broom",
     keys: ["ramon-chat.channel_retention_days", "ramon-chat.dm_retention_days"],
     columns: 2,
     warning: "ramon-chat.admin.settings.retention_warning",
   },
-  {
-    key: "realtime",
-    icon: "fas fa-bolt",
-    keys: ["ramon-chat.queue_realtime", "ramon-chat.notification_sound"],
-  },
 ];
 
-/** The switch at the top of the webhooks card; a registered setting like the rest. */
-const WEBHOOKS_SWITCH = "ramon-chat.webhooks_enabled";
+/** A card as the page draws it, whichever kind of body it carries. */
+interface Card {
+  key: string;
+  group: GroupKey;
+  icon: string;
+  /** Lower-cased text the search box matches against. */
+  haystack: string;
+  body: () => Mithril.Children;
+}
+
+type SettingEntry = Parameters<
+  ExtensionPage["buildSettingComponent"]
+>[0] extends infer E
+  ? Exclude<E, (...args: any[]) => any>
+  : never;
+
+const TAB_STORAGE_KEY = "ramon-chat.admin.tab";
+
+/**
+ * The open tab, remembered between visits: saving a setting that needs a
+ * reload, or coming back from the permissions page, should not drop the
+ * operator back on the first tab.
+ */
+let activeGroup: GroupKey = (() => {
+  try {
+    const saved = localStorage.getItem(TAB_STORAGE_KEY) as GroupKey | null;
+
+    if (saved && GROUPS.some((group) => group.key === saved)) return saved;
+  } catch {
+    return "general";
+  }
+
+  return "general";
+})();
+
+let query = "";
 
 /**
  * The chat's admin page.
  *
- * Core's ExtensionPage draws every registered setting as one long column, in
- * registration order, with nothing between "who runs channels" and "maximum
- * upload size" to say they are different subjects. Here the same settings are
- * grouped into titled sections, each with a line saying what it governs. The
- * announcer identity and the incoming webhooks get cards of their own in the
- * same grid, above the save bar, so the page reads as one form from top to
- * bottom and the bar is the last thing on it.
+ * Laid out the way the Avocado theme lays out its own: a sticky bar of tabs,
+ * each a group of titled cards, with a search box that reaches across every
+ * tab at once. What differs is the save model. Avocado's controls save on
+ * change; the chat's are registered settings saved together by the bar at the
+ * foot of the form, which stays pinned to the bottom of the window and says
+ * how many changes are waiting.
  *
  * The settings are still read from the registry, so `registerSetting` in
  * index.ts remains the one place a field is defined; this page only lays them
  * out. A key registered there and not listed here is still drawn, in a final
- * catch-all section, so nothing can silently disappear from the admin.
+ * catch-all card, so nothing can silently disappear from the admin.
  */
 export default class ChatSettingsPage extends ExtensionPage {
   content(vnode: Mithril.VnodeDOM<any, any>) {
     const entries = (app.registry.getSettings(this.extension.id) ?? []).filter(
-      (entry): entry is Exclude<typeof entry, () => Mithril.Children> =>
-        typeof entry !== "function",
+      (entry): entry is SettingEntry => typeof entry !== "function",
     );
 
-    const byKey = new Map(entries.map((entry) => [entry.setting, entry]));
-    const placed = new Set([
-      ...SECTIONS.flatMap((section) => section.keys),
-      WEBHOOKS_SWITCH,
-    ]);
-    const leftover = entries.filter((entry) => !placed.has(entry.setting));
+    const cards = this.cards(entries);
+    const needle = query.trim().toLowerCase();
+    const visible = needle
+      ? cards.filter((card) => card.haystack.includes(needle))
+      : cards.filter((card) => card.group === activeGroup);
+
+    const changes = this.isChanged();
 
     return (
       <div className="ExtensionPage-settings ChatAdmin">
         <div className="container">
           <Form>
-            <div className="ChatAdmin-grid">
-              {SECTIONS.map((section) => this.section(section, byKey))}
+            {this.toolbar(cards, needle !== "")}
 
-              {leftover.length > 0
-                ? this.card(
-                    "other",
-                    "fas fa-sliders",
-                    leftover.map((entry) => this.buildSettingComponent(entry)),
-                  )
-                : null}
+            {visible.length > 0 ? (
+              <div
+                className="ChatAdmin-grid"
+                id="ChatAdmin-panel"
+                role="tabpanel"
+                aria-labelledby={
+                  needle ? undefined : `ChatAdmin-tab-${activeGroup}`
+                }
+              >
+                {visible.map((card) =>
+                  this.card(card, needle !== "" ? card.group : null),
+                )}
+              </div>
+            ) : (
+              <p className="ChatAdmin-empty" role="status">
+                <i className="fas fa-comment-slash" aria-hidden="true" />
+                {app.translator.trans("ramon-chat.admin.layout.search_empty")}
+              </p>
+            )}
 
-              {this.card("announcer", "fas fa-robot", <BotSettings />)}
-              {this.webhooksCard(byKey.get(WEBHOOKS_SWITCH))}
-            </div>
+            <div
+              className={
+                "Form-group Form-controls ChatAdmin-controls" +
+                (changes ? " is-dirty" : "")
+              }
+            >
+              <span className="ChatAdmin-status" role="status">
+                <span className="ChatAdmin-statusDot" aria-hidden="true" />
+                {changes
+                  ? app.translator.trans("ramon-chat.admin.layout.unsaved", {
+                      count: changes,
+                    })
+                  : app.translator.trans("ramon-chat.admin.layout.saved")}
+              </span>
 
-            <div className="Form-group Form-controls ChatAdmin-controls">
-              {this.submitButton()}
-              {this.resetButton(
-                entries.map((entry) => ({
-                  key: entry.setting,
-                  label: entry.label,
-                })),
-                app.translator.trans(
-                  "core.admin.extension.reset_settings.title_extension",
-                  {
-                    extensionTitle:
-                      this.extension.extra["flarum-extension"].title,
-                  },
-                  true,
-                ),
-                this.extension.id,
-              )}
+              <span className="ChatAdmin-actions">
+                {this.resetButton(
+                  entries.map((entry) => ({
+                    key: entry.setting,
+                    label: entry.label,
+                  })),
+                  app.translator.trans(
+                    "core.admin.extension.reset_settings.title_extension",
+                    {
+                      extensionTitle:
+                        this.extension.extra["flarum-extension"].title,
+                    },
+                    true,
+                  ),
+                  this.extension.id,
+                )}
+                {this.submitButton()}
+              </span>
             </div>
           </Form>
         </div>
@@ -159,21 +256,234 @@ export default class ChatSettingsPage extends ExtensionPage {
     );
   }
 
-  protected section(
+  /**
+   * Every card on the page, in tab order. Built on each draw because the
+   * fields shown in a card follow the live form (the fof/upload adapter
+   * appears once fof/upload is the chosen storage).
+   */
+  protected cards(entries: SettingEntry[]): Card[] {
+    const byKey = new Map(entries.map((entry) => [entry.setting, entry]));
+    const placed = new Set([
+      ...SECTIONS.flatMap((section) => section.keys),
+      WEBHOOKS_SWITCH,
+    ]);
+    const leftover = entries.filter((entry) => !placed.has(entry.setting));
+
+    const cards: Card[] = [];
+
+    for (const section of SECTIONS) {
+      const fields = section.keys
+        .filter((key) => this.fieldShown(key))
+        .map((key) => byKey.get(key))
+        .filter((entry): entry is SettingEntry => Boolean(entry));
+
+      if (fields.length === 0) continue;
+
+      cards.push({
+        key: section.key,
+        group: section.group,
+        icon: section.icon,
+        haystack: this.haystack(section.key, fields),
+        body: () => this.sectionBody(section, fields),
+      });
+    }
+
+    cards.push({
+      key: "announcer",
+      group: "integrations",
+      icon: "fas fa-robot",
+      haystack: this.haystack("announcer", [], "bot avatar"),
+      body: () => <BotSettings />,
+    });
+
+    const webhooksEntry = byKey.get(WEBHOOKS_SWITCH);
+
+    cards.push({
+      key: "webhooks",
+      group: "integrations",
+      icon: "fas fa-plug",
+      haystack: this.haystack(
+        "webhooks",
+        webhooksEntry ? [webhooksEntry] : [],
+        "slack",
+      ),
+      body: () => this.webhooksBody(webhooksEntry),
+    });
+
+    if (leftover.length > 0) {
+      cards.push({
+        key: "other",
+        group: "integrations",
+        icon: "fas fa-sliders",
+        haystack: this.haystack("other", leftover),
+        body: () => (
+          <div className="ChatAdmin-fields">
+            {leftover.map((entry) => this.buildSettingComponent(entry))}
+          </div>
+        ),
+      });
+    }
+
+    return cards;
+  }
+
+  /**
+   * What the search box matches for a card: its title and description, and
+   * the label and help of every field in it.
+   */
+  protected haystack(key: string, fields: SettingEntry[], extra = ""): string {
+    const parts = [
+      this.sectionText(key, "title"),
+      this.sectionText(key, "help"),
+      extra,
+      ...fields.map((entry) =>
+        [extractText(entry.label), extractText(entry.help as any)].join(" "),
+      ),
+    ];
+
+    return parts.join(" ").toLowerCase();
+  }
+
+  protected sectionText(key: string, part: "title" | "help"): string {
+    return app.translator.trans(
+      `ramon-chat.admin.sections.${key}_${part}`,
+      {},
+      true,
+    ) as string;
+  }
+
+  /**
+   * The tab bar and the search box. Sticky, so changing tabs from the foot of
+   * a long card does not mean scrolling back to the top first.
+   */
+  protected toolbar(cards: Card[], searching: boolean): Mithril.Children {
+    return (
+      <div className="ChatAdmin-toolbar">
+        <div
+          className="ChatAdmin-tabs"
+          role="tablist"
+          aria-label={app.translator.trans(
+            "ramon-chat.admin.layout.groups_aria",
+            {},
+            true,
+          )}
+          onkeydown={(e: KeyboardEvent) => this.onTabKey(e)}
+        >
+          {GROUPS.map((group) => {
+            const count = cards.filter(
+              (card) => card.group === group.key,
+            ).length;
+            const active = !searching && group.key === activeGroup;
+            const label = app.translator.trans(
+              `ramon-chat.admin.layout.group_${group.key}`,
+              {},
+              true,
+            ) as string;
+
+            return (
+              <button
+                key={group.key}
+                type="button"
+                role="tab"
+                id={`ChatAdmin-tab-${group.key}`}
+                aria-selected={active ? "true" : "false"}
+                aria-controls="ChatAdmin-panel"
+                tabindex={active || (searching && group === GROUPS[0]) ? 0 : -1}
+                data-group={group.key}
+                title={label}
+                aria-label={label}
+                className={"ChatAdmin-tab" + (active ? " is-active" : "")}
+                onclick={() => this.selectGroup(group.key)}
+              >
+                <i className={group.icon} aria-hidden="true" />
+                <span className="ChatAdmin-tabLabel" aria-hidden="true">
+                  {label}
+                </span>
+                <span className="ChatAdmin-tabCount">{count}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="ChatAdmin-search" role="search">
+          <i className="fas fa-magnifying-glass" aria-hidden="true" />
+          <input
+            type="search"
+            className="ChatAdmin-searchInput"
+            aria-label={app.translator.trans(
+              "ramon-chat.admin.layout.search_placeholder",
+              {},
+              true,
+            )}
+            value={query}
+            placeholder={app.translator.trans(
+              "ramon-chat.admin.layout.search_placeholder",
+              {},
+              true,
+            )}
+            oninput={(e: Event) => {
+              query = (e.target as HTMLInputElement).value;
+            }}
+            onkeydown={(e: KeyboardEvent) => {
+              if (e.key === "Escape") query = "";
+            }}
+          />
+          {query ? (
+            <button
+              type="button"
+              className="ChatAdmin-searchClear"
+              aria-label={app.translator.trans(
+                "ramon-chat.admin.layout.search_clear",
+                {},
+                true,
+              )}
+              onclick={() => {
+                query = "";
+              }}
+            >
+              <i className="fas fa-xmark" aria-hidden="true" />
+            </button>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
+  protected selectGroup(key: GroupKey): void {
+    activeGroup = key;
+    query = "";
+
+    try {
+      localStorage.setItem(TAB_STORAGE_KEY, key);
+    } catch {
+      activeGroup = key;
+    }
+  }
+
+  /** Arrow keys, Home and End move between tabs, as a tab list should. */
+  protected onTabKey(e: KeyboardEvent): void {
+    const index = GROUPS.findIndex((group) => group.key === activeGroup);
+    let next = index;
+
+    if (e.key === "ArrowRight") next = (index + 1) % GROUPS.length;
+    else if (e.key === "ArrowLeft")
+      next = (index - 1 + GROUPS.length) % GROUPS.length;
+    else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = GROUPS.length - 1;
+    else return;
+
+    e.preventDefault();
+    this.selectGroup(GROUPS[next].key);
+    m.redraw.sync();
+
+    document.getElementById(`ChatAdmin-tab-${GROUPS[next].key}`)?.focus();
+  }
+
+  protected sectionBody(
     section: Section,
-    byKey: Map<string, Parameters<this["buildSettingComponent"]>[0]>,
+    fields: SettingEntry[],
   ): Mithril.Children {
-    const fields = section.keys
-      .filter((key) => this.fieldShown(key))
-      .map((key) => byKey.get(key))
-      .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
-      .map((entry) => this.buildSettingComponent(entry));
-
-    if (fields.length === 0) return null;
-
-    return this.card(
-      section.key,
-      section.icon,
+    return (
       <>
         <div
           className={
@@ -181,8 +491,27 @@ export default class ChatSettingsPage extends ExtensionPage {
             (section.columns === 2 ? " ChatAdmin-fields--two" : "")
           }
         >
-          {fields}
+          {fields.map((entry) => this.buildSettingComponent(entry))}
         </div>
+
+        {section.key === "appearance" ? (
+          <BrandingPreview
+            title={String(this.setting("ramon-chat.title")() ?? "")}
+            icon={String(this.setting("ramon-chat.icon")() ?? "")}
+            showIcon={this.isOn(this.setting("ramon-chat.show_icon")(), true)}
+          />
+        ) : null}
+
+        {section.key === "realtime" && queueKind() !== "other" ? (
+          <p className="ChatAdmin-note">
+            <i className="fas fa-bolt" aria-hidden="true" />
+            {app.translator.trans(
+              queueKind() === "database"
+                ? "ramon-chat.admin.settings.queue_realtime_inline_database"
+                : "ramon-chat.admin.settings.queue_realtime_inline",
+            )}
+          </p>
+        ) : null}
 
         {section.warning ? (
           <p className="ChatAdmin-warning">
@@ -199,16 +528,29 @@ export default class ChatSettingsPage extends ExtensionPage {
             )}
           </p>
         ) : null}
-      </>,
+      </>
     );
   }
 
   /**
-   * The adapter only matters once fof/upload is the chosen storage, so it is
-   * folded away otherwise. Read live from the form, like the webhooks switch,
+   * A boolean setting as the form holds it: "1"/"0" once loaded, a real
+   * boolean once toggled, nothing at all before it was ever saved.
+   */
+  protected isOn(raw: unknown, fallback: boolean): boolean {
+    if (raw === undefined || raw === null || raw === "") return fallback;
+
+    return raw === "1" || raw === "true" || raw === true;
+  }
+
+  /**
+   * The queue switch only means something on a continuously worked queue (see
+   * queueKind), so it is not offered elsewhere. The adapter only matters once
+   * fof/upload is the chosen storage, so it is folded away otherwise. Read live from the form, like the webhooks switch,
    * so it appears the moment the storage is switched rather than after saving.
    */
   protected fieldShown(key: string): boolean {
+    if (key === QUEUE_SETTING) return queueKind() === "other";
+
     if (key !== ADAPTER_SETTING) return true;
 
     return this.setting(STORAGE_SETTING)() === "fof-upload";
@@ -238,15 +580,10 @@ export default class ChatSettingsPage extends ExtensionPage {
    * says what saving will do. The switch is saved by the bar below, with the
    * rest of the page.
    */
-  protected webhooksCard(
-    entry: Parameters<this["buildSettingComponent"]>[0] | undefined,
-  ): Mithril.Children {
-    const raw = this.setting(WEBHOOKS_SWITCH)();
-    const enabled = raw === "1" || raw === "true" || raw === true;
+  protected webhooksBody(entry: SettingEntry | undefined): Mithril.Children {
+    const enabled = this.isOn(this.setting(WEBHOOKS_SWITCH)(), false);
 
-    return this.card(
-      "webhooks",
-      "fas fa-plug",
+    return (
       <>
         {entry ? (
           <div className="ChatAdmin-fields ChatAdmin-switch">
@@ -262,36 +599,54 @@ export default class ChatSettingsPage extends ExtensionPage {
             {app.translator.trans("ramon-chat.admin.webhooks.disabled")}
           </p>
         )}
-      </>,
+      </>
     );
   }
 
   /**
    * A titled card. Title and help come from `admin.sections.<key>_title` and
-   * `_help`, so every section says what it is for before showing its fields.
+   * `_help`, so every card says what it is for before showing its fields.
+   * While searching, the card also names the tab it lives in.
    */
-  protected card(
-    key: string,
-    icon: string,
-    body: Mithril.Children,
-  ): Mithril.Children {
+  protected card(card: Card, group: GroupKey | null): Mithril.Children {
+    const titleId = `ChatAdmin-title-${card.key}`;
+
     return (
-      <section className={"ChatAdmin-section ChatAdmin-section--" + key}>
+      <section
+        key={card.key}
+        className={"ChatAdmin-section ChatAdmin-section--" + card.key}
+        aria-labelledby={titleId}
+      >
         <header className="ChatAdmin-sectionHeader">
           <span className="ChatAdmin-sectionIcon" aria-hidden="true">
-            <i className={icon} />
+            <i className={card.icon} />
           </span>
-          <div>
-            <h3 className="ChatAdmin-sectionTitle">
-              {app.translator.trans(`ramon-chat.admin.sections.${key}_title`)}
+          <div className="ChatAdmin-sectionHeading">
+            <h3 className="ChatAdmin-sectionTitle" id={titleId}>
+              {app.translator.trans(
+                `ramon-chat.admin.sections.${card.key}_title`,
+              )}
+              {group ? (
+                <button
+                  type="button"
+                  className="ChatAdmin-sectionGroup"
+                  onclick={() => this.selectGroup(group)}
+                >
+                  {app.translator.trans(
+                    `ramon-chat.admin.layout.group_${group}`,
+                  )}
+                </button>
+              ) : null}
             </h3>
-            <p className="ChatAdmin-sectionHelp helpText">
-              {app.translator.trans(`ramon-chat.admin.sections.${key}_help`)}
+            <p className="ChatAdmin-sectionHelp">
+              {app.translator.trans(
+                `ramon-chat.admin.sections.${card.key}_help`,
+              )}
             </p>
           </div>
         </header>
 
-        <div className="ChatAdmin-sectionBody">{body}</div>
+        <div className="ChatAdmin-sectionBody">{card.body()}</div>
       </section>
     );
   }
