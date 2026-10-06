@@ -20,6 +20,7 @@ const suites = [
   "realtime-live.mjs",
   "pinned-jump.mjs",
   "transitions.mjs",
+  "channel-gone.mjs",
   "admin-page.mjs",
   "permissions.mjs",
 ].filter((name) =>

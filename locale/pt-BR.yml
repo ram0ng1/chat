@@ -6,6 +6,9 @@ ramon-chat:
     message_too_long: "As mensagens não podem passar de {max} caracteres."
     rate_limited: Você está enviando mensagens rápido demais. Aguarde um instante.
     invalid_reaction: Essa não é uma reação de emoji válida.
+    reaction_limit: Esta mensagem não aceita mais reações.
+    bookmark_name_too_long: "O nome do favorito não pode ter mais de {max} caracteres."
+    draft_too_long: "Este rascunho é longo demais para ser salvo. Rascunhos podem ter no máximo {max} caracteres."
     slow_mode_wait: "O modo lento está ativo neste canal. Você poderá enviar outra mensagem em {seconds}s."
     flag_reason_invalid: Esse não é um motivo válido para denunciar uma mensagem.
     flag_detail_required: Diga o que há de errado com esta mensagem.
@@ -17,12 +20,21 @@ ramon-chat:
     archive_discussion_not_found: Essa discussão não existe ou você não tem acesso a ela.
     archive_title_required: O arquivamento precisa de um título de discussão.
     archive_empty: Este canal foi arquivado sem mensagens.
+    archive_private_channel: Só um administrador pode arquivar um canal privado em uma discussão.
+    archive_discussion_wider: A categoria deste canal é restrita, então ele só pode ser arquivado em uma discussão dessa categoria.
+    archive_needs_approval: Suas postagens precisam de aprovação aqui, então você não pode arquivar este canal.
+    archive_too_large: "Este canal tem mais de {max} mensagens. Peça a um administrador para arquivá-lo."
+    invite_rate_limited: Você enviou convites demais recentemente. Tente de novo mais tarde.
+    membership_rate_limited: Você está entrando e saindo deste canal rápido demais. Tente de novo em um minuto.
+    channel_flag_not_allowed: Só moderadores do chat podem alterar esta configuração.
+    channel_tag_not_found: Essa categoria não existe ou você não tem acesso a ela.
     direct_channel_self: Só você
 
     uploads_disabled: O envio de arquivos está desabilitado no chat.
     upload_missing: Nenhum arquivo foi enviado.
     upload_too_large: Esse arquivo é muito grande.
     upload_unsupported: "Tipo de arquivo não suportado: {type}"
+    upload_storage_failed: Não foi possível guardar o arquivo. Tente de novo daqui a pouco, ou avise um administrador se continuar acontecendo.
 
     direct_needs_participant: Escolha ao menos um usuário para conversar.
     direct_too_many: "{max, plural, one {Uma conversa em grupo aceita no máximo # participante.} other {Uma conversa em grupo aceita no máximo # participantes.}}"
@@ -100,6 +112,7 @@ ramon-chat:
       back_to_channels: Voltar aos canais
 
     channel:
+      gone: "Este canal não existe mais."
       threading_enabled: Tópicos habilitados
       closed: Este canal está fechado. Não é possível enviar novas mensagens.
       join_to_post: Entre neste canal para enviar mensagens.
@@ -538,6 +551,14 @@ ramon-chat:
       allow_uploads_help: Anexos nas mensagens. Quais grupos podem anexar é uma permissão logo abaixo.
       max_upload_size: Tamanho máximo de envio (bytes)
       max_upload_size_help: "10485760 equivale a 10 MB."
+      upload_storage: Onde os anexos públicos são guardados
+      upload_storage_help: "Anexos de canais privados, mensagens diretas e categorias restritas ficam sempre no disco privado deste fórum, seja qual for a escolha aqui. Se o FoF Upload não conseguir guardar um arquivo, o envio é recusado em vez de ficar no disco local."
+      upload_storage_local: Disco deste fórum
+      upload_storage_fof: Armazenamento do FoF Upload
+      fof_upload_adapter: Adaptador do FoF Upload
+      fof_upload_adapter_help: "Qual dos armazenamentos do FoF Upload recebe os anexos do chat. O bucket precisa ter leitura pública. Os tipos de arquivo, limites de tamanho e permissões do próprio FoF Upload não valem aqui; valem os limites do chat acima e a permissão de envio do chat."
+      fof_upload_adapter_mapping: Seguir o mapeamento de tipos de arquivo do FoF Upload
+      fof_upload_local_warning: "O adaptador local do FoF Upload, que o mapeamento de tipos dele costuma escolher, grava em public/assets/files neste servidor. Isso só economiza banda se uma URL de CDN estiver definida nas configurações do FoF Upload."
 
       title_label: Nome do chat
       title_help: Exibido no botão do cabeçalho e no painel. Deixe vazio para usar "Chat".
@@ -573,7 +594,7 @@ ramon-chat:
       messages_title: Mensagens
       messages_help: Limites de tamanho, ritmo e edição para toda mensagem enviada.
       uploads_title: Envio de arquivos
-      uploads_help: Se as mensagens podem levar arquivos, e de que tamanho.
+      uploads_help: Se as mensagens podem levar arquivos, de que tamanho, e onde ficam guardados.
       retention_title: Retenção
       retention_help: Por quanto tempo as mensagens ficam guardadas. As mais antigas são removidas pela tarefa noturna de limpeza.
       realtime_title: Tempo real e som

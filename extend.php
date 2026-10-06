@@ -139,6 +139,14 @@ return [
             Schema\Boolean::make('canModerateChat')
                 ->get(fn ($forum, Context $context) => $context->getActor()->hasPermission('ramon-chat.moderate')),
 
+            // The channel form's audience switches (auto-join, auto-join on reply,
+            // announcing discussions). ChannelResource refuses a change to them
+            // from anyone else, so offering them would only produce an error.
+            Schema\Boolean::make('canCurateChatChannels')
+                ->get(fn ($forum, Context $context) => $context->getActor()->isAdmin()
+                    || $context->getActor()->hasPermission('ramon-chat.moderate')
+                    || $context->getActor()->hasPermission('ramon-chat.editChannel')),
+
             // The paperclip is drawn from this. The permission was enforced only in
             // UploadController, so someone without it still saw the control and got
             // a 403 on use — the server was right and the interface was lying.
@@ -206,6 +214,14 @@ return [
         ->default('ramon-chat.message_edit_window_minutes', 0)
         ->default('ramon-chat.allow_uploads', true)
         ->default('ramon-chat.max_upload_size', 10485760)
+        // Where public attachments are stored: 'local' (the chat's own disk) or
+        // 'fof-upload' (fof/upload's configured storage, used only while that
+        // extension is enabled). Private attachments ignore this. The adapter is
+        // a fof/upload adapter key; empty follows fof/upload's own mime mapping.
+        // Neither is serialised to the forum: the client never needs them, and
+        // the adapter name says where the forum keeps its files.
+        ->default(Storage\UploadStorage::SETTING, 'local')
+        ->default('ramon-chat.fof_upload_adapter', '')
         ->default('ramon-chat.allow_archiving_channels', true)
         ->default('ramon-chat.threading_default', false)
         // Whether realtime pushes go through the queue instead of running in the
@@ -259,7 +275,10 @@ return [
         ->registerPreference('ramon-chat.enabled', 'boolVal', true)
         ->registerPreference('ramon-chat.allowChannelWideMentions', 'boolVal', true)
         ->registerPreference('ramon-chat.sound', 'strVal', 'default')
-        ->registerPreference('ramon-chat.emailNotifications', 'boolVal', false)
+        // Mention mail. Read in SendChatNotifications alongside core's
+        // `notify_chatMention_email`, and on by default like it, so the two never
+        // disagree about whether a member who touched neither gets the mail.
+        ->registerPreference('ramon-chat.emailNotifications', 'boolVal', true)
         ->registerPreference('ramon-chat.openInDrawer', 'boolVal', true)
 
         // Which keystroke sends, for this member. Three states, not two, and the
@@ -445,6 +464,9 @@ return [
                 ->listen(Event\ThreadWasCreated::class, Realtime\BroadcastListener::class.'@whenThreadChanged')
                 ->listen(Event\ChannelStatusChanged::class, Realtime\BroadcastListener::class.'@whenChannelChanged')
                 ->listen(Event\ChannelWasEdited::class, Realtime\BroadcastListener::class.'@whenChannelChanged')
+                // A deleted channel leaves every member's sidebar at once, instead
+                // of lingering as a row that answers with a 404.
+                ->listen(Event\ChannelWasDeleted::class, Realtime\BroadcastListener::class.'@whenChannelDeleted')
                 // Membership: who was invited, came in, or went out. What lets a
                 // channel appear in the sidebar the moment its invite is
                 // accepted, and disappear the moment someone is removed, without
@@ -469,5 +491,15 @@ return [
             (new \Flarum\Audit\Extend\Audit())
                 ->group('ramon-chat')
                 ->using(new Audit\AuditIntegration()),
+        ]),
+
+    // ── Attachment storage through fof/upload ────────────────────────────────
+    // Only the admin dropdown needs wiring; the storage itself is picked at
+    // upload time by Storage\UploadStorage, which checks that fof/upload is
+    // enabled before touching any of its classes.
+    (new Extend\Conditional())
+        ->whenExtensionEnabled('fof-upload', fn () => [
+            (new Extend\Frontend('admin'))
+                ->content(Content\FofUploadAdapters::class),
         ]),
 ];

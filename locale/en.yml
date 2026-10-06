@@ -9,6 +9,9 @@ ramon-chat:
     message_too_long: "Messages cannot be longer than {max} characters."
     rate_limited: You are sending messages too quickly. Please slow down.
     invalid_reaction: That is not a valid emoji reaction.
+    reaction_limit: This message cannot take any more reactions.
+    bookmark_name_too_long: "Bookmark names cannot be longer than {max} characters."
+    draft_too_long: "This draft is too long to save. Drafts cannot be longer than {max} characters."
     slow_mode_wait: "Slow mode is on in this channel. You can send another message in {seconds}s."
     flag_reason_invalid: That is not a reason a message can be reported for.
     flag_detail_required: Please say what is wrong with this message.
@@ -20,6 +23,14 @@ ramon-chat:
     archive_discussion_not_found: That discussion does not exist, or you cannot access it.
     archive_title_required: An archive needs a discussion title.
     archive_empty: This channel was archived with no messages.
+    archive_private_channel: Only an administrator can archive a private channel into a discussion.
+    archive_discussion_wider: This channel's category is restricted, so it can only be archived into a discussion in that category.
+    archive_needs_approval: Your posts need approval here, so this channel cannot be archived by you.
+    archive_too_large: "This channel has more than {max} messages. Ask an administrator to archive it."
+    invite_rate_limited: You have sent too many invitations recently. Try again later.
+    membership_rate_limited: You are joining and leaving this channel too quickly. Try again in a minute.
+    channel_flag_not_allowed: Only chat moderators can change this setting.
+    channel_tag_not_found: That category does not exist, or you cannot access it.
     direct_channel_self: Just you
 
     # Uploads
@@ -27,6 +38,7 @@ ramon-chat:
     upload_missing: No file was uploaded.
     upload_too_large: That file is too large.
     upload_unsupported: "Unsupported file type: {type}"
+    upload_storage_failed: The file could not be stored. Try again in a moment, or tell an administrator if it keeps happening.
 
     # Direct messages
     direct_needs_participant: Choose at least one user to message.
@@ -126,6 +138,7 @@ ramon-chat:
       back_to_channels: Back to channels
 
     channel:
+      gone: "This channel no longer exists."
       threading_enabled: Threads enabled
       closed: This channel is closed. New messages cannot be sent.
       join_to_post: Join this channel to send messages.
@@ -567,6 +580,14 @@ ramon-chat:
       allow_uploads_help: Attachments in messages. Which groups may attach is a permission below.
       max_upload_size: Maximum upload size (bytes)
       max_upload_size_help: "10485760 is 10 MB."
+      upload_storage: Where public attachments are stored
+      upload_storage_help: "Attachments in private channels, direct messages and restricted categories always stay on this forum's private disk, whatever is chosen here. If fof/upload cannot store a file, the upload is refused rather than kept locally."
+      upload_storage_local: This forum's disk
+      upload_storage_fof: FoF Upload storage
+      fof_upload_adapter: FoF Upload adapter
+      fof_upload_adapter_help: "Which of FoF Upload's storage backends receives chat attachments. The bucket must be publicly readable. FoF Upload's own file types, size limits and permissions do not apply here; the chat's limits above and its upload permission do."
+      fof_upload_adapter_mapping: Follow FoF Upload's file type mapping
+      fof_upload_local_warning: "FoF Upload's local adapter, which its file type mapping often picks, writes to public/assets/files on this server. That only saves bandwidth if a CDN URL is set in FoF Upload's settings."
 
       title_label: Chat name
       title_help: Shown on the header button and the drawer. Leave blank to use "Chat".
@@ -602,7 +623,7 @@ ramon-chat:
       messages_title: Messages
       messages_help: Length, pace and editing limits for every message sent.
       uploads_title: Uploads
-      uploads_help: Whether messages may carry files, and how large.
+      uploads_help: Whether messages may carry files, how large, and where they are kept.
       retention_title: Retention
       retention_help: How long messages are kept. Older ones are removed by the nightly cleanup task.
       realtime_title: Realtime and sound

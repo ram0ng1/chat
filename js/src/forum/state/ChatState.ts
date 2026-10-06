@@ -874,6 +874,55 @@ export default class ChatState {
    * the reader can no longer see. The store record is left alone; a public
    * channel is still readable and the next fetch says what it may still do.
    */
+  /**
+   * A channel that no longer exists for this reader: deleted, or put out of
+   * their reach. It leaves the list, its cached stream and pin, and the local
+   * snapshot, so a reload cannot bring it back; whoever is looking at it is
+   * stepped out of it with a notice rather than left on a page whose every
+   * request now answers 404.
+   */
+  channelGone(channelId: number): void {
+    const wasOpen =
+      this.activeChannelId === channelId &&
+      (m.route.get() ?? "").includes(`/chat/c/${channelId}`);
+    this.forgetChannel(channelId);
+    delete this.streams[channelId];
+    delete this.pinnedPreviews[channelId];
+    delete this.pinnedTotals[channelId];
+    this.scheduleSnapshot();
+
+    if (wasOpen) m.route.set(app.route("chat.index"));
+
+    // Only for whoever was looking at it. A row that merely leaves the list
+    // needs no explanation, and announcing every deletion would flood anyone
+    // who belongs to many channels — an administrator above all.
+    if (wasOpen) {
+      app.alerts.show(
+        { type: "warning" },
+        app.translator.trans("ramon-chat.forum.channel.gone"),
+      );
+    }
+
+    m.redraw();
+  }
+
+  /**
+   * Error handler for requests scoped to one channel: a 403 or 404 means the
+   * channel is gone for this reader, which `channelGone` settles quietly in
+   * place of core's generic "not found" alert. Anything else falls through.
+   */
+  private goneHandler(channelId: number) {
+    return (error: { status?: number }): false | void => {
+      if (error?.status === 403 || error?.status === 404) {
+        this.channelGone(channelId);
+
+        return;
+      }
+
+      return false;
+    };
+  }
+
   forgetChannel(channelId: number): void {
     this.channels = this.channels.filter(
       (channel) => Number(channel.id()) !== channelId,
@@ -1090,7 +1139,11 @@ export default class ChatState {
    * page is reversed before being prepended.
    */
   async fetchPage(channelId: number): Promise<void> {
-    await this.fetchInto(this.stream(channelId), { channel: channelId });
+    await this.fetchInto(
+      this.stream(channelId),
+      { channel: channelId },
+      this.goneHandler(channelId),
+    );
   }
 
   /**
@@ -1103,6 +1156,7 @@ export default class ChatState {
   private async fetchInto(
     stream: ChannelStream,
     filter: Record<string, unknown>,
+    errorHandler?: (error: { status?: number }) => false | void,
   ): Promise<void> {
     if (stream.loading || !stream.hasMore) return;
 
@@ -1111,14 +1165,19 @@ export default class ChatState {
     try {
       const oldest = stream.messages[0];
 
-      const results = (await app.store.find("chat-messages", {
-        filter: {
-          ...filter,
-          ...(oldest ? { lessThan: Number(oldest.id()) } : {}),
+      const results = (await app.store.find(
+        "chat-messages",
+        {
+          filter: {
+            ...filter,
+            ...(oldest ? { lessThan: Number(oldest.id()) } : {}),
+          },
+          sort: "-id",
+          page: { limit: PAGE_SIZE },
         },
-        sort: "-id",
-        page: { limit: PAGE_SIZE },
-      })) as unknown as Message[];
+        undefined,
+        errorHandler ? { errorHandler } : undefined,
+      )) as unknown as Message[];
 
       const page = (Array.isArray(results) ? results : []).slice().reverse();
 
@@ -1227,11 +1286,16 @@ export default class ChatState {
     stream.loading = true;
 
     try {
-      const results = (await app.store.find("chat-messages", {
-        filter: { channel: channelId },
-        sort: "-id",
-        page: { limit: PAGE_SIZE },
-      })) as unknown as Message[];
+      const results = (await app.store.find(
+        "chat-messages",
+        {
+          filter: { channel: channelId },
+          sort: "-id",
+          page: { limit: PAGE_SIZE },
+        },
+        undefined,
+        { errorHandler: this.goneHandler(channelId) },
+      )) as unknown as Message[];
 
       const fresh = (Array.isArray(results) ? results : []).slice().reverse();
       const complete = fresh.length < PAGE_SIZE;
@@ -1742,6 +1806,7 @@ export default class ChatState {
         method: "POST",
         url: `${app.forum.attribute("apiUrl")}/chat-channels/${channelId}/read`,
         body: { data: { attributes: { lastReadMessageId: upTo } } },
+        errorHandler: this.goneHandler(channelId),
       })
       .catch(() => {
         // Swallowed deliberately — see above.

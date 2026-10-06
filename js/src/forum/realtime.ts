@@ -823,6 +823,8 @@ function onThread(data: {
 interface ChannelPayload {
   channelId: number;
   status: string;
+  /** Set when the channel was deleted; nothing else in the payload applies. */
+  deleted?: boolean;
   postPermission?: string;
   isPrivate?: boolean;
   threadingEnabled?: boolean;
@@ -836,6 +838,12 @@ interface ChannelPayload {
 const refetching = new Set<number>();
 
 function onChannel(data: ChannelPayload): void {
+  if (data.deleted) {
+    chatState.channelGone(data.channelId);
+
+    return;
+  }
+
   const channel = chatState.channel(data.channelId);
 
   if (!channel) return;

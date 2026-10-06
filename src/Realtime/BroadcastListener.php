@@ -13,6 +13,7 @@ use Flarum\User\User;
 use Psr\Log\LoggerInterface;
 use Ramon\Chat\Channel;
 use Ramon\Chat\Event\ChannelStatusChanged;
+use Ramon\Chat\Event\ChannelWasDeleted;
 use Ramon\Chat\Event\ChannelWasEdited;
 use Ramon\Chat\Event\InviteWasCancelled;
 use Ramon\Chat\Event\InviteWasDeclined;
@@ -219,6 +220,30 @@ class BroadcastListener
         );
     }
 
+    /**
+     * A channel removed. Ids and scalars only: the row is gone from every
+     * member's sidebar, so there is nothing left to describe — without the push
+     * the stale row stayed clickable and answered with a 404.
+     *
+     * The audience is still resolvable: deletion stamps `deleted_at` and leaves
+     * the memberships in place, and SendChatEventJob skips the visibility scope
+     * (which now excludes the channel) for a deleted channel, checking only that
+     * each member may still use the chat at all.
+     */
+    public function whenChannelDeleted(ChannelWasDeleted $event): void
+    {
+        $this->broadcaster->toChannelMembers(
+            $event->channel,
+            self::EVENT_CHANNEL,
+            [
+                'channelId' => (int) $event->channel->id,
+                'status'    => $event->channel->status,
+                'deleted'   => true,
+            ],
+            null
+        );
+    }
+
     public function whenInvited(UserWasInvited $event): void
     {
         $this->membership($event->channel, $event->user, 'invited', $event->inviter, tellMembers: false);
@@ -364,12 +389,14 @@ class BroadcastListener
                 && $message->deleted_by_id !== null
                 && (int) $message->deleted_by_id !== (int) $message->user_id,
 
-            // The id alone. The recipient names the moderator only if that user
-            // is already in their store — which they usually are, having been
-            // active in the channel — and falls back to the unnamed wording
-            // otherwise. Pushing a whole user record for a tombstone is not
-            // worth the payload on every edit and pin that shares this shape.
-            'deletedById' => $message->deleted_by_id,
+            // Never sent. The tombstone and who made it are for the author and
+            // the moderators, the only ones the API shows a deleted message to,
+            // but this one payload goes to every member — so naming the moderator
+            // here told the whole channel who removed whose message. Live, the
+            // tombstone reads "removed by a moderator"; the named form arrives
+            // with the next fetch, where MessageResource decides who may see it.
+            // The key stays so the client's payload shape does not change.
+            'deletedById' => null,
 
             'isPinned'    => $message->isPinned(),
             'pinnedAt'    => $message->pinned_at?->toIso8601String(),
