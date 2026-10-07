@@ -22,20 +22,32 @@ interface WebhookModel {
 export default class WebhooksPanel extends Component<ComponentAttrs> {
     private webhooks;
     private channels;
+    /** Accounts a webhook may post as, besides the bot: administrators only. */
+    private admins;
     private loading;
     /** URLs revealed this session, keyed by webhook id. Never re-fetchable. */
     private revealed;
     private draftName;
     private draftChannel;
+    /** Empty posts as the bot; otherwise an admin's user id. */
+    private draftAuthor;
     private working;
     oninit(vnode: Mithril.Vnode<ComponentAttrs, this>): void;
     view(): Mithril.Children;
     protected createForm(): Mithril.Children;
+    /**
+     * Who a webhook posts as: the bot, or one of the forum's administrators.
+     * Without a choice the message has no author and the stream draws it as a
+     * deleted account.
+     */
+    protected authorSelect(value: string, onchange: (value: string) => void): Mithril.Children;
+    protected authorOf(webhook: WebhookModel): string;
     protected list(): Mithril.Children;
     protected row(webhook: WebhookModel): Mithril.Children;
     protected load(): Promise<void>;
     protected create(): Promise<void>;
     protected setActive(webhook: WebhookModel, active: boolean): Promise<void>;
+    protected setAuthor(webhook: WebhookModel, value: string): Promise<void>;
     protected rotate(webhook: WebhookModel): Promise<void>;
     protected remove(webhook: WebhookModel): Promise<void>;
     protected remember(webhook: WebhookModel): void;

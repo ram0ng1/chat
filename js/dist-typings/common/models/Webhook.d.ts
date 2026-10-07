@@ -18,7 +18,10 @@ export default class Webhook extends Model {
      */
     key: () => string | null;
     url: () => string | null;
+    /** The admin account deliveries post as; null posts as the bot. */
+    userId: () => number | null;
     channel: () => false | Channel | null;
     creator: () => false | User | null;
+    user: () => false | User | null;
     apiEndpoint(): string;
 }
