@@ -106,15 +106,17 @@ class WebhookDeliveryController implements RequestHandlerInterface
             $text = mb_substr($text, 0, $max);
         }
 
-        // Webhook messages have no author. `user_id` stays null and the display
-        // identity comes from the webhook row, so a deleted admin account never
-        // orphans past deliveries.
-        $message = new Message();
-        $message->channel_id = $channel->id;
-        $message->user_id = null;
+        // Posted as the admin account chosen on the webhook, or as the bot. A bot
+        // message has no `user_id`; the client draws its name and avatar from the
+        // bot settings. Storing it as an authorless *text* message instead is what
+        // made deliveries render as a deleted account.
+        $author = $webhook->author();
+
+        $message = $author !== null
+            ? Message::build($channel, $author, $text)
+            : Message::buildBot($channel, null, $text);
+
         $message->webhook_id = $webhook->id;
-        $message->type = Message::TYPE_TEXT;
-        $message->setContentAttribute($text, null);
         $message->save();
 
         $channel->last_message_id = $message->id;
@@ -130,7 +132,7 @@ class WebhookDeliveryController implements RequestHandlerInterface
 
         $webhook->recordDelivery()->save();
 
-        $this->events->dispatch(new MessageWasSent($message, null));
+        $this->events->dispatch(new MessageWasSent($message, $author));
 
         return new JsonResponse([
             'data' => [
@@ -163,7 +165,7 @@ class WebhookDeliveryController implements RequestHandlerInterface
         $candidates = Webhook::query()
             ->where('active', true)
             ->where('key', 'like', $prefix.'%')
-            ->with('channel')
+            ->with(['channel', 'user.groups'])
             ->get();
 
         foreach ($candidates as $candidate) {

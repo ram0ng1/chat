@@ -209,7 +209,7 @@ class Message extends AbstractModel implements Formattable
      *                                      and a future renderer is not left
      *                                      parsing its own output back.
      */
-    public static function buildBot(Channel $channel, string $key, string $content, array $data = []): static
+    public static function buildBot(Channel $channel, ?string $key, string $content, array $data = []): static
     {
         $message = new static();
 

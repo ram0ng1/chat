@@ -17,6 +17,7 @@ use Flarum\Api\Sort\SortColumn;
 use Flarum\Foundation\ValidationException;
 use Flarum\Http\UrlGenerator;
 use Flarum\Locale\Translator;
+use Flarum\User\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Arr;
 use Ramon\Chat\Channel;
@@ -87,23 +88,23 @@ class WebhookResource extends AbstractDatabaseResource
             Endpoint\Index::make()
                 ->authenticated()
                 ->visible(fn (Context $context) => $context->getActor()->isAdmin())
-                ->defaultInclude(['channel'])
+                ->defaultInclude(['channel', 'user'])
                 ->defaultSort('-createdAt'),
 
             Endpoint\Show::make()
                 ->authenticated()
                 ->visible(fn (Webhook $webhook, Context $context) => $context->getActor()->isAdmin())
-                ->defaultInclude(['channel']),
+                ->defaultInclude(['channel', 'user']),
 
             Endpoint\Create::make()
                 ->authenticated()
                 ->visible(fn (Context $context) => $context->getActor()->isAdmin())
-                ->defaultInclude(['channel']),
+                ->defaultInclude(['channel', 'user']),
 
             Endpoint\Update::make()
                 ->authenticated()
                 ->visible(fn (Webhook $webhook, Context $context) => $context->getActor()->isAdmin())
-                ->defaultInclude(['channel']),
+                ->defaultInclude(['channel', 'user']),
 
             Endpoint\Delete::make()
                 ->authenticated()
@@ -126,7 +127,7 @@ class WebhookResource extends AbstractDatabaseResource
 
                     return $webhook;
                 })
-                ->defaultInclude(['channel']),
+                ->defaultInclude(['channel', 'user']),
         ];
     }
 
@@ -172,6 +173,30 @@ class WebhookResource extends AbstractDatabaseResource
                     $webhook->channel_id = $channel->id;
                 }),
 
+            // Who deliveries are posted as: an administrator's account, or null for
+            // the chat's bot. Restricted to admins because a webhook key is not a
+            // session; whoever holds it speaks as this account.
+            Schema\Integer::make('userId')
+                ->nullable()
+                ->writable()
+                ->set(function (Webhook $webhook, $value) {
+                    if ($value === null || (int) $value <= 0) {
+                        $webhook->user_id = null;
+
+                        return;
+                    }
+
+                    $user = User::query()->with('groups')->find((int) $value);
+
+                    if ($user === null || ! $user->isAdmin()) {
+                        throw new ValidationException([
+                            'userId' => $this->translator->trans('ramon-chat.api.webhook_user_not_admin'),
+                        ]);
+                    }
+
+                    $webhook->user_id = $user->id;
+                }),
+
             Schema\Integer::make('deliveriesCount'),
             Schema\DateTime::make('lastDeliveredAt')->nullable(),
             Schema\DateTime::make('createdAt'),
@@ -193,6 +218,7 @@ class WebhookResource extends AbstractDatabaseResource
 
             Schema\Relationship\ToOne::make('channel')->type('chat-channels')->includable(),
             Schema\Relationship\ToOne::make('creator')->type('users')->includable(),
+            Schema\Relationship\ToOne::make('user')->type('users')->includable(),
         ];
     }
 

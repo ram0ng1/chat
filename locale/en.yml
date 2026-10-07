@@ -84,6 +84,7 @@ ramon-chat:
     # Webhooks
     webhook_channel_unavailable: That webhook's channel is closed or unavailable.
     webhook_empty: The webhook payload contained no text.
+    webhook_user_not_admin: Choose the bot or an administrator account.
 
   ##
   # Email templates. Referenced from Notification\ChatMentionBlueprint and
@@ -797,3 +798,5 @@ ramon-chat:
       url_once: Copy this URL now. It is not shown again.
       disabled: Incoming webhooks are switched off. Turn the switch above on and save to manage them.
       failed: That change could not be saved.
+      author: Post as
+      author_bot: Bot

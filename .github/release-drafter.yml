@@ -50,14 +50,9 @@ version-resolver:
       - 'manutencao'
   default: patch
 change-template: '- $TITLE (PR #$NUMBER) por @$AUTHOR'
+# "Como atualizar" não fica aqui: o release-management.yml monta esse bloco e o
+# passa como `footer`, incluindo `php flarum migrate` só quando a versão traz
+# migração nova.
 template: |
   ## O que mudou na extensão Chat 🌟
   $CHANGES
-
-  ## 📦 Como atualizar
-
-  ```bash
-  composer require ramon/chat:$RESOLVED_VERSION
-  php flarum cache:clear
-  php flarum assets:publish
-  ```
