@@ -4,6 +4,7 @@ import type { ComponentAttrs } from "flarum/common/Component";
 import Button from "flarum/common/components/Button";
 import LoadingIndicator from "flarum/common/components/LoadingIndicator";
 import Switch from "flarum/common/components/Switch";
+import type User from "flarum/common/models/User";
 import type Mithril from "mithril";
 
 interface WebhookModel {
@@ -28,6 +29,9 @@ interface WebhookModel {
 export default class WebhooksPanel extends Component<ComponentAttrs> {
   private webhooks: WebhookModel[] = [];
   private channels: any[] = [];
+
+  /** Accounts a webhook may post as, besides the bot: administrators only. */
+  private admins: User[] = [];
   private loading = true;
 
   /** URLs revealed this session, keyed by webhook id. Never re-fetchable. */
@@ -35,6 +39,9 @@ export default class WebhooksPanel extends Component<ComponentAttrs> {
 
   private draftName = "";
   private draftChannel = "";
+
+  /** Empty posts as the bot; otherwise an admin's user id. */
+  private draftAuthor = "";
   private working = false;
 
   oninit(vnode: Mithril.Vnode<ComponentAttrs, this>): void {
@@ -95,6 +102,10 @@ export default class WebhooksPanel extends Component<ComponentAttrs> {
           ))}
         </select>
 
+        {this.authorSelect(this.draftAuthor, (value) => {
+          this.draftAuthor = value;
+        })}
+
         <Button
           className="Button Button--primary"
           loading={this.working}
@@ -105,6 +116,53 @@ export default class WebhooksPanel extends Component<ComponentAttrs> {
         </Button>
       </div>
     );
+  }
+
+  /**
+   * Who a webhook posts as: the bot, or one of the forum's administrators.
+   * Without a choice the message has no author and the stream draws it as a
+   * deleted account.
+   */
+  protected authorSelect(
+    value: string,
+    onchange: (value: string) => void,
+  ): Mithril.Children {
+    return (
+      <select
+        className="FormControl ChatWebhooks-author"
+        aria-label={app.translator.trans(
+          "ramon-chat.admin.webhooks.author",
+          {},
+          true,
+        )}
+        title={app.translator.trans(
+          "ramon-chat.admin.webhooks.author",
+          {},
+          true,
+        )}
+        value={value}
+        onchange={(e: Event) => onchange((e.target as HTMLSelectElement).value)}
+      >
+        <option value="">
+          {app.translator.trans(
+            "ramon-chat.admin.webhooks.author_bot",
+            {},
+            true,
+          )}
+        </option>
+        {this.admins.map((user) => (
+          <option key={user.id()} value={String(user.id())}>
+            {user.displayName()}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  protected authorOf(webhook: WebhookModel): string {
+    const id = webhook.attribute<number | null>("userId");
+
+    return id ? String(id) : "";
   }
 
   protected list(): Mithril.Children {
@@ -154,6 +212,10 @@ export default class WebhooksPanel extends Component<ComponentAttrs> {
         ) : null}
 
         <div className="ChatWebhooks-row-actions">
+          {this.authorSelect(this.authorOf(webhook), (value) =>
+            this.setAuthor(webhook, value),
+          )}
+
           <Switch
             state={Boolean(webhook.attribute<boolean>("active"))}
             onchange={(value: boolean) => this.setActive(webhook, value)}
@@ -185,11 +247,15 @@ export default class WebhooksPanel extends Component<ComponentAttrs> {
 
   protected async load(): Promise<void> {
     try {
-      const [webhooks, channels] = await Promise.all([
-        app.store.find("chat-webhooks", { include: "channel" }),
+      const [webhooks, channels, admins] = await Promise.all([
+        app.store.find("chat-webhooks", { include: "channel,user" }),
         app.store.find("chat-channels", {
           filter: { type: "category" },
           page: { limit: 100 },
+        }),
+        app.store.find<User[]>("users", {
+          filter: { group: "1" },
+          page: { limit: 50 },
         }),
       ]);
 
@@ -197,9 +263,11 @@ export default class WebhooksPanel extends Component<ComponentAttrs> {
         ? webhooks
         : []) as unknown as WebhookModel[];
       this.channels = Array.isArray(channels) ? channels : [];
+      this.admins = Array.isArray(admins) ? admins : [];
     } catch {
       this.webhooks = [];
       this.channels = [];
+      this.admins = [];
     } finally {
       this.loading = false;
       m.redraw();
@@ -213,6 +281,7 @@ export default class WebhooksPanel extends Component<ComponentAttrs> {
       const webhook = (await app.store.createRecord("chat-webhooks").save({
         name: this.draftName.trim(),
         channelId: Number(this.draftChannel),
+        userId: this.draftAuthor ? Number(this.draftAuthor) : null,
       })) as unknown as WebhookModel;
 
       this.webhooks = [webhook, ...this.webhooks];
@@ -220,6 +289,7 @@ export default class WebhooksPanel extends Component<ComponentAttrs> {
 
       this.draftName = "";
       this.draftChannel = "";
+      this.draftAuthor = "";
     } catch (e: any) {
       app.alerts.show(
         { type: "error" },
@@ -246,6 +316,30 @@ export default class WebhooksPanel extends Component<ComponentAttrs> {
       app.alerts.show(
         { type: "error" },
         app.translator.trans("ramon-chat.admin.webhooks.failed"),
+      );
+    } finally {
+      m.redraw();
+    }
+  }
+
+  protected async setAuthor(
+    webhook: WebhookModel,
+    value: string,
+  ): Promise<void> {
+    const previous = webhook.attribute<number | null>("userId") ?? null;
+    const userId = value ? Number(value) : null;
+
+    webhook.pushAttributes({ userId });
+    m.redraw();
+
+    try {
+      await webhook.save({ userId });
+    } catch (e: any) {
+      webhook.pushAttributes({ userId: previous });
+      app.alerts.show(
+        { type: "error" },
+        e?.response?.errors?.[0]?.detail ??
+          app.translator.trans("ramon-chat.admin.webhooks.failed"),
       );
     } finally {
       m.redraw();

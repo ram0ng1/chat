@@ -76,6 +76,7 @@ ramon-chat:
 
     webhook_channel_unavailable: O canal desse webhook está fechado ou indisponível.
     webhook_empty: O payload do webhook não continha texto.
+    webhook_user_not_admin: Escolha o bot ou uma conta de administrador.
 
   email:
     mentioned:
@@ -768,3 +769,5 @@ ramon-chat:
       url_once: Copie esta URL agora. Ela não reaparece.
       disabled: Os webhooks de entrada estão desligados. Ligue o interruptor acima e salve para gerenciá-los.
       failed: Falha ao salvar a alteração.
+      author: Enviar como
+      author_bot: Bot

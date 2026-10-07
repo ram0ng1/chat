@@ -26,6 +26,7 @@ use Illuminate\Support\Str;
  * @property string|null $username
  * @property string|null $emoji
  * @property int $channel_id
+ * @property int|null $user_id
  * @property string $key
  * @property int|null $creator_id
  * @property bool $active
@@ -35,6 +36,7 @@ use Illuminate\Support\Str;
  * @property Carbon $updated_at
  * @property-read Channel|null $channel
  * @property-read User|null $creator
+ * @property-read User|null $user
  */
 class Webhook extends AbstractModel
 {
@@ -57,6 +59,7 @@ class Webhook extends AbstractModel
 
     protected $casts = [
         'channel_id'        => 'integer',
+        'user_id'           => 'integer',
         'creator_id'        => 'integer',
         'active'            => 'boolean',
         'deliveries_count'  => 'integer',
@@ -98,6 +101,28 @@ class Webhook extends AbstractModel
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'creator_id');
+    }
+
+    /**
+     * The account deliveries are posted as. Null posts as the chat's bot.
+     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
+
+    /**
+     * Who a delivery is attributed to, or null for the bot.
+     *
+     * Only an administrator qualifies: the choice is offered as "the bot or an
+     * admin account", and an account demoted since then must not keep posting
+     * under its name on the strength of a key it never held.
+     */
+    public function author(): ?User
+    {
+        $user = $this->user;
+
+        return $user !== null && $user->isAdmin() ? $user : null;
     }
 
     public function url(): string

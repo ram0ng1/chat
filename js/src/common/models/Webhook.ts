@@ -24,8 +24,12 @@ export default class Webhook extends Model {
   key = Model.attribute<string | null>("key");
   url = Model.attribute<string | null>("url");
 
+  /** The admin account deliveries post as; null posts as the bot. */
+  userId = Model.attribute<number | null>("userId");
+
   channel = Model.hasOne<Channel | null>("channel");
   creator = Model.hasOne<User | null>("creator");
+  user = Model.hasOne<User | null>("user");
 
   apiEndpoint(): string {
     return "/chat-webhooks" + (this.exists ? "/" + this.id() : "");
