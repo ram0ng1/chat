@@ -51,7 +51,7 @@ jobs:
     steps:
       # §35.13 I3 — auditar todo egress (em modo audit; promover a block depois).
       - name: Harden Runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25  # v2.22.1
         with:
           egress-policy: audit
 
@@ -66,7 +66,7 @@ jobs:
           ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
 
       - name: Configurar Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
         with:
           node-version: 20
           cache: 'npm'
@@ -194,7 +194,7 @@ jobs:
 
       - name: Publicar Release
         id: create_release
-        uses: release-drafter/release-drafter@34d80673e067bdc0c24568d3af899c216adcfaa9  # v7.7.0
+        uses: release-drafter/release-drafter@978bb0b30c5ee8cdd332ced253758157150d43f0  # v7.10.0
         with:
           publish: true
           # Versão calculada acima — sobrepõe o version-resolver do
@@ -214,7 +214,7 @@ jobs:
       # §35.13 R4 — provenance assinada (SLSA) para os artefatos do release.
       - name: Atestar provenance dos artefatos
         if: steps.create_release.outcome == 'success'
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373  # v4.1.1
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8  # v4.2.2
         with:
           subject-path: |
             composer.json
