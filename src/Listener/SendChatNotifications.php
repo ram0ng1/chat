@@ -185,6 +185,16 @@ class SendChatNotifications
             return [];
         }
 
+        // Shared permission buckets are valid for DMs only after membership is settled.
+        if ($message->channel?->isDirect()) {
+            $userIds = ChannelUser::query()
+                ->where('channel_id', $message->channel_id)
+                ->whereNull('left_at')
+                ->whereIn('user_id', $userIds)
+                ->pluck('user_id')
+                ->all();
+        }
+
         $isChannelWide = $isMention && $message->mentions->contains(fn ($m) => $m->isChannelWide());
 
         $recipients = [];
@@ -216,17 +226,11 @@ class SendChatNotifications
                     continue;
                 }
 
-                // The authoritative check, in the form that costs no query for a
-                // message already in hand. Channel visibility is the only half
-                // that has to reach the database, and it is bucketed; the row-level
-                // half — moderators, and the author of a deleted message — is per
-                // user and decided in PHP. ScopeMessageVisibility keeps the two
-                // forms of this rule in step.
-                if (! ScopeMessageVisibility::rowVisibleTo(
-                    $user,
-                    $message,
-                    $visibility->channelVisible($user, $channelId)
-                )) {
+                // Check per-user access first so an outsider cannot seed a shared channel denial.
+                if (
+                    ! ScopeMessageVisibility::rowVisibleTo($user, $message, true)
+                    || ! $visibility->channelVisible($user, $channelId)
+                ) {
                     continue;
                 }
 

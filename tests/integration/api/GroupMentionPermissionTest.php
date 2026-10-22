@@ -15,7 +15,9 @@ use Flarum\Notification\NotificationSyncer;
 use Flarum\Testing\integration\TestCase;
 use Flarum\User\User;
 use Mockery;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Psr\Log\NullLogger;
+use Ramon\Chat\Channel;
 use Ramon\Chat\Event\MessageWasSent;
 use Ramon\Chat\Listener\SendChatNotifications;
 use Ramon\Chat\Mention\MentionResolver;
@@ -179,6 +181,53 @@ class GroupMentionPermissionTest extends TestCase
         $listener->handle(new MessageWasSent($message, User::query()->find(self::AUTHOR)));
 
         $this->assertSame([self::MOD], $mailed, 'the member who turned chat mail off is not mailed');
+    }
+
+    #[DataProvider('restrictedChannelMentions')]
+    public function test_mentions_do_not_email_non_participants_with_the_same_permissions(string $type, bool $outsiderFirst): void
+    {
+        [$memberId, $outsiderId] = $outsiderFirst ? [self::QUIET_MOD, self::MOD] : [self::MOD, self::QUIET_MOD];
+        $db = $this->database();
+        $db->table('chat_channels')->where('id', 1)->update(['type' => $type, 'is_private' => $type === 'category']);
+        $db->table('chat_channel_user')->where('user_id', $outsiderId)->delete();
+        $db->table('group_user')->whereIn('user_id', [self::MOD, self::QUIET_MOD])->delete();
+        $db->table('users')->where('id', self::QUIET_MOD)->update(['preferences' => '{}']);
+        $db->table('chat_message_mentions')->insert([
+            ['message_id' => 1, 'type' => MessageMention::TYPE_USER, 'user_id' => self::MOD, 'created_at' => Carbon::now()->toDateTimeString()],
+            ['message_id' => 1, 'type' => MessageMention::TYPE_USER, 'user_id' => self::QUIET_MOD, 'created_at' => Carbon::now()->toDateTimeString()],
+        ]);
+
+        $member = User::query()->findOrFail($memberId);
+        $outsider = User::query()->findOrFail($outsiderId);
+        $this->assertSame($member->permissionGroupIds(), $outsider->permissionGroupIds());
+        $this->assertFalse(Channel::whereVisibleTo($outsider)->whereKey(1)->exists());
+
+        $mailed = [];
+        $syncer = Mockery::mock(NotificationSyncer::class);
+        $syncer->shouldReceive('sync')->andReturnUsing(function ($blueprint, array $users) use (&$mailed) {
+            $mailed = array_map(fn (User $u) => (int) $u->id, $users);
+        });
+
+        $listener = new SendChatNotifications(
+            $syncer,
+            $this->app()->getContainer()->make(UnreadTracker::class),
+            new NullLogger()
+        );
+        $message = Message::query()->with(['channel', 'mentions'])->findOrFail(1);
+
+        $listener->handle(new MessageWasSent($message, User::query()->findOrFail(self::AUTHOR)));
+
+        $this->assertSame([$memberId], $mailed, 'only the participant should receive the mention email');
+    }
+
+    public static function restrictedChannelMentions(): array
+    {
+        return [
+            'DM, member first' => ['direct', false],
+            'DM, outsider first' => ['direct', true],
+            'private channel, member first' => ['category', false],
+            'private channel, outsider first' => ['category', true],
+        ];
     }
 
     protected function tearDown(): void
