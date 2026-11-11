@@ -81,6 +81,12 @@ ramon-chat:
     move_one_channel: Só dá para mover mensagens de um canal por vez.
     move_wider_audience: "Mensagens de uma conversa direta, ou de um canal privado para um aberto, não podem ser movidas: ficariam visíveis para quem não podia lê-las."
     move_conflict: "Chegaram mensagens novas nesse canal durante a movimentação. Nada foi movido; tente de novo."
+    schedule_invalid: Não foi possível ler o horário. Confira as datas e as horas.
+    schedule_window_order: A janela precisa terminar depois de começar.
+    schedule_weekly_days: Escolha pelo menos um dia da semana.
+    schedule_weekly_hours: "Use horários de abertura e de fechamento como 09:00 e 18:00, diferentes entre si."
+    schedule_timezone: Escolha um fuso horário da lista.
+    schedule_event_missing: Esse evento do calendário não existe ou não está publicado.
 
     webhook_channel_unavailable: O canal desse webhook está fechado ou indisponível.
     webhook_empty: O payload do webhook não continha texto.
@@ -412,6 +418,36 @@ ramon-chat:
       submit: Iniciar conversa
       submit_group: Iniciar conversa em grupo
       too_many: "Uma conversa comporta até {max} outras pessoas."
+
+    schedule:
+      section: Horário de funcionamento
+      mode_label: Quando o canal aceita mensagens
+      mode_always: Sempre aberto
+      mode_window: Numa data e hora
+      mode_weekly: Em dias da semana
+      mode_event: Durante um evento do calendário
+      mode_always_help: Sem horário. O canal só fecha quando alguém o fecha.
+      mode_window_help: Abre uma vez, entre as duas horas abaixo. Fora delas, os membros só leem.
+      mode_weekly_help: Abre toda semana nos dias e horas escolhidos. Fora deles, os membros só leem.
+      mode_event_help: Abre durante cada ocorrência do evento, inclusive as que se repetem. Fora delas, os membros só leem.
+      window_start: Abre em
+      window_end: Fecha em
+      weekly_days: Dias
+      weekly_from: Abre às
+      weekly_to: Fecha às
+      weekly_overnight: Fecha depois da meia-noite, no dia seguinte.
+      timezone: Fuso horário
+      timezone_help: As horas valem neste fuso, inclusive no horário de verão. Cada pessoa vê o horário no próprio fuso.
+      event_label: Evento
+      event_search: Buscar evento pelo nome
+      event_hint: Digite para buscar entre os eventos publicados.
+      event_none: Nenhum evento publicado com esse nome.
+      event_recurring: se repete
+      event_unavailable: O evento ligado a este canal não existe mais ou não está publicado. O canal fica fechado até você escolher outro horário.
+      closed_until: "Fora do horário. Abre {when}."
+      closed_ended: Fora do horário. Não há próxima abertura marcada.
+      closed_unavailable: Fora do horário. O evento ligado a este canal não está disponível.
+      moderators_only_now: Fora do horário. Só a moderação está escrevendo agora.
 
     add_members:
       title: Convidar membros
