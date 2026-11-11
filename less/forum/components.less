@@ -4166,3 +4166,112 @@ html.ChatComposerFront {
     z-index: ~"calc(var(--zindex-composer, 1020) + 6)";
   }
 }
+
+// ── Horário de funcionamento ──
+// Campos no formulário do canal (ScheduleFields) e o lembrete no composer de quem
+// modera fora do horário.
+.ChatSchedule {
+  &-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: @chat-space-md;
+
+    @media (max-width: @chat-mobile-breakpoint) {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  &-days {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  &-day {
+    min-width: 48px;
+    padding: 6px 10px;
+    border: 1px solid var(--avocado-border-subtle);
+    border-radius: @chat-radius-sm;
+    background: none;
+    font-size: @chat-font-label;
+    text-transform: capitalize;
+    color: var(--avocado-muted-label);
+    cursor: pointer;
+    transition: background var(--avocado-t-fast), color var(--avocado-t-fast);
+
+    &:hover:not(:disabled) {
+      background: var(--chat-row-hover-bg);
+    }
+
+    &--on {
+      border-color: var(--primary-color);
+      background: var(--primary-color);
+      color: var(--button-primary-color, #fff);
+
+      &:hover:not(:disabled) {
+        background: var(--primary-color);
+      }
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--primary-color);
+      outline-offset: 2px;
+    }
+  }
+
+  &-chosen {
+    .chat-flex-row(@chat-space-sm);
+    margin-bottom: @chat-space-sm;
+    font-weight: 600;
+    color: var(--avocado-text-dark);
+  }
+
+  &-events {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 220px;
+    margin-top: @chat-space-sm;
+    overflow-y: auto;
+  }
+
+  &-event {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+    padding: 6px @chat-space-sm;
+    border: 0;
+    border-radius: @chat-radius-sm;
+    background: none;
+    text-align: left;
+    color: var(--avocado-text-dark);
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+      background: var(--chat-row-hover-bg);
+    }
+
+    &--on {
+      background: var(--chat-row-selected-bg);
+    }
+
+    &-when {
+      font-size: @chat-font-label;
+      color: var(--avocado-muted-label);
+    }
+  }
+
+  &-warning {
+    margin: 0 0 @chat-space-md;
+    font-size: @chat-font-label;
+    color: var(--alert-error-color, #d83e3e);
+  }
+}
+
+.ChatComposer-offHours {
+  .chat-flex-row(6px);
+  padding: 4px 12px 0;
+  font-size: @chat-font-label;
+  color: var(--avocado-muted-label);
+}

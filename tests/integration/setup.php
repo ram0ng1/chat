@@ -24,6 +24,8 @@
  */
 
 use Flarum\Testing\integration\Setup\SetupScript;
+use Illuminate\Database\Capsule\Manager;
+use Illuminate\Database\Schema\Blueprint;
 
 require __DIR__.'/../../vendor/autoload.php';
 
@@ -35,3 +37,33 @@ $setup->run();
 // traduz algo dispara um warning.
 $tmpDir = getenv('FLARUM_TEST_TMP_DIR_LOCAL') ?: getenv('FLARUM_TEST_TMP_DIR') ?: __DIR__.'/../../vendor/flarum/testing/src/integration/tmp';
 @mkdir($tmpDir.'/storage/locale', 0777, true);
+
+// A tabela do ernestdefoe/calendar, como a migration dele cria, para os testes do
+// horário do canal lerem eventos de verdade (ChannelScheduleTest). Criada aqui,
+// antes de qualquer teste: um CREATE TABLE no meio do teste confirma a transação
+// dele no MySQL e no MariaDB, e no InnoDB uma tabela criada depois do snapshot da
+// transação nem pode ser lida por ela.
+$config = require $tmpDir.'/config.php';
+$database = $config['database'];
+
+if ($database['driver'] === 'sqlite' && ! file_exists($database['database'])) {
+    $database['database'] = $tmpDir.'/'.$database['database'];
+}
+
+$capsule = new Manager();
+$capsule->addConnection($database);
+$schema = $capsule->getConnection()->getSchemaBuilder();
+
+if (! $schema->hasTable('calendar_events')) {
+    $schema->create('calendar_events', function (Blueprint $table) {
+        $table->increments('id');
+        $table->string('title', 255);
+        $table->string('slug', 255);
+        $table->dateTime('start_at');
+        $table->dateTime('end_at')->nullable();
+        $table->boolean('all_day')->default(false);
+        $table->string('timezone', 64)->default('UTC');
+        $table->string('rrule', 600)->nullable();
+        $table->boolean('is_published')->default(true);
+    });
+}

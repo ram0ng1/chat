@@ -93,6 +93,23 @@ export default class Channel extends Model {
   bypassesSlowMode = Model.attribute<boolean>('bypassesSlowMode');
 
   /**
+   * Horário de funcionamento como o servidor guarda (ver Schedule\OpeningHours);
+   * null é sempre aberto. Fora dele, só moderadores escrevem.
+   */
+  schedule = Model.attribute<ChannelScheduleData | null>('schedule');
+
+  /** Se está no horário agora, calculado no servidor. */
+  scheduleOpen = Model.attribute<boolean>('scheduleOpen');
+
+  /** Quando abre ou fecha a seguir; null se nada mais está marcado. */
+  scheduleNextChange = Model.attribute<Date | null, string | null>('scheduleNextChange', Model.transformDate);
+
+  /** O evento do calendário ligado sumiu: o canal fica fechado. */
+  scheduleUnavailable = Model.attribute<boolean>('scheduleUnavailable');
+
+  scheduleEventTitle = Model.attribute<string | null>('scheduleEventTitle');
+
+  /**
    * Null significa herdar a setting do fórum, não "sem limite"
    * (`Channel::maxMessageLength()` no servidor). Use `resolveMaxMessageLength()`.
    */
@@ -230,3 +247,9 @@ export default class Channel extends Model {
     return '/chat-channels' + (this.exists ? '/' + this.id() : '');
   }
 }
+
+/** Horário guardado no canal; o `mode` diz quais campos existem. */
+export type ChannelScheduleData =
+  | { mode: 'window'; start: string; end: string; timezone: string }
+  | { mode: 'weekly'; days: number[]; from: string; to: string; timezone: string }
+  | { mode: 'event'; eventId: number };

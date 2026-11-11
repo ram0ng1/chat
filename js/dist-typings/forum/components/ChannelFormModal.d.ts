@@ -43,6 +43,7 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
     private tagId;
     private threading;
     private slowMode;
+    private schedule;
     /** String, como `slowMode`, porque alimenta um <select>. "" segue o fórum. */
     private maxMessageLength;
     /** Se o campo numérico próprio aparece no lugar das opções. */
@@ -88,6 +89,11 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
     protected accessSection(): Mithril.Children;
     /** Comportamento do canal. */
     protected behaviourSection(): Mithril.Children;
+    /**
+     * Horário de funcionamento: fora dele, só a moderação escreve. Ocupa as duas
+     * colunas, como a identidade, porque os campos mudam com o modo.
+     */
+    protected scheduleSection(): Mithril.Children;
     /** Grupo de campos com título; some quando não há nada a mostrar. */
     protected section(titleKey: string, children: Mithril.Children[], className?: string): Mithril.Children;
     /**
