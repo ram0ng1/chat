@@ -71,6 +71,10 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
      */
     protected frozen(channel: Channel): Mithril.Children;
     /**
+     * Quem modera escreve fora do horário; a linha lembra que os membros não podem.
+     */
+    protected offHoursHint(channel: Channel): Mithril.Children;
+    /**
      * Aviso de arquivado: onde ficou a transcrição e, para quem pode, como desarquivar.
      */
     protected archivedNotice(channel: Channel): Mithril.Children;

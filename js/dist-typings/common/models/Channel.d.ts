@@ -78,6 +78,18 @@ export default class Channel extends Model {
     slowModeRemaining: () => number;
     bypassesSlowMode: () => boolean;
     /**
+     * Horário de funcionamento como o servidor guarda (ver Schedule\OpeningHours);
+     * null é sempre aberto. Fora dele, só moderadores escrevem.
+     */
+    schedule: () => ChannelScheduleData | null;
+    /** Se está no horário agora, calculado no servidor. */
+    scheduleOpen: () => boolean;
+    /** Quando abre ou fecha a seguir; null se nada mais está marcado. */
+    scheduleNextChange: () => Date | null;
+    /** O evento do calendário ligado sumiu: o canal fica fechado. */
+    scheduleUnavailable: () => boolean;
+    scheduleEventTitle: () => string | null;
+    /**
      * Null significa herdar a setting do fórum, não "sem limite"
      * (`Channel::maxMessageLength()` no servidor). Use `resolveMaxMessageLength()`.
      */
@@ -163,3 +175,19 @@ export default class Channel extends Model {
     others(): User[];
     apiEndpoint(): string;
 }
+/** Horário guardado no canal; o `mode` diz quais campos existem. */
+export type ChannelScheduleData = {
+    mode: 'window';
+    start: string;
+    end: string;
+    timezone: string;
+} | {
+    mode: 'weekly';
+    days: number[];
+    from: string;
+    to: string;
+    timezone: string;
+} | {
+    mode: 'event';
+    eventId: number;
+};
