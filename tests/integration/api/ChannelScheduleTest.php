@@ -13,7 +13,6 @@ use Carbon\Carbon;
 use Flarum\Group\Group;
 use Flarum\Testing\integration\TestCase;
 use Illuminate\Contracts\Cache\Repository;
-use Illuminate\Database\Schema\Blueprint;
 use Psr\Http\Message\ResponseInterface;
 use Ramon\Chat\Schedule\CalendarEvents;
 use Ramon\Chat\Schedule\ErnestDefoeCalendar;
@@ -223,29 +222,21 @@ class ChannelScheduleTest extends TestCase
     }
 
     /**
-     * A tabela do ernestdefoe/calendar, como a migration dele cria, e o leitor
-     * ligado como se a extensão estivesse ativa.
+     * Eventos na tabela do ernestdefoe/calendar e o leitor ligado como se a
+     * extensão estivesse ativa.
      *
      * @param list<array<string, mixed>> $events
      */
     private function withCalendar(array $events): void
     {
         $container = $this->app()->getContainer();
-        $schema = $this->ddlConnection()->getSchemaBuilder();
 
-        if (! $schema->hasTable('calendar_events')) {
-            $schema->create('calendar_events', function (Blueprint $table) {
-                $table->increments('id');
-                $table->string('title', 255);
-                $table->string('slug', 255);
-                $table->dateTime('start_at');
-                $table->dateTime('end_at')->nullable();
-                $table->boolean('all_day')->default(false);
-                $table->string('timezone', 64)->default('UTC');
-                $table->string('rrule', 600)->nullable();
-                $table->boolean('is_published')->default(true);
-            });
-        }
+        // A tabela vem do tests/integration/setup.php; criá-la aqui quebraria a
+        // transação do teste no MySQL e no MariaDB.
+        $this->assertTrue(
+            $this->database()->getSchemaBuilder()->hasTable('calendar_events'),
+            'calendar_events is missing: run composer test:setup again'
+        );
 
         $this->database()->table('calendar_events')->insert($events);
 
@@ -259,27 +250,6 @@ class ChannelScheduleTest extends TestCase
         $container->instance(CalendarEvents::class, $calendar);
         $container->forgetInstance(\Ramon\Chat\Schedule\ChannelSchedule::class);
         $container->forgetInstance(\Ramon\Chat\Api\Resource\ChannelResource::class);
-    }
-
-    /**
-     * Onde criar a tabela. O teste roda dentro de uma transação desfeita no fim;
-     * no MySQL e no MariaDB um CREATE TABLE confirma essa transação e os dados do
-     * teste vazariam para os seguintes. Lá a tabela vai por outra conexão, que só
-     * confirma a criação. PostgreSQL e SQLite desfazem DDL junto, e no SQLite uma
-     * segunda conexão esperaria pelo lock de escrita da primeira.
-     */
-    private function ddlConnection(): \Illuminate\Database\ConnectionInterface
-    {
-        $connection = $this->database();
-
-        if (! in_array($connection->getDriverName(), ['mysql', 'mariadb'], true)) {
-            return $connection;
-        }
-
-        $manager = $this->app()->getContainer()->make(\Illuminate\Database\Capsule\Manager::class);
-        $manager->addConnection($connection->getConfig(), 'calendar_ddl');
-
-        return $manager->getConnection('calendar_ddl');
     }
 
     private function trans(string $key): string
