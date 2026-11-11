@@ -231,7 +231,7 @@ class ChannelScheduleTest extends TestCase
     private function withCalendar(array $events): void
     {
         $container = $this->app()->getContainer();
-        $schema = $this->database()->getSchemaBuilder();
+        $schema = $this->ddlConnection()->getSchemaBuilder();
 
         if (! $schema->hasTable('calendar_events')) {
             $schema->create('calendar_events', function (Blueprint $table) {
@@ -259,6 +259,27 @@ class ChannelScheduleTest extends TestCase
         $container->instance(CalendarEvents::class, $calendar);
         $container->forgetInstance(\Ramon\Chat\Schedule\ChannelSchedule::class);
         $container->forgetInstance(\Ramon\Chat\Api\Resource\ChannelResource::class);
+    }
+
+    /**
+     * Onde criar a tabela. O teste roda dentro de uma transação desfeita no fim;
+     * no MySQL e no MariaDB um CREATE TABLE confirma essa transação e os dados do
+     * teste vazariam para os seguintes. Lá a tabela vai por outra conexão, que só
+     * confirma a criação. PostgreSQL e SQLite desfazem DDL junto, e no SQLite uma
+     * segunda conexão esperaria pelo lock de escrita da primeira.
+     */
+    private function ddlConnection(): \Illuminate\Database\ConnectionInterface
+    {
+        $connection = $this->database();
+
+        if (! in_array($connection->getDriverName(), ['mysql', 'mariadb'], true)) {
+            return $connection;
+        }
+
+        $manager = $this->app()->getContainer()->make(\Illuminate\Database\Capsule\Manager::class);
+        $manager->addConnection($connection->getConfig(), 'calendar_ddl');
+
+        return $manager->getConnection('calendar_ddl');
     }
 
     private function trans(string $key): string
