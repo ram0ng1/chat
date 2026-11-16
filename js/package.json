@@ -22,7 +22,7 @@
   "devDependencies": {
     "@flarum/prettier-config": "^1.0.0",
     "cross-env": "^10.1.0",
-    "emojibase-data": "^17.0.0",
+    "emojibase-data": "^18.0.0",
     "simple-emoji-map": "^1.0.0"
   },
   "prettier": "@flarum/prettier-config"
