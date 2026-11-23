@@ -88,6 +88,12 @@ ramon-chat:
     move_one_channel: Messages can only be moved from one channel at a time.
     move_wider_audience: "Messages from a direct conversation, or from a private channel into an open one, cannot be moved: that would show them to people who could not read them."
     move_conflict: "New messages arrived in that channel during the move. Nothing was moved; try again."
+    schedule_invalid: The opening hours could not be read. Check the dates and times.
+    schedule_window_order: The window must end after it starts.
+    schedule_weekly_days: Pick at least one day of the week.
+    schedule_weekly_hours: "Use opening and closing times like 09:00 and 18:00, and make them different."
+    schedule_timezone: Pick a time zone from the list.
+    schedule_event_missing: That calendar event does not exist or is not published.
 
     # Webhooks
     webhook_channel_unavailable: That webhook's channel is closed or unavailable.
@@ -438,6 +444,36 @@ ramon-chat:
       submit: Start conversation
       submit_group: Start group conversation
       too_many: "A conversation holds up to {max} other people."
+
+    schedule:
+      section: Opening hours
+      mode_label: When the channel takes messages
+      mode_always: Always open
+      mode_window: On a date and time
+      mode_weekly: On days of the week
+      mode_event: During a calendar event
+      mode_always_help: No hours. The channel closes only when someone closes it.
+      mode_window_help: Opens once, between the two times below. Outside them, members can only read.
+      mode_weekly_help: Opens every week on the chosen days and hours. Outside them, members can only read.
+      mode_event_help: Opens during every occurrence of the event, repeats included. Outside them, members can only read.
+      window_start: Opens at
+      window_end: Closes at
+      weekly_days: Days
+      weekly_from: Opens at
+      weekly_to: Closes at
+      weekly_overnight: Closes after midnight, on the next day.
+      timezone: Time zone
+      timezone_help: The hours follow this time zone, daylight saving included. Everyone sees them in their own time zone.
+      event_label: Event
+      event_search: Search events by name
+      event_hint: Type to search the published events.
+      event_none: No published event by that name.
+      event_recurring: repeats
+      event_unavailable: The event linked to this channel no longer exists or is not published. The channel stays closed until you pick other hours.
+      closed_until: "Outside opening hours. Opens {when}."
+      closed_ended: Outside opening hours. No next opening is scheduled.
+      closed_unavailable: Outside opening hours. The event linked to this channel is not available.
+      moderators_only_now: Outside opening hours. Only moderators are writing now.
 
     add_members:
       title: Invite members

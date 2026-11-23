@@ -23,6 +23,7 @@ use Flarum\User\User;
 use Illuminate\Contracts\Events\Dispatcher as Events;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Arr;
+use InvalidArgumentException;
 use Laminas\Diactoros\Response\EmptyResponse;
 use Ramon\Chat\Access\ScopeChannelVisibility;
 use Ramon\Chat\Channel;
@@ -38,6 +39,9 @@ use Ramon\Chat\Event\UserJoinedChannel;
 use Ramon\Chat\Event\UserLeftChannel;
 use Ramon\Chat\Event\UsersWereInvited;
 use Ramon\Chat\Event\UserWasInvited;
+use Ramon\Chat\Schedule\CalendarEvents;
+use Ramon\Chat\Schedule\ChannelSchedule;
+use Ramon\Chat\Schedule\OpeningHours;
 use Ramon\Chat\Service\ActionThrottle;
 use Ramon\Chat\Service\ChannelArchiver;
 use Ramon\Chat\Service\ChannelOwnership;
@@ -87,7 +91,9 @@ class ChannelResource extends AbstractDatabaseResource
         protected ActionThrottle $throttle,
         protected ExtensionManager $extensions,
         protected OwnershipTransfers $transfers,
-        protected ChannelRanks $ranks
+        protected ChannelRanks $ranks,
+        protected ChannelSchedule $schedule,
+        protected CalendarEvents $calendar
     ) {
     }
 
@@ -929,6 +935,50 @@ class ChannelResource extends AbstractDatabaseResource
                 ->writable(fn (Channel $c, Context $context) => $this->mayWriteCategoryField($c, $context))
                 ->set(function (Channel $channel, $value) {
                     $channel->slow_mode_seconds = max(0, min(21600, (int) $value));
+                }),
+
+            // Horário de funcionamento (ver Schedule\OpeningHours); null é sempre aberto.
+            // Quem edita o canal muda. Público para quem vê o canal: são só horários, e
+            // o composer precisa deles para dizer quando abre.
+            Schema\Arr::make('schedule')
+                ->nullable()
+                ->get(fn (Channel $c) => ChannelSchedule::of($c))
+                ->writable(fn (Channel $c, Context $context) => $this->mayWriteCategoryField($c, $context))
+                ->set(function (Channel $channel, $value) {
+                    try {
+                        $schedule = OpeningHours::normalize($value, $this->calendar);
+                    } catch (InvalidArgumentException $e) {
+                        throw new ValidationException([
+                            'schedule' => $this->translator->trans('ramon-chat.api.'.$e->getMessage()),
+                        ]);
+                    }
+
+                    $channel->setAttribute('schedule', $schedule === null ? null : json_encode($schedule));
+                    $this->schedule->forget($channel);
+                }),
+
+            // O estado agora e a próxima mudança, calculados no servidor: o cliente não
+            // expande recorrência de calendário nem confia no relógio do aparelho.
+            Schema\Boolean::make('scheduleOpen')
+                ->get(fn (Channel $c) => $this->schedule->state($c)['open']),
+
+            Schema\DateTime::make('scheduleNextChange')
+                ->nullable()
+                ->get(fn (Channel $c) => $this->schedule->state($c)['nextChange']),
+
+            // O evento ligado sumiu ou saiu do ar: o canal fica fechado até trocarem o
+            // horário, e o formulário avisa.
+            Schema\Boolean::make('scheduleUnavailable')
+                ->get(fn (Channel $c) => $this->schedule->state($c)['unavailable']),
+
+            Schema\Str::make('scheduleEventTitle')
+                ->nullable()
+                ->get(function (Channel $c) {
+                    $schedule = ChannelSchedule::of($c);
+
+                    return ($schedule['mode'] ?? null) === OpeningHours::MODE_EVENT
+                        ? $this->calendar->title((int) $schedule['eventId'])
+                        : null;
                 }),
 
             // Tamanho máximo da mensagem. Null segue a setting do fórum, não "sem

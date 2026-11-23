@@ -34,6 +34,12 @@ class ChatServiceProvider extends AbstractServiceProvider
         // Instância única para que limpar os cargos após uma escrita limpe também o
         // que já foi lido na request. A chave é o objeto Channel.
         $this->container->singleton(Service\ChannelRanks::class);
+
+        // Horário dos canais. O calendário é o ernestdefoe/calendar quando ligado;
+        // a classe confere isso sozinha, então outra extensão pode trocar o binding.
+        // Instância única para policy e resource dividirem o memo (de validade curta).
+        $this->container->singleton(Schedule\CalendarEvents::class, Schedule\ErnestDefoeCalendar::class);
+        $this->container->singleton(Schedule\ChannelSchedule::class);
     }
 
     public function boot(): void

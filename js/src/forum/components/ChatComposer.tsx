@@ -24,6 +24,7 @@ import { stickersAvailable, stickerIcon, stickerLabel, openStickerPicker, close 
 import { flamojiPickerButton, loadCustomEmoji, searchCustomEmoji, customEmojiImage } from '../utils/flamoji';
 import iconLabel from '../utils/iconLabel';
 import { loadMessageTooLongModal } from '../utils/lazy';
+import { closedNotice, watchSchedule } from '../utils/schedule';
 
 export interface ChatComposerAttrs extends ComponentAttrs {
   channel: Channel;
@@ -173,6 +174,9 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
   view(): Mithril.Children {
     const { channel, state, threadId } = this.attrs;
 
+    // Reabre ou fecha sozinho quando o horário vira.
+    watchSchedule(channel);
+
     if (!channel.canPostMessage()) {
       return this.frozen(channel);
     }
@@ -189,6 +193,7 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
     return (
       <div className="ChatComposer">
         {this.contextBar()}
+        {this.offHoursHint(channel)}
         {this.pendingAttachments()}
 
         <ChatAutocomplete
@@ -356,6 +361,16 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
 
     if (channel.isArchived()) return this.archivedNotice(channel);
 
+    // Fora do horário, depois dos motivos permanentes: diz quando abre.
+    if (!channel.isClosed() && channel.scheduleOpen() === false) {
+      return (
+        <div className="ChatChannel-frozen ChatChannel-frozen--schedule">
+          <i className="fas fa-clock" aria-hidden="true" />
+          <span>{closedNotice(channel)}</span>
+        </div>
+      );
+    }
+
     const key = channel.isClosed()
       ? 'ramon-chat.forum.channel.closed'
       : channel.postPermission() === 'moderators'
@@ -369,6 +384,20 @@ export default class ChatComposer extends Component<ChatComposerAttrs> {
       <div className="ChatChannel-frozen">
         <i className={icon} aria-hidden="true" />
         <span>{app.translator.trans(key)}</span>
+      </div>
+    );
+  }
+
+  /**
+   * Quem modera escreve fora do horário; a linha lembra que os membros não podem.
+   */
+  protected offHoursHint(channel: Channel): Mithril.Children {
+    if (channel.scheduleOpen() !== false) return null;
+
+    return (
+      <div className="ChatComposer-offHours">
+        <i className="fas fa-clock" aria-hidden="true" />
+        <span>{app.translator.trans('ramon-chat.forum.schedule.moderators_only_now')}</span>
       </div>
     );
   }

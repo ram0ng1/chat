@@ -31,6 +31,7 @@ I started it because every chat extension I tried sat beside the forum rather th
 - New discussions in a bound category announced into the channel, posted by the chat's bot or by a member you nominate
 - Pinned messages, edit history, and moderation with attribution, so a removed message names the moderator who removed it
 - A drawer that follows you around the forum and a full screen page, sharing one conversation state
+- Opening hours per channel: once on a date, on days of the week, or during the occurrences of an [`ernestdefoe/calendar`](https://github.com/ernestdefoe/calendar) event
 - Plays nice with `flarum/gdpr` for export, anonymization and erasure, and with `flarum/audit` for the trail
 
 ## Installation
@@ -43,7 +44,7 @@ php flarum cache:clear
 
 Enable Chat on the Extensions page. Channels, the announcer, the bot and permissions are all managed in the admin panel, each option explained in place.
 
-Optional companions: `flarum/tags` unlocks category scoped channels, `flarum/realtime` makes delivery, typing and presence instant, `flarum/mentions` gives `@user` parity with discussions, and `flarum/emoji` renders `:shortcode:`. None of them are required.
+Optional companions: `flarum/tags` unlocks category scoped channels, `flarum/realtime` makes delivery, typing and presence instant, `flarum/mentions` gives `@user` parity with discussions, `flarum/emoji` renders `:shortcode:`, and `ernestdefoe/calendar` lets a channel open during calendar events. None of them are required.
 
 ## Good to know
 
@@ -57,6 +58,7 @@ Optional companions: `flarum/tags` unlocks category scoped channels, `flarum/rea
 - Every membership change reaches the people it concerns over `flarum/realtime` as `ramonChat.membership`, so a channel appears in the sidebar the moment its invitation is accepted and disappears the moment someone is removed, on every open tab.
 - Members (not administrators) are held to a few limits so one account cannot flood everyone else: at most 20 new direct conversations and 10 new channels an hour, 30 uploads every 10 minutes with at most 20 waiting to be sent, 10 attachments per message and 20 reports an hour. A message that names more than 10 people notifies none of them directly, as Discourse does.
 - A one-to-one conversation that already has messages stays between its two people: new members can only be invited into a group conversation or an empty one. Moving messages never widens their audience: nothing leaves a direct conversation, and a private channel's messages only move into another private one.
+- A channel with opening hours takes messages only inside them; outside, members can still read, and the composer says when it opens next. Administrators, chat moderators, and a channel's owner and moderators keep writing, so an event can be prepared before it starts. The hours are checked when a message is sent, with no scheduled task, and an open page switches on its own when they open or close. Linked to an `ernestdefoe/calendar` event, the channel opens for every occurrence, repeats included; an event without an end counts as one hour, an all-day one as the whole day in its time zone, and an event that is deleted or unpublished keeps the channel closed until someone picks other hours.
 - `tests/E2E/` holds end-to-end suites that run against a live forum, websocket included; see its README.
 
 ## Storing attachments with FoF Upload

@@ -14,6 +14,7 @@ import type Channel from '../../common/models/Channel';
 import chatState from '../state/chat';
 import afterModalClosed from '../utils/afterModalClosed';
 import EmojiPicker from './EmojiPicker';
+import ScheduleFields, { ScheduleDraft } from './ScheduleFields';
 import { resolveEmoji } from '../utils/emoji';
 import { humanDuration } from '../utils/duration';
 import { forumMaxMessageLength } from '../utils/messageLimit';
@@ -75,6 +76,7 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
   private tagId!: Stream<string>;
   private threading!: Stream<boolean>;
   private slowMode!: Stream<string>;
+  private schedule!: ScheduleDraft;
 
   /** String, como `slowMode`, porque alimenta um <select>. "" segue o fórum. */
   private maxMessageLength!: Stream<string>;
@@ -104,6 +106,7 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
 
     // String por causa do <select>; convertido só no envio.
     this.slowMode = Stream(String(channel?.slowModeSeconds() ?? 0));
+    this.schedule = new ScheduleDraft(channel?.schedule() ?? null, channel?.scheduleEventTitle() ?? null);
 
     // "" e não "0": "seguir o fórum" vira null, e 0 seria limite de zero caracteres.
     this.maxMessageLength = Stream(channel?.maxMessageLength() ? String(channel.maxMessageLength()) : '');
@@ -196,6 +199,7 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
           {this.identitySection()}
           {this.accessSection()}
           {this.behaviourSection()}
+          {this.scheduleSection()}
           {this.lifecycle()}
         </div>
       </div>
@@ -357,6 +361,18 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
         {curates ? this.toggle(this.autoJoin, 'ramon-chat.forum.info.auto_join', app.translator.trans('ramon-chat.forum.info.auto_join_help')) : null}
       </div>,
     ]);
+  }
+
+  /**
+   * Horário de funcionamento: fora dele, só a moderação escreve. Ocupa as duas
+   * colunas, como a identidade, porque os campos mudam com o modo.
+   */
+  protected scheduleSection(): Mithril.Children {
+    return this.section(
+      'ramon-chat.forum.schedule.section',
+      [<ScheduleFields draft={this.schedule} disabled={this.loading} unavailable={!!this.attrs.channel?.scheduleUnavailable()} />],
+      'ChannelFormModal-section--wide'
+    );
   }
 
   /** Grupo de campos com título; some quando não há nada a mostrar. */
@@ -1025,6 +1041,7 @@ export default class ChannelFormModal extends FormModal<ChannelFormModalAttrs> {
       emoji: this.useImage() ? null : this.emoji().trim() || null,
       threadingEnabled: this.threading(),
       slowModeSeconds: Number(this.slowMode()) || 0,
+      schedule: this.schedule.toPayload(),
       maxMessageLength: this.clampedMessageLength(),
       allowChannelWideMentions: this.allowChannelWide(),
       autoJoin: this.autoJoin(),

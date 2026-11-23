@@ -16,6 +16,8 @@ use Ramon\Chat\Access\ChannelPolicy;
 use Ramon\Chat\Access\VisibilityCache;
 use Ramon\Chat\Channel;
 use Ramon\Chat\ChannelUser;
+use Ramon\Chat\Schedule\ChannelSchedule;
+use Ramon\Chat\Schedule\NoCalendar;
 use Ramon\Chat\Service\ChannelOwnership;
 use Ramon\Chat\Tests\unit\QueryTestCase;
 
@@ -47,7 +49,7 @@ class ChannelPolicyTest extends QueryTestCase
             fn (string $key, $default = null) => $key === ChannelOwnership::SETTING ? $mode : true
         );
 
-        return new ChannelPolicy($settings, $cache ?? new VisibilityCache(), new ChannelOwnership($settings));
+        return new ChannelPolicy($settings, $cache ?? new VisibilityCache(), new ChannelOwnership($settings), new ChannelSchedule(new NoCalendar()));
     }
 
     /**

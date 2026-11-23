@@ -13,6 +13,7 @@ import { SidebarSkeleton } from './Skeletons';
 import { channelIcon } from '../utils/channelIcon';
 import { loadChannelFormModal, loadNewDirectModal } from '../utils/lazy';
 import { isOnline } from '../utils/presence';
+import { closedNotice } from '../utils/schedule';
 
 export interface ChatSidebarAttrs extends ComponentAttrs {
   state: ChatState;
@@ -306,6 +307,11 @@ export default class ChatSidebar extends Component<ChatSidebarAttrs> {
             title={app.translator.trans('ramon-chat.forum.browse.inspecting', {}, true)}
             aria-hidden="true"
           />
+        ) : null}
+
+        {/* Fora do horário: o membro sabe antes de abrir que não vai poder escrever. */}
+        {channel.scheduleOpen() === false && !channel.isClosed() ? (
+          <i className="ChatChannelRow-lock fas fa-clock" title={closedNotice(channel)} aria-hidden="true" />
         ) : null}
 
         {/* Ícone de silenciado: só a linha esmaecida se confundiria com "inativo". */}

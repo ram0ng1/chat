@@ -13,6 +13,7 @@ use Flarum\Settings\SettingsRepositoryInterface;
 use Flarum\User\Access\AbstractPolicy;
 use Flarum\User\User;
 use Ramon\Chat\Channel;
+use Ramon\Chat\Schedule\ChannelSchedule;
 use Ramon\Chat\Service\ChannelOwnership;
 
 /**
@@ -25,7 +26,8 @@ class ChannelPolicy extends AbstractPolicy
     public function __construct(
         protected SettingsRepositoryInterface $settings,
         protected VisibilityCache $cache,
-        protected ChannelOwnership $ownership
+        protected ChannelOwnership $ownership,
+        protected ChannelSchedule $schedule
     ) {
     }
 
@@ -56,6 +58,13 @@ class ChannelPolicy extends AbstractPolicy
 
         if (! $this->view($actor, $channel)) {
             return null;
+        }
+
+        // Fora do horário do canal, só quem cuida da sala escreve: moderadores do
+        // chat, o dono e os moderadores do canal (admins têm toda permissão). Assim a
+        // moderação prepara o evento antes de abrir.
+        if (! $this->schedule->isOpen($channel) && ! $this->ownership->moderates($actor, $channel)) {
+            return false;
         }
 
         // Canal de anúncios: todos leem, moderadores (e o dono) escrevem.

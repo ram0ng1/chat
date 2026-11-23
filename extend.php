@@ -201,6 +201,8 @@ return [
         ->post('/chat/drafts', 'chat.drafts.store', Api\Controller\DraftController::class)
         ->get('/chat/drafts', 'chat.drafts.index', Api\Controller\ListDraftsController::class)
         ->post('/chat/direct', 'chat.direct.start', Api\Controller\StartDirectController::class)
+        // Eventos do calendário para o horário do canal (ver Schedule\CalendarEvents).
+        ->get('/chat/calendar-events', 'chat.calendar.events', Api\Controller\ListCalendarEventsController::class)
         // Fora do resource: canal privado é invisível a quem não entrou, então um
         // endpoint com scope não o acharia. O convite é a autorização; {id} é o canal.
         ->post('/chat/invites/{id:\d+}/accept', 'chat.invites.accept', Api\Controller\AcceptInviteController::class)
