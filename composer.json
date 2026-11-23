@@ -39,7 +39,7 @@
         "phpstan/phpstan": "^2.2",
         "phpunit/phpunit": "^12.5.22",
         "pusher/pusher-php-server": "^7.2",
-        "vimeo/psalm": "^6.0"
+        "vimeo/psalm": "^7.7"
     },
     "suggest": {
         "flarum/tags": "Required for category-scoped channels, which inherit tag permissions (^2.0).",
