@@ -1,4 +1,4 @@
-import app from 'flarum/forum/app';
+import app from 'flarum/common/app';
 import Model from 'flarum/common/Model';
 import type User from 'flarum/common/models/User';
 import type Channel from './Channel';
